@@ -1,1 +1,1 @@
-# yal_chat_ios
+# YAL-Chat-iOS

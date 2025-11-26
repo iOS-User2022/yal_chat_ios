@@ -1,0 +1,1392 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		4839E7F62ED06FD700567861 /* FirebaseAnalytics in Frameworks */ = {isa = PBXBuildFile; productRef = 4839E7F52ED06FD700567861 /* FirebaseAnalytics */; };
+		B570746FE502094D44BF51D8 /* Pods_YAL.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 7BB08A36C7C1730C08ABD6F4 /* Pods_YAL.framework */; };
+		C903D7192E6ECE4A0026736F /* FirebaseCrashlytics in Frameworks */ = {isa = PBXBuildFile; productRef = C903D7182E6ECE4A0026736F /* FirebaseCrashlytics */; };
+		C916DD622DCCE84700F2FE3E /* IdentityLookup.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = C97389172DCC9F61001399CD /* IdentityLookup.framework */; settings = {ATTRIBUTES = (Weak, ); }; };
+		C9553D6F2DD60548006D0802 /* RealmSwift in Frameworks */ = {isa = PBXBuildFile; productRef = C9553D6E2DD60548006D0802 /* RealmSwift */; };
+		C9553D702DD608E0006D0802 /* RealmSwift in Embed Frameworks */ = {isa = PBXBuildFile; productRef = C9553D6E2DD60548006D0802 /* RealmSwift */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
+		C971CC2B2E9D12BC0009BDEF /* YALNotificationServiceExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = C971CC242E9D12BC0009BDEF /* YALNotificationServiceExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		C971CC362E9D12E30009BDEF /* UserNotifications.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = C971CC352E9D12E30009BDEF /* UserNotifications.framework */; };
+		C971CC382E9D12E30009BDEF /* UserNotificationsUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = C971CC372E9D12E30009BDEF /* UserNotificationsUI.framework */; };
+		C971CC422E9D12E30009BDEF /* YALNotificationContentExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = C971CC342E9D12E30009BDEF /* YALNotificationContentExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		C9ABE9B92E66DF2E003EE418 /* PhoneNumberKit in Frameworks */ = {isa = PBXBuildFile; productRef = C9ABE9B82E66DF2E003EE418 /* PhoneNumberKit */; };
+		C9ABE9BD2E66DF2E003EE418 /* PhoneNumberKit-Static in Frameworks */ = {isa = PBXBuildFile; productRef = C9ABE9BC2E66DF2E003EE418 /* PhoneNumberKit-Static */; };
+		C9B6A6152DBAD80900CA15BD /* MessageFilterExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = C9B6A60E2DBAD80900CA15BD /* MessageFilterExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		C9D88C0B2DBCEF5D004A5887 /* SDWebImageSwiftUI in Frameworks */ = {isa = PBXBuildFile; productRef = C9D88C0A2DBCEF5D004A5887 /* SDWebImageSwiftUI */; };
+		C9D88F9E2DC35F7D004A5887 /* FirebaseCore in Frameworks */ = {isa = PBXBuildFile; productRef = C9D88F9D2DC35F7D004A5887 /* FirebaseCore */; };
+		C9D88FA02DC35F7D004A5887 /* FirebaseRemoteConfig in Frameworks */ = {isa = PBXBuildFile; productRef = C9D88F9F2DC35F7D004A5887 /* FirebaseRemoteConfig */; };
+		C9DDFF0B2DAD4C48007126C3 /* Swinject in Frameworks */ = {isa = PBXBuildFile; productRef = C9DDFF0A2DAD4C48007126C3 /* Swinject */; };
+		E79C7CE9B8824E9BB02C836F /* Pods_MessageFilterExtension.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 99BA6860A4B195F9C8DCDFCA /* Pods_MessageFilterExtension.framework */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		C971CC292E9D12BC0009BDEF /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = C9DDFB272DA7C1A8007126C3 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = C971CC232E9D12BC0009BDEF;
+			remoteInfo = YALNotificationServiceExtension;
+		};
+		C971CC402E9D12E30009BDEF /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = C9DDFB272DA7C1A8007126C3 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = C971CC332E9D12E30009BDEF;
+			remoteInfo = YALNotificationContentExtension;
+		};
+		C9B6A6132DBAD80900CA15BD /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = C9DDFB272DA7C1A8007126C3 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = C9B6A60D2DBAD80900CA15BD;
+			remoteInfo = MessageFilterExtension;
+		};
+		C9DDFB3D2DA7C1A9007126C3 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = C9DDFB272DA7C1A8007126C3 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = C9DDFB2E2DA7C1A8007126C3;
+			remoteInfo = YAL;
+		};
+		C9DDFB472DA7C1A9007126C3 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = C9DDFB272DA7C1A8007126C3 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = C9DDFB2E2DA7C1A8007126C3;
+			remoteInfo = YAL;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		C9553D712DD608E0006D0802 /* Embed Frameworks */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
+				C9553D702DD608E0006D0802 /* RealmSwift in Embed Frameworks */,
+			);
+			name = "Embed Frameworks";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C9B6A6162DBAD80900CA15BD /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				C971CC2B2E9D12BC0009BDEF /* YALNotificationServiceExtension.appex in Embed Foundation Extensions */,
+				C971CC422E9D12E30009BDEF /* YALNotificationContentExtension.appex in Embed Foundation Extensions */,
+				C9B6A6152DBAD80900CA15BD /* MessageFilterExtension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		4993CDCF6A86C871A5776815 /* Pods-YAL.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-YAL.release.xcconfig"; path = "Target Support Files/Pods-YAL/Pods-YAL.release.xcconfig"; sourceTree = "<group>"; };
+		7BB08A36C7C1730C08ABD6F4 /* Pods_YAL.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_YAL.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		8B0B8CB3EEA7A4440B8F7541 /* Pods-YAL.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-YAL.debug.xcconfig"; path = "Target Support Files/Pods-YAL/Pods-YAL.debug.xcconfig"; sourceTree = "<group>"; };
+		99BA6860A4B195F9C8DCDFCA /* Pods_MessageFilterExtension.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_MessageFilterExtension.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		C971CC242E9D12BC0009BDEF /* YALNotificationServiceExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = YALNotificationServiceExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		C971CC342E9D12E30009BDEF /* YALNotificationContentExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = YALNotificationContentExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		C971CC352E9D12E30009BDEF /* UserNotifications.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = UserNotifications.framework; path = System/Library/Frameworks/UserNotifications.framework; sourceTree = SDKROOT; };
+		C971CC372E9D12E30009BDEF /* UserNotificationsUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = UserNotificationsUI.framework; path = System/Library/Frameworks/UserNotificationsUI.framework; sourceTree = SDKROOT; };
+		C97389172DCC9F61001399CD /* IdentityLookup.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = IdentityLookup.framework; path = System/Library/Frameworks/IdentityLookup.framework; sourceTree = SDKROOT; };
+		C9B6A60E2DBAD80900CA15BD /* MessageFilterExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = MessageFilterExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		C9DDFB2F2DA7C1A8007126C3 /* YAL.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = YAL.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		C9DDFB3C2DA7C1A9007126C3 /* YALTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = YALTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		C9DDFB462DA7C1A9007126C3 /* YALUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = YALUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		DF1AF6FD22AF75498709D39C /* Pods-MessageFilterExtension.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-MessageFilterExtension.release.xcconfig"; path = "Target Support Files/Pods-MessageFilterExtension/Pods-MessageFilterExtension.release.xcconfig"; sourceTree = "<group>"; };
+		F6ED0455A4EEDC820989BE92 /* Pods-MessageFilterExtension.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-MessageFilterExtension.debug.xcconfig"; path = "Target Support Files/Pods-MessageFilterExtension/Pods-MessageFilterExtension.debug.xcconfig"; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		4839CED72EC74FA400567861 /* Exceptions for "YAL" folder in "YALNotificationServiceExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Core/Services/Storage/Storage.swift,
+			);
+			target = C971CC232E9D12BC0009BDEF /* YALNotificationServiceExtension */;
+		};
+		C971CC2F2E9D12BC0009BDEF /* Exceptions for "YALNotificationServiceExtension" folder in "YALNotificationServiceExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = C971CC232E9D12BC0009BDEF /* YALNotificationServiceExtension */;
+		};
+		C971CC462E9D12E30009BDEF /* Exceptions for "YALNotificationContentExtension" folder in "YALNotificationContentExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = C971CC332E9D12E30009BDEF /* YALNotificationContentExtension */;
+		};
+		C9B6A61A2DBAD80900CA15BD /* Exceptions for "MessageFilterExtension" folder in "MessageFilterExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = C9B6A60D2DBAD80900CA15BD /* MessageFilterExtension */;
+		};
+		C9DDFF072DAD4C1C007126C3 /* Exceptions for "YAL" folder in "YAL" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				SupportingFiles/Info.plist,
+			);
+			target = C9DDFB2E2DA7C1A8007126C3 /* YAL */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		C971CC252E9D12BC0009BDEF /* YALNotificationServiceExtension */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				C971CC2F2E9D12BC0009BDEF /* Exceptions for "YALNotificationServiceExtension" folder in "YALNotificationServiceExtension" target */,
+			);
+			path = YALNotificationServiceExtension;
+			sourceTree = "<group>";
+		};
+		C971CC392E9D12E30009BDEF /* YALNotificationContentExtension */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				C971CC462E9D12E30009BDEF /* Exceptions for "YALNotificationContentExtension" folder in "YALNotificationContentExtension" target */,
+			);
+			path = YALNotificationContentExtension;
+			sourceTree = "<group>";
+		};
+		C9B6A60F2DBAD80900CA15BD /* MessageFilterExtension */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				C9B6A61A2DBAD80900CA15BD /* Exceptions for "MessageFilterExtension" folder in "MessageFilterExtension" target */,
+			);
+			path = MessageFilterExtension;
+			sourceTree = "<group>";
+		};
+		C9DDFB312DA7C1A8007126C3 /* YAL */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				C9DDFF072DAD4C1C007126C3 /* Exceptions for "YAL" folder in "YAL" target */,
+				4839CED72EC74FA400567861 /* Exceptions for "YAL" folder in "YALNotificationServiceExtension" target */,
+			);
+			path = YAL;
+			sourceTree = "<group>";
+		};
+		C9DDFB3F2DA7C1A9007126C3 /* YALTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = YALTests;
+			sourceTree = "<group>";
+		};
+		C9DDFB492DA7C1A9007126C3 /* YALUITests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = YALUITests;
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		C971CC212E9D12BC0009BDEF /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C971CC312E9D12E30009BDEF /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				C971CC382E9D12E30009BDEF /* UserNotificationsUI.framework in Frameworks */,
+				C971CC362E9D12E30009BDEF /* UserNotifications.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C9B6A60B2DBAD80900CA15BD /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				C916DD622DCCE84700F2FE3E /* IdentityLookup.framework in Frameworks */,
+				E79C7CE9B8824E9BB02C836F /* Pods_MessageFilterExtension.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C9DDFB2C2DA7C1A8007126C3 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				C9ABE9B92E66DF2E003EE418 /* PhoneNumberKit in Frameworks */,
+				C9553D6F2DD60548006D0802 /* RealmSwift in Frameworks */,
+				C9D88C0B2DBCEF5D004A5887 /* SDWebImageSwiftUI in Frameworks */,
+				C9D88F9E2DC35F7D004A5887 /* FirebaseCore in Frameworks */,
+				C9ABE9BD2E66DF2E003EE418 /* PhoneNumberKit-Static in Frameworks */,
+				C9D88FA02DC35F7D004A5887 /* FirebaseRemoteConfig in Frameworks */,
+				C903D7192E6ECE4A0026736F /* FirebaseCrashlytics in Frameworks */,
+				C9DDFF0B2DAD4C48007126C3 /* Swinject in Frameworks */,
+				4839E7F62ED06FD700567861 /* FirebaseAnalytics in Frameworks */,
+				B570746FE502094D44BF51D8 /* Pods_YAL.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C9DDFB392DA7C1A9007126C3 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C9DDFB432DA7C1A9007126C3 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		97EC4DE283273A338DC007F8 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				C97389172DCC9F61001399CD /* IdentityLookup.framework */,
+				99BA6860A4B195F9C8DCDFCA /* Pods_MessageFilterExtension.framework */,
+				7BB08A36C7C1730C08ABD6F4 /* Pods_YAL.framework */,
+				C971CC352E9D12E30009BDEF /* UserNotifications.framework */,
+				C971CC372E9D12E30009BDEF /* UserNotificationsUI.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		B62211144712E19273107DA5 /* Pods */ = {
+			isa = PBXGroup;
+			children = (
+				F6ED0455A4EEDC820989BE92 /* Pods-MessageFilterExtension.debug.xcconfig */,
+				DF1AF6FD22AF75498709D39C /* Pods-MessageFilterExtension.release.xcconfig */,
+				8B0B8CB3EEA7A4440B8F7541 /* Pods-YAL.debug.xcconfig */,
+				4993CDCF6A86C871A5776815 /* Pods-YAL.release.xcconfig */,
+			);
+			path = Pods;
+			sourceTree = "<group>";
+		};
+		C9DDFB262DA7C1A8007126C3 = {
+			isa = PBXGroup;
+			children = (
+				C9DDFB312DA7C1A8007126C3 /* YAL */,
+				C9DDFB3F2DA7C1A9007126C3 /* YALTests */,
+				C9DDFB492DA7C1A9007126C3 /* YALUITests */,
+				C9B6A60F2DBAD80900CA15BD /* MessageFilterExtension */,
+				C971CC252E9D12BC0009BDEF /* YALNotificationServiceExtension */,
+				C971CC392E9D12E30009BDEF /* YALNotificationContentExtension */,
+				C9DDFB302DA7C1A8007126C3 /* Products */,
+				B62211144712E19273107DA5 /* Pods */,
+				97EC4DE283273A338DC007F8 /* Frameworks */,
+			);
+			sourceTree = "<group>";
+		};
+		C9DDFB302DA7C1A8007126C3 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				C9DDFB2F2DA7C1A8007126C3 /* YAL.app */,
+				C9DDFB3C2DA7C1A9007126C3 /* YALTests.xctest */,
+				C9DDFB462DA7C1A9007126C3 /* YALUITests.xctest */,
+				C9B6A60E2DBAD80900CA15BD /* MessageFilterExtension.appex */,
+				C971CC242E9D12BC0009BDEF /* YALNotificationServiceExtension.appex */,
+				C971CC342E9D12E30009BDEF /* YALNotificationContentExtension.appex */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		C971CC232E9D12BC0009BDEF /* YALNotificationServiceExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = C971CC2E2E9D12BC0009BDEF /* Build configuration list for PBXNativeTarget "YALNotificationServiceExtension" */;
+			buildPhases = (
+				C971CC202E9D12BC0009BDEF /* Sources */,
+				C971CC212E9D12BC0009BDEF /* Frameworks */,
+				C971CC222E9D12BC0009BDEF /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				C971CC252E9D12BC0009BDEF /* YALNotificationServiceExtension */,
+			);
+			name = YALNotificationServiceExtension;
+			productName = YALNotificationServiceExtension;
+			productReference = C971CC242E9D12BC0009BDEF /* YALNotificationServiceExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+		C971CC332E9D12E30009BDEF /* YALNotificationContentExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = C971CC432E9D12E30009BDEF /* Build configuration list for PBXNativeTarget "YALNotificationContentExtension" */;
+			buildPhases = (
+				C971CC302E9D12E30009BDEF /* Sources */,
+				C971CC312E9D12E30009BDEF /* Frameworks */,
+				C971CC322E9D12E30009BDEF /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				C971CC392E9D12E30009BDEF /* YALNotificationContentExtension */,
+			);
+			name = YALNotificationContentExtension;
+			productName = YALNotificationContentExtension;
+			productReference = C971CC342E9D12E30009BDEF /* YALNotificationContentExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+		C9B6A60D2DBAD80900CA15BD /* MessageFilterExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = C9B6A6192DBAD80900CA15BD /* Build configuration list for PBXNativeTarget "MessageFilterExtension" */;
+			buildPhases = (
+				A9C1A66F66E8981B65E9125C /* [CP] Check Pods Manifest.lock */,
+				C9B6A60A2DBAD80900CA15BD /* Sources */,
+				C9B6A60B2DBAD80900CA15BD /* Frameworks */,
+				C9B6A60C2DBAD80900CA15BD /* Resources */,
+				409B650741362193E34F3E57 /* [CP] Copy Pods Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				C9B6A60F2DBAD80900CA15BD /* MessageFilterExtension */,
+			);
+			name = MessageFilterExtension;
+			productName = MessageFilterExtension;
+			productReference = C9B6A60E2DBAD80900CA15BD /* MessageFilterExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+		C9DDFB2E2DA7C1A8007126C3 /* YAL */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = C9DDFB502DA7C1A9007126C3 /* Build configuration list for PBXNativeTarget "YAL" */;
+			buildPhases = (
+				A44CA7EBDC9C4A2C0083DD99 /* [CP] Check Pods Manifest.lock */,
+				C9DDFB2B2DA7C1A8007126C3 /* Sources */,
+				C9DDFB2C2DA7C1A8007126C3 /* Frameworks */,
+				C9DDFB2D2DA7C1A8007126C3 /* Resources */,
+				C9B6A6162DBAD80900CA15BD /* Embed Foundation Extensions */,
+				70B67A3D3B30A1D8A9D794AE /* [CP] Copy Pods Resources */,
+				C9553D712DD608E0006D0802 /* Embed Frameworks */,
+				C903D71A2E6ED1D30026736F /* ShellScript */,
+				08A72605C8911365D873C1F6 /* [CP] Embed Pods Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				C9B6A6142DBAD80900CA15BD /* PBXTargetDependency */,
+				C971CC2A2E9D12BC0009BDEF /* PBXTargetDependency */,
+				C971CC412E9D12E30009BDEF /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				C9DDFB312DA7C1A8007126C3 /* YAL */,
+			);
+			name = YAL;
+			packageProductDependencies = (
+				C9DDFF0A2DAD4C48007126C3 /* Swinject */,
+				C9D88C0A2DBCEF5D004A5887 /* SDWebImageSwiftUI */,
+				C9D88F9D2DC35F7D004A5887 /* FirebaseCore */,
+				C9D88F9F2DC35F7D004A5887 /* FirebaseRemoteConfig */,
+				C9553D6E2DD60548006D0802 /* RealmSwift */,
+				C9ABE9B82E66DF2E003EE418 /* PhoneNumberKit */,
+				C9ABE9BC2E66DF2E003EE418 /* PhoneNumberKit-Static */,
+				C903D7182E6ECE4A0026736F /* FirebaseCrashlytics */,
+				4839E7F52ED06FD700567861 /* FirebaseAnalytics */,
+			);
+			productName = YAL;
+			productReference = C9DDFB2F2DA7C1A8007126C3 /* YAL.app */;
+			productType = "com.apple.product-type.application";
+		};
+		C9DDFB3B2DA7C1A9007126C3 /* YALTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = C9DDFB532DA7C1A9007126C3 /* Build configuration list for PBXNativeTarget "YALTests" */;
+			buildPhases = (
+				C9DDFB382DA7C1A9007126C3 /* Sources */,
+				C9DDFB392DA7C1A9007126C3 /* Frameworks */,
+				C9DDFB3A2DA7C1A9007126C3 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				C9DDFB3E2DA7C1A9007126C3 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				C9DDFB3F2DA7C1A9007126C3 /* YALTests */,
+			);
+			name = YALTests;
+			productName = YALTests;
+			productReference = C9DDFB3C2DA7C1A9007126C3 /* YALTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		C9DDFB452DA7C1A9007126C3 /* YALUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = C9DDFB562DA7C1A9007126C3 /* Build configuration list for PBXNativeTarget "YALUITests" */;
+			buildPhases = (
+				C9DDFB422DA7C1A9007126C3 /* Sources */,
+				C9DDFB432DA7C1A9007126C3 /* Frameworks */,
+				C9DDFB442DA7C1A9007126C3 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				C9DDFB482DA7C1A9007126C3 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				C9DDFB492DA7C1A9007126C3 /* YALUITests */,
+			);
+			name = YALUITests;
+			productName = YALUITests;
+			productReference = C9DDFB462DA7C1A9007126C3 /* YALUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		C9DDFB272DA7C1A8007126C3 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 2600;
+				LastUpgradeCheck = 1630;
+				TargetAttributes = {
+					C971CC232E9D12BC0009BDEF = {
+						CreatedOnToolsVersion = 26.0.1;
+					};
+					C971CC332E9D12E30009BDEF = {
+						CreatedOnToolsVersion = 26.0.1;
+					};
+					C9B6A60D2DBAD80900CA15BD = {
+						CreatedOnToolsVersion = 16.3;
+					};
+					C9DDFB2E2DA7C1A8007126C3 = {
+						CreatedOnToolsVersion = 16.3;
+					};
+					C9DDFB3B2DA7C1A9007126C3 = {
+						CreatedOnToolsVersion = 16.3;
+						TestTargetID = C9DDFB2E2DA7C1A8007126C3;
+					};
+					C9DDFB452DA7C1A9007126C3 = {
+						CreatedOnToolsVersion = 16.3;
+						TestTargetID = C9DDFB2E2DA7C1A8007126C3;
+					};
+				};
+			};
+			buildConfigurationList = C9DDFB2A2DA7C1A8007126C3 /* Build configuration list for PBXProject "YAL" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = C9DDFB262DA7C1A8007126C3;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				C9DDFF082DAD4C36007126C3 /* XCRemoteSwiftPackageReference "Swinject" */,
+				C9D88C092DBCEE36004A5887 /* XCRemoteSwiftPackageReference "SDWebImageSwiftUI" */,
+				C9D88F9C2DC35F7D004A5887 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
+				C9553D6D2DD60548006D0802 /* XCRemoteSwiftPackageReference "realm-swift" */,
+				C9ABE9B72E66DF2E003EE418 /* XCRemoteSwiftPackageReference "PhoneNumberKit" */,
+				C89DCAFE2E73F89F00616FC9 /* XCRemoteSwiftPackageReference "netfox" */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = C9DDFB302DA7C1A8007126C3 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				C9DDFB2E2DA7C1A8007126C3 /* YAL */,
+				C9DDFB3B2DA7C1A9007126C3 /* YALTests */,
+				C9DDFB452DA7C1A9007126C3 /* YALUITests */,
+				C9B6A60D2DBAD80900CA15BD /* MessageFilterExtension */,
+				C971CC232E9D12BC0009BDEF /* YALNotificationServiceExtension */,
+				C971CC332E9D12E30009BDEF /* YALNotificationContentExtension */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		C971CC222E9D12BC0009BDEF /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C971CC322E9D12E30009BDEF /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C9B6A60C2DBAD80900CA15BD /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C9DDFB2D2DA7C1A8007126C3 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C9DDFB3A2DA7C1A9007126C3 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C9DDFB442DA7C1A9007126C3 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		08A72605C8911365D873C1F6 /* [CP] Embed Pods Frameworks */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-YAL/Pods-YAL-frameworks-${CONFIGURATION}-input-files.xcfilelist",
+			);
+			inputPaths = (
+			);
+			name = "[CP] Embed Pods Frameworks";
+			outputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-YAL/Pods-YAL-frameworks-${CONFIGURATION}-output-files.xcfilelist",
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-YAL/Pods-YAL-frameworks.sh\"\n";
+			showEnvVarsInLog = 0;
+		};
+		409B650741362193E34F3E57 /* [CP] Copy Pods Resources */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-MessageFilterExtension/Pods-MessageFilterExtension-resources-${CONFIGURATION}-input-files.xcfilelist",
+			);
+			inputPaths = (
+			);
+			name = "[CP] Copy Pods Resources";
+			outputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-MessageFilterExtension/Pods-MessageFilterExtension-resources-${CONFIGURATION}-output-files.xcfilelist",
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-MessageFilterExtension/Pods-MessageFilterExtension-resources.sh\"\n";
+			showEnvVarsInLog = 0;
+		};
+		70B67A3D3B30A1D8A9D794AE /* [CP] Copy Pods Resources */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-YAL/Pods-YAL-resources-${CONFIGURATION}-input-files.xcfilelist",
+			);
+			inputPaths = (
+			);
+			name = "[CP] Copy Pods Resources";
+			outputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-YAL/Pods-YAL-resources-${CONFIGURATION}-output-files.xcfilelist",
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-YAL/Pods-YAL-resources.sh\"\n";
+			showEnvVarsInLog = 0;
+		};
+		A44CA7EBDC9C4A2C0083DD99 /* [CP] Check Pods Manifest.lock */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"${PODS_PODFILE_DIR_PATH}/Podfile.lock",
+				"${PODS_ROOT}/Manifest.lock",
+			);
+			name = "[CP] Check Pods Manifest.lock";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(DERIVED_FILE_DIR)/Pods-YAL-checkManifestLockResult.txt",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
+			showEnvVarsInLog = 0;
+		};
+		A9C1A66F66E8981B65E9125C /* [CP] Check Pods Manifest.lock */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"${PODS_PODFILE_DIR_PATH}/Podfile.lock",
+				"${PODS_ROOT}/Manifest.lock",
+			);
+			name = "[CP] Check Pods Manifest.lock";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(DERIVED_FILE_DIR)/Pods-MessageFilterExtension-checkManifestLockResult.txt",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
+			showEnvVarsInLog = 0;
+		};
+		C903D71A2E6ED1D30026736F /* ShellScript */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"$(SRCROOT)/${DWARF_DSYM_FOLDER_PATH}/${DWARF_DSYM_FILE_NAME}",
+				"$(SRCROOT)/${DWARF_DSYM_FOLDER_PATH}/${DWARF_DSYM_FILE_NAME}/Contents/Resources/DWARF/${PRODUCT_NAME}",
+				"$(SRCROOT)/${DWARF_DSYM_FOLDER_PATH}/${DWARF_DSYM_FILE_NAME}/Contents/Info.plist",
+				"$(SRCROOT)/$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/GoogleService-Info.plist",
+				"$(SRCROOT)/$(TARGET_BUILD_DIR)/$(EXECUTABLE_PATH)",
+			);
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "# Type a script or drag a script file from your workspace to insert its path.\n\"${BUILD_DIR%/Build/*}/SourcePackages/checkouts/firebase-ios-sdk/Crashlytics/run\"\n";
+		};
+/* End PBXShellScriptBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		C971CC202E9D12BC0009BDEF /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C971CC302E9D12E30009BDEF /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C9B6A60A2DBAD80900CA15BD /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C9DDFB2B2DA7C1A8007126C3 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C9DDFB382DA7C1A9007126C3 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C9DDFB422DA7C1A9007126C3 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		C971CC2A2E9D12BC0009BDEF /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = C971CC232E9D12BC0009BDEF /* YALNotificationServiceExtension */;
+			targetProxy = C971CC292E9D12BC0009BDEF /* PBXContainerItemProxy */;
+		};
+		C971CC412E9D12E30009BDEF /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = C971CC332E9D12E30009BDEF /* YALNotificationContentExtension */;
+			targetProxy = C971CC402E9D12E30009BDEF /* PBXContainerItemProxy */;
+		};
+		C9B6A6142DBAD80900CA15BD /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = C9B6A60D2DBAD80900CA15BD /* MessageFilterExtension */;
+			targetProxy = C9B6A6132DBAD80900CA15BD /* PBXContainerItemProxy */;
+		};
+		C9DDFB3E2DA7C1A9007126C3 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = C9DDFB2E2DA7C1A8007126C3 /* YAL */;
+			targetProxy = C9DDFB3D2DA7C1A9007126C3 /* PBXContainerItemProxy */;
+		};
+		C9DDFB482DA7C1A9007126C3 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = C9DDFB2E2DA7C1A8007126C3 /* YAL */;
+			targetProxy = C9DDFB472DA7C1A9007126C3 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		C971CC2C2E9D12BC0009BDEF /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = YALNotificationServiceExtension/YALNotificationServiceExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = 8S3YYR85J4;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = YALNotificationServiceExtension/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = YALNotificationServiceExtension;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.echelonera.yalchat.YALNotificationServiceExtension;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		C971CC2D2E9D12BC0009BDEF /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = YALNotificationServiceExtension/YALNotificationServiceExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 8S3YYR85J4;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = YALNotificationServiceExtension/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = YALNotificationServiceExtension;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.echelonera.yalchat.YALNotificationServiceExtension;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		C971CC442E9D12E30009BDEF /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 124;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = 8S3YYR85J4;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = YALNotificationContentExtension/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = YALNotificationContentExtension;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.echelonera.yalchat.YALNotificationContentExtension;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		C971CC452E9D12E30009BDEF /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 124;
+				DEVELOPMENT_TEAM = 8S3YYR85J4;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = YALNotificationContentExtension/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = YALNotificationContentExtension;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.echelonera.yalchat.YALNotificationContentExtension;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		C9B6A6172DBAD80900CA15BD /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = F6ED0455A4EEDC820989BE92 /* Pods-MessageFilterExtension.debug.xcconfig */;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = MessageFilterExtension/MessageFilterExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 8S3YYR85J4;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "$(SRCROOT)/MessageFilterExtension/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = MessageFilterExtension;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 16;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.echelonera.yalchat.MessageFilterExtension;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		C9B6A6182DBAD80900CA15BD /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = DF1AF6FD22AF75498709D39C /* Pods-MessageFilterExtension.release.xcconfig */;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = MessageFilterExtension/MessageFilterExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 8S3YYR85J4;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "$(SRCROOT)/MessageFilterExtension/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = MessageFilterExtension;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 16;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.echelonera.yalchat.MessageFilterExtension;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		C9DDFB4E2DA7C1A9007126C3 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = 8S3YYR85J4;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.4;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		C9DDFB4F2DA7C1A9007126C3 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = 8S3YYR85J4;
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.4;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		C9DDFB512DA7C1A9007126C3 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 8B0B8CB3EEA7A4440B8F7541 /* Pods-YAL.debug.xcconfig */;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = AppIcon;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = YAL/YALDebug.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 8S3YYR85J4;
+				ENABLE_PREVIEWS = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "$(SRCROOT)/YAL/SupportingFiles/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "YAL.ai ";
+				INFOPLIST_KEY_NSCameraUsageDescription = "We need access to your camera to allow you to take a photo for your profile. This photo will be used only within the app and is not shared without your consent";
+				INFOPLIST_KEY_NSContactsUsageDescription = "We need access to your contacts to help you find and connect with your friends within the app. We only use this data locally and do not upload it to our servers";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "We need access to your photo library to select images.";
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
+				INFOPLIST_KEY_UIStatusBarStyle = "";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
+				IPHONEOS_DEPLOYMENT_TARGET = 16;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0.2;
+				PRODUCT_BUNDLE_IDENTIFIER = com.echelonera.yalchat;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		C9DDFB522DA7C1A9007126C3 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 4993CDCF6A86C871A5776815 /* Pods-YAL.release.xcconfig */;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = AppIcon;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = YAL/YAL.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 8S3YYR85J4;
+				ENABLE_PREVIEWS = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "$(SRCROOT)/YAL/SupportingFiles/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "YAL.ai ";
+				INFOPLIST_KEY_NSCameraUsageDescription = "We need access to your camera to allow you to take a photo for your profile. This photo will be used only within the app and is not shared without your consent";
+				INFOPLIST_KEY_NSContactsUsageDescription = "We need access to your contacts to help you find and connect with your friends within the app. We only use this data locally and do not upload it to our servers";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "We need access to your photo library to select images.";
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
+				INFOPLIST_KEY_UIStatusBarStyle = "";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
+				IPHONEOS_DEPLOYMENT_TARGET = 16;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0.2;
+				PRODUCT_BUNDLE_IDENTIFIER = com.echelonera.yalchat;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+		C9DDFB542DA7C1A9007126C3 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 8S3YYR85J4;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.yal.matrixchatapp.YALTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/YAL.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/YAL";
+			};
+			name = Debug;
+		};
+		C9DDFB552DA7C1A9007126C3 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 8S3YYR85J4;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.yal.matrixchatapp.YALTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/YAL.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/YAL";
+			};
+			name = Release;
+		};
+		C9DDFB572DA7C1A9007126C3 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 8S3YYR85J4;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.yal.matrixchatapp.YALUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = YAL;
+			};
+			name = Debug;
+		};
+		C9DDFB582DA7C1A9007126C3 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 8S3YYR85J4;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.yal.matrixchatapp.YALUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = YAL;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		C971CC2E2E9D12BC0009BDEF /* Build configuration list for PBXNativeTarget "YALNotificationServiceExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				C971CC2C2E9D12BC0009BDEF /* Debug */,
+				C971CC2D2E9D12BC0009BDEF /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		C971CC432E9D12E30009BDEF /* Build configuration list for PBXNativeTarget "YALNotificationContentExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				C971CC442E9D12E30009BDEF /* Debug */,
+				C971CC452E9D12E30009BDEF /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		C9B6A6192DBAD80900CA15BD /* Build configuration list for PBXNativeTarget "MessageFilterExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				C9B6A6172DBAD80900CA15BD /* Debug */,
+				C9B6A6182DBAD80900CA15BD /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		C9DDFB2A2DA7C1A8007126C3 /* Build configuration list for PBXProject "YAL" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				C9DDFB4E2DA7C1A9007126C3 /* Debug */,
+				C9DDFB4F2DA7C1A9007126C3 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		C9DDFB502DA7C1A9007126C3 /* Build configuration list for PBXNativeTarget "YAL" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				C9DDFB512DA7C1A9007126C3 /* Debug */,
+				C9DDFB522DA7C1A9007126C3 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		C9DDFB532DA7C1A9007126C3 /* Build configuration list for PBXNativeTarget "YALTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				C9DDFB542DA7C1A9007126C3 /* Debug */,
+				C9DDFB552DA7C1A9007126C3 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		C9DDFB562DA7C1A9007126C3 /* Build configuration list for PBXNativeTarget "YALUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				C9DDFB572DA7C1A9007126C3 /* Debug */,
+				C9DDFB582DA7C1A9007126C3 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		C89DCAFE2E73F89F00616FC9 /* XCRemoteSwiftPackageReference "netfox" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/kasketis/netfox";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.21.0;
+			};
+		};
+		C9553D6D2DD60548006D0802 /* XCRemoteSwiftPackageReference "realm-swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/realm/realm-swift.git";
+			requirement = {
+				branch = master;
+				kind = branch;
+			};
+		};
+		C9ABE9B72E66DF2E003EE418 /* XCRemoteSwiftPackageReference "PhoneNumberKit" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/marmelroy/PhoneNumberKit";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 4.1.4;
+			};
+		};
+		C9D88C092DBCEE36004A5887 /* XCRemoteSwiftPackageReference "SDWebImageSwiftUI" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/SDWebImage/SDWebImageSwiftUI.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 3.1.3;
+			};
+		};
+		C9D88F9C2DC35F7D004A5887 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/firebase/firebase-ios-sdk";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 11.12.0;
+			};
+		};
+		C9DDFF082DAD4C36007126C3 /* XCRemoteSwiftPackageReference "Swinject" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/Swinject/Swinject.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.9.1;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		4839E7F52ED06FD700567861 /* FirebaseAnalytics */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = C9D88F9C2DC35F7D004A5887 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseAnalytics;
+		};
+		C903D7182E6ECE4A0026736F /* FirebaseCrashlytics */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = FirebaseCrashlytics;
+		};
+		C9553D6E2DD60548006D0802 /* RealmSwift */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = C9553D6D2DD60548006D0802 /* XCRemoteSwiftPackageReference "realm-swift" */;
+			productName = RealmSwift;
+		};
+		C9ABE9B82E66DF2E003EE418 /* PhoneNumberKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = C9ABE9B72E66DF2E003EE418 /* XCRemoteSwiftPackageReference "PhoneNumberKit" */;
+			productName = PhoneNumberKit;
+		};
+		C9ABE9BC2E66DF2E003EE418 /* PhoneNumberKit-Static */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = C9ABE9B72E66DF2E003EE418 /* XCRemoteSwiftPackageReference "PhoneNumberKit" */;
+			productName = "PhoneNumberKit-Static";
+		};
+		C9D88C0A2DBCEF5D004A5887 /* SDWebImageSwiftUI */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = C9D88C092DBCEE36004A5887 /* XCRemoteSwiftPackageReference "SDWebImageSwiftUI" */;
+			productName = SDWebImageSwiftUI;
+		};
+		C9D88F9D2DC35F7D004A5887 /* FirebaseCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = C9D88F9C2DC35F7D004A5887 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseCore;
+		};
+		C9D88F9F2DC35F7D004A5887 /* FirebaseRemoteConfig */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = C9D88F9C2DC35F7D004A5887 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseRemoteConfig;
+		};
+		C9DDFF0A2DAD4C48007126C3 /* Swinject */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = C9DDFF082DAD4C36007126C3 /* XCRemoteSwiftPackageReference "Swinject" */;
+			productName = Swinject;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = C9DDFB272DA7C1A8007126C3 /* Project object */;
+}

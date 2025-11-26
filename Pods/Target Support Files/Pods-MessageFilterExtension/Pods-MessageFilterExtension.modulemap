@@ -1,0 +1,6 @@
+framework module Pods_MessageFilterExtension {
+  umbrella header "Pods-MessageFilterExtension-umbrella.h"
+
+  export *
+  module * { export * }
+}

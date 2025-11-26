@@ -1,0 +1,9 @@
+/* 
+  Localizable.strings
+  YAL
+
+  Created by Vishal Bhadade on 09/10/25.
+  
+*/
+"MSG_FROM_USER_WITH_CONTENT" = "%@: %@";
+"MSG_FROM_USER_IN_ROOM_WITH_CONTENT" = "%@ in %@: %@";
