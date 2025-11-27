@@ -19,6 +19,7 @@ enum NavigationTarget: Hashable {
 }
 
 struct RoomListView: View {
+
     @State private var showContactsList = false
     @StateObject private var viewModel: RoomListViewModel
     @EnvironmentObject var router: Router
@@ -176,6 +177,10 @@ struct RoomListView: View {
                 }
             }
             .onAppear {
+                    print("==================================================")
+                    print("ROOM LIST VIEW ENTERED")
+                    print("==================================================")
+                
                 guard !didRunInitialLoad else { return }
                 didRunInitialLoad = true
                 restoreSession()

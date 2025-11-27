@@ -17,6 +17,8 @@ struct ReceiverMessageView: View {
     @State private var isVideoPlayerPresented = false
     @State private var downloadedImage: UIImage?
     
+    @StateObject private var previewFetcher = URLPreviewFetcher()
+
     var isForwarding: Bool? = false
 
     let isGroupChat: Bool
@@ -74,7 +76,7 @@ struct ReceiverMessageView: View {
     }
     
     var body: some View {
-        HStack(alignment: .top, spacing: 4) {
+        VStack() {
             if isForwarding == true {
                 Toggle(isOn: $message.isSelected) {
                     messageBubble.disabled(true)
@@ -97,6 +99,35 @@ struct ReceiverMessageView: View {
                     messageBubble
                 }
             }
+            
+            // Add URL Preview
+                     if message.containsURL, let urlString = message.firstURL {
+                         if let cachedPreview = URLPreviewCache.shared.getPreview(for: urlString) {
+                             URLPreviewCard(previewData: cachedPreview) {
+                                 openURL(urlString)
+                             }
+                             .padding(.top, 4)
+                         } else if previewFetcher.isLoading {
+                             HStack {
+                                 ProgressView()
+                                 Text("Loading preview...")
+                                     .font(.caption)
+                                     .foregroundColor(.gray)
+                             }
+                             .frame(maxWidth: .infinity)
+                             .frame(height: 60)
+                             .background(Color(.systemGray6))
+                             .cornerRadius(8)
+                         } else if let preview = previewFetcher.previewData {
+                             URLPreviewCard(previewData: preview) {
+                                 openURL(urlString)
+                             }
+                             .padding(.top, 4)
+                             .onAppear {
+                                 URLPreviewCache.shared.setPreview(preview, for: urlString)
+                             }
+                         }
+                     }
             Spacer()
         }
         .padding(.leading, 20)
@@ -107,6 +138,17 @@ struct ReceiverMessageView: View {
                 onMessageRead?()
             }
             downLoadAvatarIfNeeded()
+            
+            // Fetch preview when message appears
+                       if message.containsURL,
+                          let urlString = message.firstURL,
+                          URLPreviewCache.shared.getPreview(for: urlString) == nil,
+                          previewFetcher.previewData == nil {
+                           Task {
+                               await previewFetcher.fetchPreview(for: urlString)
+                           }
+                       }
+                   
         }
         .onChange(of: message.mediaUrl) { _ in triggerDownloadIfNeeded() }
     }
@@ -118,6 +160,11 @@ struct ReceiverMessageView: View {
         }
         return false
     }
+    private func openURL(_ urlString: String) {
+           if let url = URL(string: urlString) {
+               UIApplication.shared.open(url)
+           }
+       }
 
     @ViewBuilder
     private var mediaSection: some View {
@@ -466,6 +513,23 @@ struct ReceiverMessageView: View {
             }
         }
     }
+    @ViewBuilder
+       func messageContentWithPreview() -> some View {
+           VStack(alignment: .leading, spacing: 8) {
+               // Original message content
+               Text(message.content)
+                   .font(.system(size: 15))
+                   .foregroundColor(.primary)
+               
+               // URL Preview
+               if message.containsURL, let urlString = message.firstURL {
+                   URLPreviewForMessage(
+                       urlString: urlString,
+                       message: message
+                   )
+               }
+           }
+       }
 }
 
 // MARK: - Reply Preview View

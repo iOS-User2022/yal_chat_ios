@@ -64,6 +64,7 @@ struct UserProfileView: View {
             .background(Design.Color.appGradient.opacity(0.12))
             .ignoresSafeArea(.all)
             .onAppear {
+                print("user profile view")
                 topInsets = 0
             }
             .overlay{

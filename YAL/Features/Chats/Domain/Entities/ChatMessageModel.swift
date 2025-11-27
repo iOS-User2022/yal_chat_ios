@@ -127,6 +127,24 @@ class ChatMessageModel: ObservableObject, Identifiable, Equatable, Hashable {
         return ByteCountFormatter.string(fromByteCount: Int64(size), countStyle: .file)
     }
     
+    
+    // Add this property to store preview metadata
+       var urlPreviewData: URLPreviewData? {
+           get {
+               // Retrieve from cache or stored metadata
+               if let firstURL = self.firstURL {
+                   return URLPreviewCache.shared.getPreview(for: firstURL)
+               }
+               return nil
+           }
+           set {
+               if let preview = newValue {
+                   URLPreviewCache.shared.setPreview(preview, for: preview.url)
+               }
+           }
+       }
+    
+   
     private var cancellables = Set<AnyCancellable>()
 
     // MARK: - Initializer

@@ -48,6 +48,10 @@ struct SelectContactsListView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(Design.Color.white)
             .onAppear {
+                print("==================================================")
+                print("select contact LIST VIEW ENTERED")
+                print("==================================================")
+            
                 viewModel.startContactSync()
             }
             .navigationDestination(for: GroupCreateRoute.self) { route in

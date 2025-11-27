@@ -17,6 +17,10 @@ struct ChatInputBar: View {
     let onImageButtonTap: () -> Void
     var onCancelReply: (() -> Void)?
 
+    @StateObject private var livePreviewFetcher = URLPreviewFetcher()
+    @State private var showURLPreview = false
+    @State private var currentPreviewURL: String?
+    
     @StateObject private var audioRecorder = AudioRecorder()
     @State private var isRecording = false
     @State private var hasRecordingStarted = false
@@ -37,8 +41,40 @@ struct ChatInputBar: View {
                 .padding(.bottom, 2)
                 .transition(.opacity)
             }
+            
             replyView()
 
+            // Show live URL preview if URL detected
+            if showURLPreview, let preview = livePreviewFetcher.previewData {
+                HStack(alignment: .top, spacing: 8) {
+                    URLPreviewCard(previewData: preview) {
+                        // Open URL in browser
+                        if let url = URL(string: preview.url) {
+                            UIApplication.shared.open(url)
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
+                    
+                    Button(action: {
+                        withAnimation {
+                            showURLPreview = false
+                            currentPreviewURL = nil
+                        }
+                    }) {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundColor(.gray)
+                            .font(.system(size: 20))
+                    }
+                    .padding(.top, 8)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(Color(.systemGray6))
+                .cornerRadius(12)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .animation(.easeInOut, value: showURLPreview)
+            }
+            
             // INPUT BAR
             if isRecording {
                 RecordingView(audioRecorder: audioRecorder, onSend: {
@@ -63,6 +99,9 @@ struct ChatInputBar: View {
                         .background(Color.white)
                         .clipShape(RoundedRectangle(cornerRadius: 8))
                         .shadow(color: .black.opacity(0.08), radius: 10, x: 0, y: 0)
+                        .onChange(of: message) { newValue in
+                            handleMessageChange(newValue)
+                        }
 
                     if message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                         Button(action: {
@@ -73,7 +112,12 @@ struct ChatInputBar: View {
                                 .clipShape(RoundedRectangle(cornerRadius: 12))
                         }
                     } else {
-                        Button(action: onSend) {
+                        Button(action: {
+                            onSend()
+                            // Reset preview after sending
+                            showURLPreview = false
+                            currentPreviewURL = nil
+                        }) {
                             Image("send")
                                 .frame(width: 40, height: 40)
                                 .clipShape(RoundedRectangle(cornerRadius: 12))
@@ -94,6 +138,50 @@ struct ChatInputBar: View {
         audioRecorder.startRecording()
         isRecording = true
         hasRecordingStarted = true
+    }
+    
+    private func handleMessageChange(_ text: String) {
+        let urls = URLDetector.extractURLs(from: text)
+        
+        if let firstURL = urls.first, URLDetector.isValidURL(firstURL) {
+            // Only fetch if it's a new URL
+            if currentPreviewURL != firstURL {
+                currentPreviewURL = firstURL
+                
+                // Check cache first
+                if let cachedPreview = URLPreviewCache.shared.getPreview(for: firstURL) {
+                    livePreviewFetcher.previewData = cachedPreview
+                    withAnimation {
+                        showURLPreview = true
+                    }
+                } else {
+                    // Debounce the fetch to avoid too many requests
+                    Task {
+                        try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 second delay
+                        
+                        // Check if URL still exists and is the same
+                        if message.contains(firstURL), currentPreviewURL == firstURL {
+                            await livePreviewFetcher.fetchPreview(for: firstURL)
+                            
+                            await MainActor.run {
+                                if livePreviewFetcher.previewData != nil {
+                                    withAnimation {
+                                        showURLPreview = true
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        } else {
+            // No valid URL found, hide preview
+            withAnimation {
+                showURLPreview = false
+            }
+            currentPreviewURL = nil
+            livePreviewFetcher.previewData = nil
+        }
     }
     
     private func sendRecording() {

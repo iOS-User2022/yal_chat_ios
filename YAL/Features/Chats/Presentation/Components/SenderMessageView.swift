@@ -349,6 +349,23 @@ struct SenderMessageView: View {
         formatter.dateFormat = "HH:mm"
         return formatter.string(from: date)
     }
+    @ViewBuilder
+        func messageContentWithPreview() -> some View {
+            VStack(alignment: .leading, spacing: 8) {
+                // Original message content
+                Text(message.content)
+                    .font(.system(size: 15))
+                    .foregroundColor(.primary)
+                
+                // URL Preview
+                if message.containsURL, let urlString = message.firstURL {
+                    URLPreviewForMessage(
+                        urlString: urlString,
+                        message: message
+                    )
+                }
+            }
+        }
 }
 
 // MARK: - Reply Preview View
@@ -405,5 +422,76 @@ private struct ReplyPreviewView: View {
         .onTapGesture {
             onTapReplyMessage?()
         }
+    }
+}
+// MARK: - URL Preview Component for Messages
+struct URLPreviewForMessage: View {
+    let urlString: String
+    let message: ChatMessageModel
+    
+    @StateObject private var previewFetcher = URLPreviewFetcher()
+    @State private var hasAttemptedFetch = false
+    
+    var body: some View {
+        Group {
+            if let cachedPreview = URLPreviewCache.shared.getPreview(for: urlString) {
+                URLPreviewCard(previewData: cachedPreview) {
+                    openURL(urlString)
+                }
+            } else if previewFetcher.isLoading {
+                LoadingPreviewView()
+            } else if let preview = previewFetcher.previewData {
+                URLPreviewCard(previewData: preview) {
+                    openURL(urlString)
+                }
+                .onAppear {
+                    URLPreviewCache.shared.setPreview(preview, for: urlString)
+                }
+            } else if hasAttemptedFetch {
+                // Show nothing if fetch failed
+                EmptyView()
+            }
+        }
+        .onAppear {
+            fetchPreviewIfNeeded()
+        }
+    }
+    
+    private func fetchPreviewIfNeeded() {
+        guard !hasAttemptedFetch else { return }
+        
+        // Check cache first
+        if URLPreviewCache.shared.getPreview(for: urlString) != nil {
+            return
+        }
+        
+        // Fetch from network
+        hasAttemptedFetch = true
+        Task {
+            await previewFetcher.fetchPreview(for: urlString)
+        }
+    }
+    
+    private func openURL(_ urlString: String) {
+        if let url = URL(string: urlString) {
+            UIApplication.shared.open(url)
+        }
+    }
+}
+// MARK: - Loading Preview View
+struct LoadingPreviewView: View {
+    var body: some View {
+        HStack(spacing: 12) {
+            ProgressView()
+                .progressViewStyle(CircularProgressViewStyle())
+            
+            Text("Loading preview...")
+                .font(.caption)
+                .foregroundColor(.gray)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(12)
+        .background(Color(.systemGray6))
+        .cornerRadius(8)
     }
 }

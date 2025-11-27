@@ -191,6 +191,28 @@ final class ChatViewModel: ObservableObject {
         cancellables.removeAll()
     }
 
+    func sendMessageWithURLPreview(toRoom roomId: String, inReplyTo: ChatMessageModel? = nil) {
+            // Extract URLs
+            let urls = URLDetector.extractURLs(from: newMessage)
+            
+            if let firstURL = urls.first {
+                // Send message immediately
+                sendMessage(toRoom: roomId, inReplyTo: inReplyTo)
+                
+                // Fetch preview in background
+                Task {
+                    let fetcher = URLPreviewFetcher()
+                    await fetcher.fetchPreview(for: firstURL)
+                    
+                    if let preview = fetcher.previewData {
+                        // Store in cache for future use
+                        URLPreviewCache.shared.setPreview(preview, for: firstURL)
+                    }
+                }
+            } else {
+                sendMessage(toRoom: roomId, inReplyTo: inReplyTo)
+            }
+        }
     func switchRoom(to roomId: String) {
         guard currentRoomId != roomId else { return }
 
@@ -351,51 +373,30 @@ final class ChatViewModel: ObservableObject {
     }
 
     func sendMessage(toRoom roomId: String, inReplyTo: ChatMessageModel? = nil) {
+        // Extract URLs
+        let urls = URLDetector.extractURLs(from: newMessage)
+        
+        // Your existing send logic
         guard !newMessage.isEmpty,
               let userId = currentUser?.userId,
               let currentRoomId = currentRoomId else { return }
-
-        let tempId = UUID().uuidString
-        let ts = Int64(Date().timeIntervalSince1970 * 1000)
-        let message = ChatMessageModel(
-            eventId: tempId, sender: userId, content: newMessage,
-            timestamp: ts, msgType: MessageType.text.rawValue,
-            userId: userId, roomId: currentRoomId, inReplyTo: inReplyTo
-        )
-
-        DispatchQueue.main.async {
-            self.messages.append(message)
-            self.isLoading = true
+        
+        // ... rest of your existing code ...
+        
+        // After sending, fetch preview in background
+        if let firstURL = urls.first {
+            Task {
+                let fetcher = URLPreviewFetcher()
+                await fetcher.fetchPreview(for: firstURL)
+                
+                if let preview = fetcher.previewData {
+                    URLPreviewCache.shared.setPreview(preview, for: firstURL)
+                }
+            }
         }
-
-        roomService.sendMessage(message: message)
-            .subscribe(on: processQ)
-            .receive(on: processQ)
-            .sink(receiveCompletion: { [weak self] completion in
-                guard let self else { return }
-                DispatchQueue.main.async {
-                    if case let .failure(error) = completion {
-                        self.errorMessage = "Message send failed: \(error.localizedDescription)"
-                    }
-                    self.isLoading = false
-                }
-            }, receiveValue: { [weak self] response in
-                guard let self else { return }
-                if case .success(let resp) = response {
-                    DispatchQueue.main.async {
-                        if let idx = self.messages.firstIndex(where: { $0.eventId == tempId }) {
-                            self.messages[idx].eventId = resp.eventId
-                        }
-                    }
-                } else if case .unsuccess(let e) = response {
-                    DispatchQueue.main.async { self.errorMessage = "Message send failed: \(e.localizedDescription)" }
-                }
-            })
-            .store(in: &cancellables)
-
+        
         newMessage = ""
     }
-
     func markMessageAsRead(roomId: String, eventId: String, usePrivate: Bool = false) {
         roomService.sendReadMarker(
             roomId: roomId,

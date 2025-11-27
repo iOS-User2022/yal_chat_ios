@@ -273,6 +273,8 @@ struct ChatView: View {
                     }
                 }
                 .onAppear {
+                    print("chat view")
+
                     chatViewModel.enableMessageObservation()
                     chatViewModel.fetchMessages(forRoom: selectedRoom.id)
                     // Trigger search if returning from UserProfileView

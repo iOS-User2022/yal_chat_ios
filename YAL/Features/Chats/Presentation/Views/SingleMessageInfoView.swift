@@ -70,6 +70,7 @@ struct SingleMessageInfoView: View {
         }
         .padding()
         .background(AnyView(Design.Color.blueGradient.opacity(0.8)))
+       
 
     }
     
