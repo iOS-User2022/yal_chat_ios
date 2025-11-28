@@ -373,17 +373,75 @@ final class ChatViewModel: ObservableObject {
     }
 
     func sendMessage(toRoom roomId: String, inReplyTo: ChatMessageModel? = nil) {
-        // Extract URLs
-        let urls = URLDetector.extractURLs(from: newMessage)
-        
-        // Your existing send logic
-        guard !newMessage.isEmpty,
+        guard !newMessage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
               let userId = currentUser?.userId,
               let currentRoomId = currentRoomId else { return }
         
-        // ... rest of your existing code ...
+        let messageContent = newMessage
+        let urls = URLDetector.extractURLs(from: messageContent)
         
-        // After sending, fetch preview in background
+        // Create the message
+        let tempId = UUID().uuidString
+        let ts = Int64(Date().timeIntervalSince1970 * 1000)
+        
+        let message = ChatMessageModel(
+            eventId: tempId,
+            sender: userId,
+            content: messageContent,
+            timestamp: ts,
+            msgType: MessageType.text.rawValue,
+            mediaUrl: nil,
+            mediaInfo: nil,
+            userId: userId,
+            roomId: currentRoomId,
+            receipts: [],
+            downloadState: .notStarted,
+            downloadProgress: 0.0,
+            messageStatus: .sending
+        )
+        
+        // Add to messages immediately for optimistic UI
+        DispatchQueue.main.async {
+            self.messages.append(message)
+        }
+        
+        // Clear the input field
+        newMessage = ""
+        
+        // Send the message
+        roomService.sendMessage(message: message)
+            .subscribe(on: processQ)
+            .receive(on: processQ)
+            .sink(receiveCompletion: { completion in
+                if case .failure(let error) = completion {
+                    print("[sendMessage] Failed: \(error.localizedDescription)")
+                    DispatchQueue.main.async {
+                        if let idx = self.messages.firstIndex(where: { $0.eventId == tempId }) {
+//                            self.messages[idx].messageStatus = .failed
+                        }
+                    }
+                }
+            }, receiveValue: { [weak self] result in
+                switch result {
+                case .success(let response):
+                    DispatchQueue.main.async {
+                        if let idx = self?.messages.firstIndex(where: { $0.eventId == tempId }) {
+                            self?.messages[idx].eventId = response.eventId
+                            self?.messages[idx].messageStatus = .sent
+                        }
+                    }
+                case .unsuccess(let error):
+                    print("[sendMessage] API Error: \(error.localizedDescription)")
+                    DispatchQueue.main.async {
+                        if let idx = self?.messages.firstIndex(where: { $0.eventId == tempId }) {
+//                            self?.messages[idx].messageStatus = .failed
+                        }
+                    }
+                }
+            })
+            .store(in: &cancellables)
+        
+        // Fetch URL preview in background (if applicable)
         if let firstURL = urls.first {
             Task {
                 let fetcher = URLPreviewFetcher()
@@ -394,8 +452,6 @@ final class ChatViewModel: ObservableObject {
                 }
             }
         }
-        
-        newMessage = ""
     }
     func markMessageAsRead(roomId: String, eventId: String, usePrivate: Bool = false) {
         roomService.sendReadMarker(
