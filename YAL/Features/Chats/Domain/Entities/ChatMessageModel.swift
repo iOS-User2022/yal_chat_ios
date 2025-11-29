@@ -10,6 +10,16 @@ import Foundation
 import Combine
 import UIKit
 
+
+struct LinkPreviewData: Codable {
+    var url: String
+    var title: String?
+    var description: String?
+    var imageUrl: String?
+    var siteName: String?
+    var favicon: String?
+
+}
 struct ReceiptUpdate {
     let eventId: String
     let receipts: [MessageReadReceipt]
@@ -105,6 +115,10 @@ class ChatMessageModel: ObservableObject, Identifiable, Equatable, Hashable {
     @Published var inReplyTo: ChatMessageModel?
     @Published var reactions: [MessageReaction] = []
 
+    var linkPreview: LinkPreviewData?
+
+    // Add this property for URL preview
+      @Published var urlPreview: URLPreviewData?
     // MARK: - Constants
     let currentUserId: String
     let roomId: String
@@ -162,7 +176,9 @@ class ChatMessageModel: ObservableObject, Identifiable, Equatable, Hashable {
         downloadState: MediaDownloadState = .notStarted,
         downloadProgress: Double = 0.0,
         messageStatus: MessageStatus = .sent,
-        inReplyTo: ChatMessageModel? = nil
+        inReplyTo: ChatMessageModel? = nil,
+        linkPreview: LinkPreviewData? = nil  // Add this
+
     ) {
         self.eventId = eventId
         self.sender = sender
@@ -178,7 +194,8 @@ class ChatMessageModel: ObservableObject, Identifiable, Equatable, Hashable {
         self.downloadProgress = downloadProgress
         self.messageStatus = messageStatus
         self.inReplyTo = inReplyTo
-        
+        self.linkPreview = linkPreview
+
         bindReceiptStatusUpdates()
     }
     
@@ -234,10 +251,35 @@ class ChatMessageModel: ObservableObject, Identifiable, Equatable, Hashable {
                 timestamp: $0.timestamp
             )
         }
-        
+        // Add link preview deserialization
+              if let previewData = object.linkPreviewData {
+                  self.linkPreview = try? JSONDecoder().decode(LinkPreviewData.self, from: previewData)
+              }
         bindReceiptStatusUpdates()
     }
-    
+    convenience init(from obj: MessageObject, currentUserId: String) {
+           let receipts = (try? JSONDecoder().decode([MessageReadReceipt].self, from: obj.receipts ?? Data())) ?? []
+           let linkPreview = obj.linkPreviewData.flatMap { try? JSONDecoder().decode(LinkPreviewData.self, from: $0) }
+           
+           self.init(
+               eventId: obj.eventId,
+               sender: obj.sender,
+               content: obj.content,
+               timestamp: obj.timestamp,
+               msgType: obj.msgType,
+               mediaUrl: obj.mediaUrl,
+               mediaInfo: obj.mediaInfo?.toModel(),
+               userId: currentUserId,
+               roomId: obj.roomId,
+               receipts: receipts,
+               messageStatus: MessageStatus(rawValue: obj.messageStatus ?? "sent") ?? .sent,
+               linkPreview: linkPreview
+           )
+           
+           self.reactions = obj.reactions.map { r in
+               MessageReaction(eventId: r.eventId, userId: r.userId, key: r.key, timestamp: r.timestamp)
+           }
+       }
     func update(receiptEvent: ReceiptEvent) {
         receiptEvent.read?.forEach { userId, info in
             let receiptModel = receipts.first(where: { $0.userId == userId })

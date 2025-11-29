@@ -15,9 +15,21 @@ struct URLPreviewData: Codable, Identifiable {
     let siteName: String?
     let favicon: String?
     
+    
     enum CodingKeys: String, CodingKey {
         case url, title, description, imageURL, siteName, favicon
     }
+    // Add this conversion method
+     func toLinkPreviewData() -> LinkPreviewData {
+         return LinkPreviewData(
+             url: self.url,
+             title: self.title,
+             description: self.description,
+             imageUrl: self.imageURL,
+             siteName: self.siteName,
+             favicon: self.favicon
+         )
+     }
 }
 
 // MARK: - URL Detector
@@ -140,37 +152,40 @@ class URLPreviewFetcher: ObservableObject {
     }
 }
 
-// MARK: - URL Preview Card View
+// MARK: - URL Preview Card View (UPDATED - Fixed Property Names)
 struct URLPreviewCard: View {
     let previewData: URLPreviewData
+    var isSender: Bool = false
     let onTap: () -> Void
     
     var body: some View {
         Button(action: onTap) {
             VStack(alignment: .leading, spacing: 0) {
-                // Image (if available)
-                if let imageURLString = previewData.imageURL,
-                   let imageURL = URL(string: imageURLString) {
-                    AsyncImage(url: imageURL) { phase in
+                // Preview Image - FIXED: imageURL instead of imageUrl
+                if let imageUrl = previewData.imageURL, !imageUrl.isEmpty {
+                    AsyncImage(url: URL(string: imageUrl)) { phase in
                         switch phase {
                         case .empty:
                             Rectangle()
-                                .fill(Color.gray.opacity(0.2))
-                                .frame(height: 160)
-                                .overlay(ProgressView())
+                                .fill(isSender ? Color.white.opacity(0.2) : Color.gray.opacity(0.2))
+                                .frame(height: 120)
+                                .overlay(
+                                    ProgressView()
+                                        .tint(isSender ? .white : .gray)
+                                )
                         case .success(let image):
                             image
                                 .resizable()
                                 .aspectRatio(contentMode: .fill)
-                                .frame(height: 160)
+                                .frame(height: 120)
                                 .clipped()
                         case .failure:
                             Rectangle()
-                                .fill(Color.gray.opacity(0.2))
-                                .frame(height: 160)
+                                .fill(isSender ? Color.white.opacity(0.2) : Color.gray.opacity(0.2))
+                                .frame(height: 120)
                                 .overlay(
                                     Image(systemName: "photo")
-                                        .foregroundColor(.gray)
+                                        .foregroundColor(isSender ? .white.opacity(0.7) : .gray)
                                 )
                         @unknown default:
                             EmptyView()
@@ -178,67 +193,41 @@ struct URLPreviewCard: View {
                     }
                 }
                 
-                // Content
-                VStack(alignment: .leading, spacing: 6) {
-                    // Site name or domain
-                    if let siteName = previewData.siteName {
-                        Text(siteName.uppercased())
-                            .font(.caption2)
-                            .foregroundColor(.gray)
-                    } else if let host = URL(string: previewData.url)?.host {
-                        Text(host.uppercased())
-                            .font(.caption2)
-                            .foregroundColor(.gray)
-                    }
-                    
-                    // Title
-                    if let title = previewData.title {
+                // Preview Text Content
+                VStack(alignment: .leading, spacing: 4) {
+                    if let title = previewData.title, !title.isEmpty {
                         Text(title)
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundColor(.primary)
+                            .font(Design.Font.bold(13))
+                            .foregroundColor(isSender ? .white : .primary)
                             .lineLimit(2)
                     }
                     
-                    // Description
-                    if let description = previewData.description {
+                    if let description = previewData.description, !description.isEmpty {
                         Text(description)
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                            .lineLimit(3)
+                            .font(Design.Font.regular(11))
+                            .foregroundColor(isSender ? .white.opacity(0.8) : .secondary)
+                            .lineLimit(2)
                     }
                     
-                    // URL
-                    HStack(spacing: 4) {
-                        if let favicon = previewData.favicon,
-                           let faviconURL = URL(string: favicon) {
-                            AsyncImage(url: faviconURL) { image in
-                                image
-                                    .resizable()
-                                    .frame(width: 12, height: 12)
-                            } placeholder: {
-                                Image(systemName: "globe")
-                                    .font(.system(size: 10))
-                                    .foregroundColor(.gray)
-                            }
-                        } else {
-                            Image(systemName: "globe")
-                                .font(.system(size: 10))
-                                .foregroundColor(.gray)
-                        }
-                        
-                        Text(previewData.url)
-                            .font(.caption2)
-                            .foregroundColor(.blue)
-                            .lineLimit(1)
+                    // Domain/Site Name
+                    if let siteName = previewData.siteName, !siteName.isEmpty {
+                        Text(siteName.uppercased())
+                            .font(Design.Font.regular(9))
+                            .foregroundColor(isSender ? .white.opacity(0.6) : .gray)
+                    } else if let host = URL(string: previewData.url)?.host {
+                        Text(host.uppercased())
+                            .font(Design.Font.regular(9))
+                            .foregroundColor(isSender ? .white.opacity(0.6) : .gray)
                     }
                 }
-                .padding(12)
+                .padding(8)
+                .background(isSender ? Color.white.opacity(0.15) : Color.white)
             }
-            .background(Color(.systemGray6))
-            .cornerRadius(12)
+            .background(isSender ? Color.white.opacity(0.1) : Color(.systemGray6))
+            .cornerRadius(8)
             .overlay(
-                RoundedRectangle(cornerRadius: 12)
-                    .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(isSender ? Color.white.opacity(0.3) : Color.gray.opacity(0.2), lineWidth: 1)
             )
         }
         .buttonStyle(PlainButtonStyle())
@@ -247,12 +236,22 @@ struct URLPreviewCard: View {
 
 // MARK: - Extensions for ChatMessageModel
 extension ChatMessageModel {
+    /// Check if the message content contains a URL
     var containsURL: Bool {
-        !URLDetector.extractURLs(from: content).isEmpty
+        let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue)
+        let matches = detector?.matches(in: content, options: [], range: NSRange(location: 0, length: content.utf16.count))
+        return !(matches?.isEmpty ?? true)
     }
     
+    /// Extract the first URL from the message content
     var firstURL: String? {
-        URLDetector.extractURLs(from: content).first
+        let urls = URLDetector.extractURLs(from: content)
+        return urls.first
+    }
+    
+    /// Extract all URLs from the message content
+    var allURLs: [String] {
+        return URLDetector.extractURLs(from: content)
     }
 }
 
@@ -273,52 +272,32 @@ class URLPreviewCache {
         cache.removeAll()
     }
 }
+// URLPreviewData+Extensions.swift
 
-// MARK: - Usage Example in Message Bubble
-struct MessageWithURLPreview: View {
-    let message: ChatMessageModel
-    @StateObject private var previewFetcher = URLPreviewFetcher()
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            // Original message text
-            Text(message.content)
-                .font(.system(size: 15))
-                .foregroundColor(.primary)
-            
-            // URL Preview
-            if let urlString = message.firstURL {
-                if let cachedPreview = URLPreviewCache.shared.getPreview(for: urlString) {
-                    URLPreviewCard(previewData: cachedPreview) {
-                        openURL(urlString)
-                    }
-                } else if previewFetcher.isLoading {
-                    ProgressView()
-                        .frame(height: 60)
-                } else if let preview = previewFetcher.previewData {
-                    URLPreviewCard(previewData: preview) {
-                        openURL(urlString)
-                    }
-                    .onAppear {
-                        URLPreviewCache.shared.setPreview(preview, for: urlString)
-                    }
-                }
-            }
-        }
-        .onAppear {
-            if let urlString = message.firstURL,
-               URLPreviewCache.shared.getPreview(for: urlString) == nil,
-               previewFetcher.previewData == nil {
-                Task {
-                    await previewFetcher.fetchPreview(for: urlString)
-                }
-            }
-        }
-    }
-    
-    private func openURL(_ urlString: String) {
-        if let url = URL(string: urlString) {
-            UIApplication.shared.open(url)
-        }
-    }
-}
+//extension URLPreviewData {
+//    /// Converts URLPreviewData to LinkPreviewData
+//    func toLinkPreviewData() -> LinkPreviewData {
+//        return LinkPreviewData(
+//            url: self.url.absoluteString,
+//            title: self.title,
+//            description: self.description,
+//            imageUrl: self.imageURL?.absoluteString,
+//            siteName: self.siteName
+//        )
+//    }
+//}
+
+//extension LinkPreviewData {
+//    /// Converts LinkPreviewData to URLPreviewData
+//    func toURLPreviewData() -> URLPreviewData? {
+//        guard let url = URL(string: self.url) else { return nil }
+//        
+//        return URLPreviewData(
+//            url: url,
+//            title: self.title,
+//            description: self.description,
+//            imageURL: self.imageUrl.flatMap { URL(string: $0) },
+//            siteName: self.siteName
+//        )
+//    }
+//}

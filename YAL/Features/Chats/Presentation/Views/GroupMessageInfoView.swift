@@ -179,7 +179,6 @@ struct MemberRow: View {
                 initialsView
             }
         }.onAppear {
-            print("group message view enterd")
             guard downloadedImage == nil else { return } // prevent re-download
             print("member.avatarURL", member.avatarURL)
             if let httpUrl = member.avatarURL, !httpUrl.isEmpty {

@@ -14,6 +14,8 @@ final class ChatViewModel: ObservableObject {
     private let roomService: RoomServiceProtocol
     private var cancellables = Set<AnyCancellable>()
 
+      private var linkPreviews: [String: LinkPreviewData] = [:] // Cache by message ID
+      
     @Published var uploadProgress: Double = 0.0
     @Published var errorMessage: String? = nil
     @Published var isLoading: Bool = false
@@ -190,29 +192,130 @@ final class ChatViewModel: ObservableObject {
         cancellables.forEach { $0.cancel() }
         cancellables.removeAll()
     }
+    // In ChatViewModel.swift, replace sendMessageWithURLPreview with this:
 
     func sendMessageWithURLPreview(toRoom roomId: String, inReplyTo: ChatMessageModel? = nil) {
-            // Extract URLs
-            let urls = URLDetector.extractURLs(from: newMessage)
-            
-            if let firstURL = urls.first {
-                // Send message immediately
-                sendMessage(toRoom: roomId, inReplyTo: inReplyTo)
-                
-                // Fetch preview in background
-                Task {
-                    let fetcher = URLPreviewFetcher()
-                    await fetcher.fetchPreview(for: firstURL)
-                    
-                    if let preview = fetcher.previewData {
-                        // Store in cache for future use
-                        URLPreviewCache.shared.setPreview(preview, for: firstURL)
+        guard !newMessage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              let userId = currentUser?.userId,
+              let currentRoomId = currentRoomId else { return }
+        
+        let messageContent = newMessage
+        let urls = URLDetector.extractURLs(from: messageContent)
+        
+        // Create the message
+        let tempId = UUID().uuidString
+        let ts = Int64(Date().timeIntervalSince1970 * 1000)
+        
+        let message = ChatMessageModel(
+            eventId: tempId,
+            sender: userId,
+            content: messageContent,
+            timestamp: ts,
+            msgType: MessageType.text.rawValue,
+            mediaUrl: nil,
+            mediaInfo: nil,
+            userId: userId,
+            roomId: currentRoomId,
+            receipts: [],
+            downloadState: .notStarted,
+            downloadProgress: 0.0,
+            messageStatus: .sending,
+            linkPreview: nil  // Will be set after fetching
+
+        )
+        
+        // Add message immediately for optimistic UI
+          DispatchQueue.main.async {
+              self.messages.append(message)
+          }
+        // ✅ SAVE TO DATABASE IMMEDIATELY (without preview)
+           processQ.async {
+               DBManager.shared.saveMessage(message: message, inRoom: currentRoomId, inReplyTo: "")
+           }
+          // Clear the input field
+          newMessage = ""
+          
+          // If there's a URL, fetch preview in background
+          if let firstURL = urls.first {
+              Task {
+                  let fetcher = URLPreviewFetcher()
+                  await fetcher.fetchPreview(for: firstURL)
+                  
+                  // Store in cache
+                  if let urlPreview = fetcher.previewData {
+                                 // ✅ Use the extension method
+                                 let linkPreview = urlPreview.toLinkPreviewData()
+                                 
+                                 URLPreviewCache.shared.setPreview(urlPreview, for: firstURL)
+                                 
+                                 DispatchQueue.main.async {
+                                     if let index = self.messages.firstIndex(where: { $0.eventId == tempId }) {
+                                                            self.messages[index].linkPreview = linkPreview
+                                                        }
+                                 }
+                      // ✅ UPDATE DATABASE WITH PREVIEW
+                                     self.processQ.async {
+                                         DBManager.shared.updateMessageLinkPreview(eventId: tempId, preview: linkPreview)
+                                     }
+                             }
+              }
+          }
+          
+          // Send to server
+          sendMessageToServer(message: message, tempId: tempId)
+    }
+    // Add new helper method to save message with preview to database
+//    private func saveMessageWithPreview(_ message: ChatMessageModel) {
+//        processQ.async {
+//            DBManager.shared.saveOrUpdateMessage(message)
+//        }
+//    }
+
+    // Keep this helper method
+    private func sendMessageToServer(message: ChatMessageModel, tempId: String) {
+        roomService.sendMessage(message: message)
+            .subscribe(on: processQ)
+            .receive(on: processQ)
+            .sink(receiveCompletion: { completion in
+                if case .failure(let error) = completion {
+                                print("[sendMessage] Failed: \(error.localizedDescription)")
+                                // Removed: self.messages[idx].messageStatus = .failed
+                            }
+            }, receiveValue: { [weak self] result in
+                guard let self else { return }
+
+                switch result {
+                case .success(let response):
+                    DispatchQueue.main.async {
+                        if let idx = self.messages.firstIndex(where: { $0.eventId == tempId }) {
+                            let preview = self.messages[idx].linkPreview
+                                                  self.messages[idx].eventId = response.eventId
+                                                  self.messages[idx].messageStatus = .sent
+                                                  self.messages[idx].linkPreview = preview
+                        }
                     }
+                    // ✅ UPDATE DATABASE WITH NEW EVENT ID
+                                 self.processQ.async {
+                                     if let oldMessage = DBManager.shared.getMessageIfExists(eventId: tempId) {
+                                         // Delete old temp message
+                                         DBManager.shared.deleteMessage(eventId: tempId)
+                                         
+                                         // Save with new event ID
+                                         var updatedMessage = oldMessage
+                                         updatedMessage.eventId = response.eventId
+                                         updatedMessage.messageStatus = .sent
+                                         DBManager.shared.saveMessage(message: updatedMessage, inRoom: message.roomId, inReplyTo: "")
+                                     }
+                                 }
+                case .unsuccess(let error):
+                    print("[sendMessage] API Error: \(error.localizedDescription)")
+                    
                 }
-            } else {
-                sendMessage(toRoom: roomId, inReplyTo: inReplyTo)
-            }
-        }
+            })
+            .store(in: &cancellables)
+    }
+
+
     func switchRoom(to roomId: String) {
         guard currentRoomId != roomId else { return }
 
@@ -376,7 +479,6 @@ final class ChatViewModel: ObservableObject {
         guard !newMessage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
               let userId = currentUser?.userId,
               let currentRoomId = currentRoomId else { return }
-        
         let messageContent = newMessage
         let urls = URLDetector.extractURLs(from: messageContent)
         
@@ -452,6 +554,8 @@ final class ChatViewModel: ObservableObject {
                 }
             }
         }
+        sendMessageWithURLPreview(toRoom: roomId, inReplyTo: inReplyTo)
+
     }
     func markMessageAsRead(roomId: String, eventId: String, usePrivate: Bool = false) {
         roomService.sendReadMarker(

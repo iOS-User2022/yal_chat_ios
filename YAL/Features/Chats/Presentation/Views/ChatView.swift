@@ -281,7 +281,6 @@ struct ChatView: View {
                     }
                 }
                 .onAppear {
-                    print("chat view")
 
                     chatViewModel.enableMessageObservation()
                     chatViewModel.fetchMessages(forRoom: selectedRoom.id)
@@ -534,7 +533,13 @@ struct ChatView: View {
             )
         }
     }
-        
+    func containsURL(_ text: Binding<String>) -> Bool {
+        let str = text.wrappedValue
+        let detector = try! NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue)
+        let range = NSRange(str.startIndex..., in: str)
+        return detector.firstMatch(in: str, options: [], range: range) != nil
+    }
+
     // MARK: Input Bar
     var inputBar: some View {
         var senderName = "You"
@@ -550,7 +555,13 @@ struct ChatView: View {
             inReplyTo: $inReplyTo,
             typingUsers: chatViewModel.typingUsers,
             onSend: {
-                chatViewModel.sendMessage(toRoom: selectedRoom.id, inReplyTo: inReplyTo)
+                if(containsURL($chatViewModel.newMessage)) {
+                    // Changed from sendMessage to sendMessageWithURLPreview
+                    chatViewModel.sendMessageWithURLPreview(toRoom: selectedRoom.id, inReplyTo: inReplyTo)
+                }
+                else {
+                    chatViewModel.sendMessage(toRoom: selectedRoom.id, inReplyTo: inReplyTo)
+                }
                 inReplyTo = nil
             },
             onSendAudio: { url in

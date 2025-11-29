@@ -177,10 +177,7 @@ struct RoomListView: View {
                 }
             }
             .onAppear {
-                    print("==================================================")
-                    print("ROOM LIST VIEW ENTERED")
-                    print("==================================================")
-                
+                    
                 guard !didRunInitialLoad else { return }
                 didRunInitialLoad = true
                 restoreSession()

@@ -50,7 +50,8 @@ protocol DBManageable {
     func getMessageIfExists(eventId: String) -> ChatMessageModel?
     func updateMessage(message: ChatMessageModel, inRoom roomId: String, inReplyTo replyToEventId: String?)
     func addReactionToMessage(messageEventId: String, reactionEventId: String, userId: String, emojiKey: String, timestamp: Int64)
-    
+    // ✅ ADD THIS LINE
+    func updateMessageLinkPreview(eventId: String, preview: LinkPreviewData)
     func streamRoomHydrations(sortKey: String, ascending: Bool, limit: Int?, batchSize: Int, batchDelay: TimeInterval) -> AnyPublisher<[RoomHydrationPayload], Never>
     func clearAllSync(purgeFiles: Bool)
     

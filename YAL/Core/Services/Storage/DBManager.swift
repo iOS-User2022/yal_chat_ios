@@ -160,6 +160,7 @@ class MessageObject: Object {
     @Persisted           var inReplyTo: String?
     @Persisted           var reactions: List<MessageReactionObject>
     @Persisted           var isRedacted: Bool = false
+    @Persisted var linkPreviewData: Data?  // Store as JSON Data
 
     convenience init(from model: ChatMessageModel) {
         self.init()
@@ -186,7 +187,18 @@ class MessageObject: Object {
             self.reactions.append(obj)
         }
         self.isRedacted = model.isRedacted
+        self.setLinkPreview(model.linkPreview)
+
     }
+   
+    // Add conversion method
+        func setLinkPreview(_ preview: LinkPreviewData?) {
+            guard let preview = preview else {
+                linkPreviewData = nil
+                return
+            }
+            linkPreviewData = try? JSONEncoder().encode(preview)
+        }
 }
 
 class MediaInfoEntity: EmbeddedObject {
@@ -1166,7 +1178,7 @@ final class DBManager: DBManageable {
             let r = realm
             autoreleasepool {
                 try? r.write {
-                    let obj = MessageObject()
+                    let obj = MessageObject(from: message)
                     obj.eventId       = message.eventId
                     obj.roomId        = roomId
                     obj.sender        = message.sender
@@ -1204,6 +1216,7 @@ final class DBManager: DBManageable {
                 try? r.write {
                     for m in messages {
                         if let existing = r.object(ofType: MessageObject.self, forPrimaryKey: m.eventId) {
+
                             var needsUpdate = false
                             
                             if existing.messageStatus != m.messageStatus.rawValue {
@@ -1227,7 +1240,12 @@ final class DBManager: DBManageable {
                                 existing.reactions.append(obj)
                             }
                             needsUpdate = true
-                            
+                            // ✅ ADD THIS: Update link preview if changed
+                                                   let newPreviewData = try? JSONEncoder().encode(m.linkPreview)
+                                                   if existing.linkPreviewData != newPreviewData {
+                                                       existing.linkPreviewData = newPreviewData
+                                                       needsUpdate = true
+                                                   }
                             // Update only if needed
                             if needsUpdate {
                                 r.add(existing, update: .modified)
@@ -1243,7 +1261,22 @@ final class DBManager: DBManageable {
             }
         }
     }
-    
+    func updateMessageLinkPreview(eventId: String, preview: LinkPreviewData) {
+        queue.async { [self] in
+            let r = realm
+            guard let obj = r.object(ofType: MessageObject.self, forPrimaryKey: eventId) else {
+                print("Message not found: \(eventId)")
+                return
+            }
+            
+            autoreleasepool {
+                try? r.write {
+                    obj.setLinkPreview(preview)
+                    r.add(obj, update: .modified)
+                }
+            }
+        }
+    }
     func fetchMessages(inRoom roomId: String) -> [ChatMessageModel] {
         let r = realm
         let objs = r.objects(MessageObject.self)
@@ -1255,7 +1288,7 @@ final class DBManager: DBManageable {
         var modelMap: [String: ChatMessageModel] = [:]
         for o in messagesArray {
             let receipts = (try? JSONDecoder().decode([MessageReadReceipt].self, from: o.receipts ?? Data())) ?? []
-            
+
             let reactionModels = o.reactions.map { r in
                 MessageReaction(
                     eventId: r.eventId,
@@ -1264,7 +1297,11 @@ final class DBManager: DBManageable {
                     timestamp: r.timestamp
                 )
             }
-            
+            // ✅ DECODE LINK PREVIEW DATA
+                 let linkPreview: LinkPreviewData? = {
+                     guard let data = o.linkPreviewData else { return nil }
+                     return try? JSONDecoder().decode(LinkPreviewData.self, from: data)
+                 }()
             let model = ChatMessageModel(
                 eventId:   o.eventId,
                 sender:    o.sender,
@@ -1278,6 +1315,8 @@ final class DBManager: DBManageable {
                 receipts:  receipts,
                 messageStatus: MessageStatus(rawValue: o.messageStatus ?? "sent") ?? .sent,
                 inReplyTo: nil, // set below
+                linkPreview: linkPreview  // ✅ SET LINK PREVIEW
+
             )
             model.reactions = Array(reactionModels)
             modelMap[o.eventId] = model

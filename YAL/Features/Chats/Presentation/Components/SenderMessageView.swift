@@ -16,6 +16,7 @@ struct SenderMessageView: View {
     @State private var downloadRequested = false
     @State private var isVideoPlayerPresented = false
 
+    
     var onDownloadNeeded: ((ChatMessageModel) -> Void)?
     var onTap: (() -> Void)?
     var onLongPress: (() -> Void)?
@@ -74,8 +75,9 @@ struct SenderMessageView: View {
                             }
                         )
                     }
-                    
-                    textSection
+                    messageContentWithPreview()
+
+//                    textSection
                     
                     timestampSection
                 }
@@ -353,11 +355,19 @@ struct SenderMessageView: View {
     @ViewBuilder
         func messageContentWithPreview() -> some View {
             VStack(alignment: .leading, spacing: 8) {
+                // Original message text
+                          if !message.content.isEmpty {
+                              HighlightedText(text: message.content, searchText: searchText)
+                                  .font(Design.Font.regular(14))
+                                  .foregroundColor(Design.Color.white)
+                                  .padding(.horizontal, 8)
+                                  .padding(.top, 8)
+                          }
                 // Original message content
-                Text(message.content)
-                    .font(.system(size: 15))
-                    .foregroundColor(.primary)
-                
+//                Text(message.content)
+//                    .font(.system(size: 15))
+//                    .foregroundColor(.primary)
+//                
                 // URL Preview
                 if message.containsURL, let urlString = message.firstURL {
                     URLPreviewForMessage(
@@ -365,6 +375,9 @@ struct SenderMessageView: View {
                         message: message,
                         onURLTapped: onURLTapped
                     )
+                    .padding(.horizontal, 8)
+                                    .padding(.top, message.content.isEmpty ? 8 : 4)
+                                    .padding(.bottom, 4)
                 }
             }
         }
@@ -452,7 +465,10 @@ struct URLPreviewForMessage: View {
                 }
             } else if hasAttemptedFetch {
                 // Show nothing if fetch failed
-                EmptyView()
+//                EmptyView()
+                MinimalLinkPreview(urlString: urlString, isSender: true) {
+                                  openURL(urlString)
+                              }
             }
         }
         .onAppear {
@@ -485,12 +501,17 @@ struct URLPreviewForMessage: View {
         }
     }
 }
+
 // MARK: - Loading Preview View
 struct LoadingPreviewView: View {
+    var isSender: Bool = false
+
     var body: some View {
         HStack(spacing: 12) {
             ProgressView()
-                .progressViewStyle(CircularProgressViewStyle())
+                .progressViewStyle(CircularProgressViewStyle(tint: isSender ? .white : .gray))
+                                .scaleEffect(0.8)
+                            
             
             Text("Loading preview...")
                 .font(.caption)
@@ -498,7 +519,45 @@ struct LoadingPreviewView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(12)
-        .background(Color(.systemGray6))
+        .background(isSender ? Color.white.opacity(0.15) : Color(.systemGray6))
         .cornerRadius(8)
+    }
+}
+// MARK: - Minimal Link Preview (Fallback)
+struct MinimalLinkPreview: View {
+    let urlString: String
+    var isSender: Bool = false
+    let onTap: () -> Void
+    
+    var body: some View {
+        Button(action: onTap) {
+            HStack(spacing: 8) {
+                Image(systemName: "link")
+                    .font(.system(size: 12))
+                    .foregroundColor(isSender ? .white.opacity(0.8) : .blue)
+                
+                if let url = URL(string: urlString), let host = url.host {
+                    Text(host)
+                        .font(Design.Font.regular(11))
+                        .foregroundColor(isSender ? .white.opacity(0.9) : .primary)
+                        .lineLimit(1)
+                } else {
+                    Text(urlString)
+                        .font(Design.Font.regular(11))
+                        .foregroundColor(isSender ? .white.opacity(0.9) : .primary)
+                        .lineLimit(1)
+                }
+                
+                Spacer()
+                
+                Image(systemName: "arrow.up.right")
+                    .font(.system(size: 10))
+                    .foregroundColor(isSender ? .white.opacity(0.6) : .gray)
+            }
+            .padding(8)
+            .background(isSender ? Color.white.opacity(0.15) : Color(.systemGray6))
+            .cornerRadius(8)
+        }
+        .buttonStyle(PlainButtonStyle())
     }
 }
