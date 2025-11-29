@@ -33,6 +33,7 @@ struct ReceiverMessageView: View {
     var onScrollToMessage: ((String) -> Void)?
     var onEmoji: (() -> Void)?
     var onToggleChange: (() -> Void)?
+    var onURLTapped: ((String) -> Void)?
     let selectedEventId: String?
     let searchText: String
     let isFromSelection: Bool
@@ -50,6 +51,7 @@ struct ReceiverMessageView: View {
         onLongPress: (() -> Void)? = nil,
         onMessageRead: (() -> Void)? = nil,
         onScrollToMessage: ((String) -> Void)? = nil,
+        onURLTapped: ((String) -> Void)? = nil,
         onToggleChange: (() -> Void)? = nil,
         selectedEventId: String? = nil,
         searchText: String = "",
@@ -73,6 +75,7 @@ struct ReceiverMessageView: View {
         self.isForwarding = isForwarding
         self.onToggleChange = onToggleChange
         self.isFromSelection = isFromSelection
+        self.onURLTapped = onURLTapped
     }
     
     var body: some View {
@@ -161,10 +164,14 @@ struct ReceiverMessageView: View {
         return false
     }
     private func openURL(_ urlString: String) {
-           if let url = URL(string: urlString) {
-               UIApplication.shared.open(url)
-           }
-       }
+        if let onURLTapped = onURLTapped {
+            // Let the parent (ChatView) handle presenting WebViewScreen
+            onURLTapped(urlString)
+        } else if let url = URL(string: urlString) {
+            // Fallback to opening in the system browser if no handler is provided
+            UIApplication.shared.open(url)
+        }
+    }
 
     @ViewBuilder
     private var mediaSection: some View {
@@ -525,7 +532,8 @@ struct ReceiverMessageView: View {
                if message.containsURL, let urlString = message.firstURL {
                    URLPreviewForMessage(
                        urlString: urlString,
-                       message: message
+                       message: message,
+                       onURLTapped: onURLTapped
                    )
                }
            }

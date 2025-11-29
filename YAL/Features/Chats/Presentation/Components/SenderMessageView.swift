@@ -26,6 +26,7 @@ struct SenderMessageView: View {
     var isForwarding: Bool? = false
     var onToggleChange: (() -> Void)?
     var senderImage: String = ""
+    var onURLTapped: ((String) -> Void)? = nil
 
     var body: some View {
         HStack(alignment: .top) {
@@ -361,7 +362,8 @@ struct SenderMessageView: View {
                 if message.containsURL, let urlString = message.firstURL {
                     URLPreviewForMessage(
                         urlString: urlString,
-                        message: message
+                        message: message,
+                        onURLTapped: onURLTapped
                     )
                 }
             }
@@ -428,6 +430,7 @@ private struct ReplyPreviewView: View {
 struct URLPreviewForMessage: View {
     let urlString: String
     let message: ChatMessageModel
+    var onURLTapped: ((String) -> Void)? = nil
     
     @StateObject private var previewFetcher = URLPreviewFetcher()
     @State private var hasAttemptedFetch = false
@@ -473,7 +476,11 @@ struct URLPreviewForMessage: View {
     }
     
     private func openURL(_ urlString: String) {
-        if let url = URL(string: urlString) {
+        if let onURLTapped = onURLTapped {
+            // Let the parent (ChatView) handle presenting WebViewScreen
+            onURLTapped(urlString)
+        } else if let url = URL(string: urlString) {
+            // Fallback to opening in the system browser if no handler is provided
             UIApplication.shared.open(url)
         }
     }

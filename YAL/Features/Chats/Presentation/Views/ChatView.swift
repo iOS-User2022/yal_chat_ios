@@ -75,6 +75,8 @@ struct ChatView: View {
         var types: [UTType] = []
         return types
     }()
+    
+    @State private var urlToOpen: String? = nil
 
     @Binding var navPath: NavigationPath
 
@@ -144,7 +146,13 @@ struct ChatView: View {
                             isForwarding: $isForwarding,
                             resultCount: $resultCount,
                             showNoResultsAlert: $showNoResultsAlert,
-                            showScrollToBottomButton: $showScrollToBottomButton
+                            showScrollToBottomButton: $showScrollToBottomButton,
+                            onURLTapped: { urlString in
+                                // Use async dispatch to ensure view hierarchy is ready
+                                DispatchQueue.main.async {
+                                    urlToOpen = urlString
+                                }
+                            }
                         )
                         .environmentObject(chatViewModel)
                         
@@ -286,6 +294,14 @@ struct ChatView: View {
                 .onDisappear {
                     chatViewModel.disableMessageObservation()
                     chatViewModel.audioPlayer.stop()
+                }
+                .fullScreenCover(isPresented: Binding(
+                    get: { urlToOpen != nil },
+                    set: { if !$0 { urlToOpen = nil } }
+                )) {
+                    if let urlString = urlToOpen {
+                        WebViewScreen(urlString: urlString)
+                    }
                 }
                 .sheet(item: $forwardPayload, onDismiss: {
                     forwardPayload = nil
@@ -623,6 +639,7 @@ struct MessagesSection: View {
     @State private var highlightedEventID: String? = nil
     @Binding var showNoResultsAlert: Bool
     @Binding var showScrollToBottomButton: Bool
+    var onURLTapped: ((String) -> Void)? = nil
 
     @State private var didAddObservers = false
     @State private var nextObserver: NSObjectProtocol?
@@ -693,7 +710,8 @@ struct MessagesSection: View {
                                     isForwarding: isForwarding,
                                     onToggleChange: {
                                         chatViewModel.toggleMessageSelection()
-                                    }
+                                    },
+                                    onURLTapped: onURLTapped
                                 )
                                 .matchedGeometryIf(
                                     selectedMessage != nil,
@@ -984,7 +1002,8 @@ struct MessagesSection: View {
         onScrollToMessage: ((String) -> Void)? = nil,
         selectedEventId: String? = nil,
         isForwarding: Bool = false,
-        onToggleChange: (@escaping () -> Void)
+        onToggleChange: (@escaping () -> Void),
+        onURLTapped: ((String) -> Void)? = nil
     ) -> some View {
         if message.isReceived {
             let senderModel = members.first { $0.userId == message.sender }
@@ -1008,8 +1027,8 @@ struct MessagesSection: View {
                 onScrollToMessage: { eventId in
                     onScrollToMessage?(eventId)
                 },
-                onToggleChange: {
-                   onToggleChange()
+                onURLTapped: onURLTapped, onToggleChange: {
+                    onToggleChange()
                 },
                 selectedEventId: selectedMessage?.eventId,
                 searchText: searchString,
@@ -1036,7 +1055,9 @@ struct MessagesSection: View {
                 isForwarding: isForwarding,
                 onToggleChange: {
                     onToggleChange()
-                }, senderImage: loadProfileImage()
+                },
+                senderImage: loadProfileImage(),
+                onURLTapped: onURLTapped
             )
             .frame(maxWidth: .infinity, alignment: .trailing)
             .padding(.leading, 20)
@@ -1326,4 +1347,10 @@ struct MediaPickerButton: View {
 
 enum MediaPickerType {
     case camera, gallery, document, audio
+}
+
+// MARK: - URL Wrapper for WebViewScreen
+private struct URLWrapper: Identifiable {
+    let id = UUID()
+    let urlString: String
 }
