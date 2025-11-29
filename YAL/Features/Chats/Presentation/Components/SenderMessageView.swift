@@ -75,7 +75,19 @@ struct SenderMessageView: View {
                         )
                     }
                     
-                    textSection
+                    VStack(alignment: .trailing, spacing: 8) {
+                        textSection
+                        
+                        // URL Preview for sent messages
+                        if message.containsURL, let urlString = message.firstURL {
+                            URLPreviewForMessage(
+                                urlString: urlString,
+                                message: message,
+                                onURLTapped: onURLTapped
+                            )
+                            .padding(.horizontal, 8)
+                        }
+                    }
                     
                     timestampSection
                 }
@@ -450,14 +462,61 @@ struct URLPreviewForMessage: View {
                 .onAppear {
                     URLPreviewCache.shared.setPreview(preview, for: urlString)
                 }
-            } else if hasAttemptedFetch {
-                // Show nothing if fetch failed
-                EmptyView()
+            } else {
+                // Show fallback preview even if fetch failed or hasn't completed
+                fallbackPreview
             }
         }
         .onAppear {
             fetchPreviewIfNeeded()
         }
+    }
+    
+    private var fallbackPreview: some View {
+        // Create a minimal preview with domain and favicon
+        let domain = URL(string: urlString)?.host ?? urlString
+        let faviconURL = "https://\(domain)/favicon.ico"
+        
+        return Button(action: {
+            openURL(urlString)
+        }) {
+            HStack(spacing: 12) {
+                // Favicon or globe icon
+                AsyncImage(url: URL(string: faviconURL)) { image in
+                    image
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                } placeholder: {
+                    Image(systemName: "globe")
+                        .foregroundColor(.gray)
+                }
+                .frame(width: 24, height: 24)
+                .cornerRadius(4)
+                
+                // Domain and URL
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(domain)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(.primary)
+                        .lineLimit(1)
+                    
+                    Text(urlString)
+                        .font(.caption2)
+                        .foregroundColor(.blue)
+                        .lineLimit(1)
+                }
+                
+                Spacer()
+            }
+            .padding(12)
+            .background(Color(.systemGray6))
+            .cornerRadius(12)
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+            )
+        }
+        .buttonStyle(PlainButtonStyle())
     }
     
     private func fetchPreviewIfNeeded() {
