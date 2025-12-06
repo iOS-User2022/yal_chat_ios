@@ -154,7 +154,8 @@ struct RoomSummaryAdapter {
             createdAt: createdAt,
             isLeft: isLeft,
             isGroup: isGroup,
-            admins: admins,
+            adminIds: admins,
+            admins: [],
             joinedUserIds: joined,
             invitedUserIds: invited,
             leftUserIds: left,
@@ -187,7 +188,7 @@ struct RoomSummaryAdapter {
         var lastServerTs       = prev.lastServerTimestamp
         var creator            = prev.creator
         var createdAt          = prev.createdAt
-        var admins             = Set(prev.admins)
+        var adminIds             = Set(prev.adminIds)
         var joined             = Set(prev.joinedUserIds)
         var invited            = Set(prev.invitedUserIds)
         var left               = Set(prev.leftUserIds)
@@ -232,7 +233,7 @@ struct RoomSummaryAdapter {
         // --- admins from power levels (>= 50)
         if let plevelUsers = ((state.last { $0.type == "m.room.power_levels" })
                               ?? (timeline.last { $0.type == "m.room.power_levels" }))?.content?.users {
-            admins = Set(plevelUsers.compactMap { $1 >= 50 ? $0 : nil })
+            adminIds = Set(plevelUsers.compactMap { $1 >= 50 ? $0 : nil })
         }
         
         // --- Membership SoT (apply deltas)
@@ -315,7 +316,8 @@ struct RoomSummaryAdapter {
             createdAt: createdAt,
             isLeft: isLeft,
             isGroup: isGroup,
-            admins: Array(admins),
+            adminIds: Array(adminIds),
+            admins: [],
             joinedUserIds: Array(joined),
             invitedUserIds: Array(invited),
             leftUserIds: Array(left),

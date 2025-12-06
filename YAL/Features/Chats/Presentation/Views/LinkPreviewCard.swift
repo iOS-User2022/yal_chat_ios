@@ -1,5 +1,8 @@
 //
-//  URLPreviewModels.swift
+//  LinkPreviewCard.swift
+//  YAL
+//
+//  Created by Hari krishna on 28/11/25.
 //
 
 import Foundation

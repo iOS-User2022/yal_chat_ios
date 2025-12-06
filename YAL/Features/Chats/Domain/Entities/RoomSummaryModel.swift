@@ -32,7 +32,8 @@ struct RoomSummaryModel: Equatable, Sendable, Identifiable {
     var isGroup: Bool
 
     // Admins (userIds)
-    var admins: [String]
+    var admins: [ContactLite] = []
+    var adminIds: [String]
 
     // Membership IDs
     var joinedUserIds: [String]
@@ -48,6 +49,9 @@ struct RoomSummaryModel: Equatable, Sendable, Identifiable {
     var bannedMembers: [ContactLite] = []
     var participants: [ContactLite] = []
 
+    var activeParticipantIds: [String] = []
+    var activeParticipants: [ContactLite] = []
+    
     private struct MemberSnapshot {
         var contact: ContactLite
         var status: MembershipStatus
@@ -80,7 +84,8 @@ struct RoomSummaryModel: Equatable, Sendable, Identifiable {
         createdAt: Int64?,
         isLeft: Bool,
         isGroup: Bool,
-        admins: [String],
+        adminIds: [String],
+        admins: [ContactLite],
         joinedUserIds: [String],
         invitedUserIds: [String],
         leftUserIds: [String],
@@ -106,9 +111,9 @@ struct RoomSummaryModel: Equatable, Sendable, Identifiable {
         self.lastServerTimestamp = lastServerTimestamp
         self.creator = creator
         self.createdAt = createdAt
-        self.isLeft = isLeft
+        self.isLeft = isLeft || bannedUserIds.contains(currentUserId) || leftUserIds.contains(currentUserId)
         self.isGroup = isGroup
-        self.admins = admins
+        self.adminIds = adminIds
         self.joinedUserIds = joinedUserIds
         self.invitedUserIds = invitedUserIds
         self.leftUserIds = leftUserIds
@@ -119,6 +124,7 @@ struct RoomSummaryModel: Equatable, Sendable, Identifiable {
         self.leftMembers = leftMembers
         self.bannedMembers = bannedMembers
         self.participants = participants
+        self.activeParticipants = joinedMembers + invitedMembers
         // SoT stays private and starts empty
         self.memberMap = [:]
     }
@@ -137,7 +143,7 @@ struct RoomSummaryModel: Equatable, Sendable, Identifiable {
         for u in joinedUserIds  { final[u.formattedMatrixUserId]  = .join }
 
         // Monotonic ts to enforce total order across precedence groups
-        var ts = (lastServerTimestamp ?? serverTimestamp ?? createdAt ?? nowMs()) * 1000
+        var ts = (serverTimestamp ?? lastServerTimestamp ?? createdAt ?? nowMs()) * 1000
 
         // Insert by precedence, bumping ts so later precedence overwrites earlier
         func insert(_ ids: [String], as status: MembershipStatus) {
@@ -186,7 +192,14 @@ struct RoomSummaryModel: Equatable, Sendable, Identifiable {
         let invited = values.filter { $0.status == .invite }.sorted { $0.ts > $1.ts }
         let left    = values.filter { $0.status == .leave  }.sorted { $0.ts > $1.ts }
         let banned  = values.filter { $0.status == .ban    }.sorted { $0.ts > $1.ts }
-
+        
+        let isMemberLeft: Bool = {
+            if let snap = memberMap[currentUserId] {
+                return snap.status == .leave || snap.status == .ban
+            }
+            return false
+        }()
+        
         // write hydrated ContactLite buckets
         joinedMembers  = joined.map  { $0.contact }
         invitedMembers = invited.map { $0.contact }
@@ -201,6 +214,7 @@ struct RoomSummaryModel: Equatable, Sendable, Identifiable {
 
         // participants & derived
         participants = joinedMembers + invitedMembers + leftMembers + bannedMembers
+        activeParticipants = joinedMembers + invitedMembers
         participantsCount = participants.count
         isGroup = participantsCount > 2
 
@@ -208,9 +222,15 @@ struct RoomSummaryModel: Equatable, Sendable, Identifiable {
         if !isGroup {
             opponentUserId = participants.first { $0.userId != currentUserId }?.userId
         } else {
+            admins = participants.filter { cm in
+                guard let uid = cm.userId else { return false }
+                return adminIds.contains(uid)
+            }
             opponentUserId = nil
         }
-
+        
+        isLeft = isMemberLeft
+        
         // friendly lastSenderName
         if let ls = lastSender, !ls.isEmpty,
            let p = participants.first(where: { $0.userId == ls }) {
@@ -227,6 +247,8 @@ struct RoomSummaryModel: Equatable, Sendable, Identifiable {
             
             if (avatarUrl ?? "").isEmpty { avatarUrl = opp.avatarURL }
         }
+        
+        
     }
     
     mutating func syncMembersFromIDs(
@@ -236,11 +258,10 @@ struct RoomSummaryModel: Equatable, Sendable, Identifiable {
         banned: [String],
         baselineTS: Int64? = nil
     ) {
-        var ts = (baselineTS ?? lastServerTimestamp ?? serverTimestamp ?? createdAt ?? nowMs()) * 1000
+        var ts = (serverTimestamp ?? lastServerTimestamp ?? baselineTS ?? createdAt ?? nowMs()) * 1000
 
         func insert(_ ids: [String], as status: MembershipStatus) {
             for uid in Array(Set(ids.map { $0.formattedMatrixUserId })) {
-                ts &+= 1
                 upsertMember(userId: uid, status: status, ts: ts, resolved: nil)
             }
         }
@@ -280,11 +301,13 @@ struct RoomSummaryModel: Equatable, Sendable, Identifiable {
             lastSenderName: lastSenderName,
             unreadCount: unreadCount,
             participantsCount: participantsCount,
+            serverTimestamp: serverTimestamp,
             lastServerTimestamp: lastServerTimestamp,
             joinedMemberIds: joinedUserIds,
             invitedMemberIds: invitedUserIds,
             leftMemberIds: leftUserIds,
-            bannedMemberIds: bannedUserIds
+            bannedMemberIds: bannedUserIds,
+            adminMemberIds: adminIds
         )
 
         // Map ContactLite → ContactModel and assign
@@ -293,20 +316,21 @@ struct RoomSummaryModel: Equatable, Sendable, Identifiable {
         let leftCM    = leftMembers.map(materializeContact)
         let bannedCM  = bannedMembers.map(materializeContact)
         let allCM     = joinedCM + invitedCM + leftCM + bannedCM
-
+        let active    = joinedCM + invitedCM
+        
         room.joinedMembers = joinedCM
         room.invitedMembers = invitedCM
         room.leftMembers = leftCM
         room.bannedMembers = bannedCM
         room.participants = allCM
+        room.activeParticipants = active
         room.participantsCount = allCM.count
         room.isGroup = allCM.count > 2
 
         if room.isGroup {
-            let adminSet = Set(admins)
             room.admins = allCM.filter { cm in
                 guard let uid = cm.userId else { return false }
-                return adminSet.contains(uid)
+                return adminIds.contains(uid)
             }
             room.opponent = nil
         } else {
@@ -314,6 +338,7 @@ struct RoomSummaryModel: Equatable, Sendable, Identifiable {
             room.opponent = allCM.first { $0.userId != currentUserId }
         }
 
+        room.isLeft = leftUserIds.contains(currentUserId) || bannedUserIds.contains(currentUserId)
         room.isHydrated = true
     }
     
@@ -363,7 +388,7 @@ extension RoomSummaryModel {
         let allEvents = state + tl
             
         let buckets = Self.extractMembershipBuckets(from: allEvents)
-        
+        let isLeft = buckets.left.contains(currentUserId) || buckets.invited.contains(currentUserId)
         let lastMsgEv = tl.first(where: { $0.type == "m.room.message" })
         let lastMsg    = lastMsgEv?.content?.body
         let lastSender = lastMsgEv?.sender
@@ -384,9 +409,10 @@ extension RoomSummaryModel {
             lastServerTimestamp: lastServerTs,
             creator: creator,
             createdAt: createdAt,
-            isLeft: false,
+            isLeft: isLeft,
             isGroup: false,                  // will be set during hydration
-            admins: buckets.admins,
+            adminIds: buckets.admins,
+            admins: [],
             joinedUserIds: buckets.joined,
             invitedUserIds: buckets.invited,
             leftUserIds: buckets.left,
@@ -421,7 +447,7 @@ extension RoomSummaryModel {
                 name = nm
             }
             // admins (unchanged from your code)
-            admins = Array(Self.extractAdmins(from: ss))
+            adminIds = Array(Self.extractAdmins(from: ss))
 
             // Membership changes → SoT
             applyMembershipEvents(ss)
@@ -504,6 +530,7 @@ extension RoomSummaryModel {
     
     private mutating func rebuildParticipantsFromHydratedBuckets() {
         participants = joinedMembers + invitedMembers + leftMembers + bannedMembers
+        activeParticipants = joinedMembers + invitedMembers
         participantsCount = participants.count
         isGroup = participantsCount > 2
         opponentUserId = isGroup ? nil : participants.first(where: { $0.userId != currentUserId })?.userId
@@ -657,9 +684,12 @@ extension RoomSummaryModel {
         
         // Keep admins list tidy if user leaves/gets banned
         if membership == .leave || membership == .ban {
-            admins.removeAll { $0 == uid }
+            adminIds.removeAll { $0 == uid }
         }
         
+        var ts = (serverTimestamp ?? nowMs()) * 1000
+        ts &+= 1
+        upsertMember(userId: uid, status: membership, ts: ts, resolved: nil)
         // Rebuild hydrated members and derived fields
         refreshHydratedMembers()
     }
@@ -683,6 +713,7 @@ extension RoomSummaryModel {
         bannedMembers  = bannedUserIds.map(resolve)
         
         participants = joinedMembers + invitedMembers + leftMembers + bannedMembers
+        activeParticipants = joinedMembers + invitedMembers
         participantsCount = participants.count
         isGroup = participantsCount > 2
         
@@ -706,8 +737,14 @@ extension RoomSummaryModel {
                 }
             }
         } else {
+            admins = participants.filter { cm in
+                guard let uid = cm.userId else { return false }
+                return adminIds.contains(uid)
+            }
             opponentUserId = nil
         }
+        
+        isLeft = leftUserIds.contains(currentUserId) || bannedUserIds.contains(currentUserId)
         
         updateLastSenderName()
     }
@@ -745,7 +782,7 @@ extension RoomSummaryModel {
                 bannedMembers: bannedUserIds,
                 serverTimestamp: serverTimestamp,
                 lastServerTimestamp: lastServerTimestamp,
-                admins: [],
+                adminIds: adminIds,
                 isLeft: isLeft,
                 state: nil
             )

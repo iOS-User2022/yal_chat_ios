@@ -73,7 +73,7 @@ public struct ContactLite: Equatable, Hashable, Codable, Sendable, Identifiable 
         self.isSynced = isSynced
         self.isOnline = isOnline
         self.lastSeen = lastSeen
-        self.randomeProfileColor = randomeProfileColor
+        self.randomeProfileColor = randomeProfileColor ?? randomBackgroundColor()
     }
 
     // Custom Decodable: ignore color, set a fresh one
@@ -204,8 +204,6 @@ extension ContactLite {
         // display name (prefer nickname)
         if contact.isKeyAvailable(CNContactNicknameKey), !contact.nickname.isEmpty {
             model.displayName = contact.nickname
-        } else {
-            model.displayName = fullName
         }
 
         // emails

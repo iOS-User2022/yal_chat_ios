@@ -50,8 +50,6 @@ final class NotificationService: UNNotificationServiceExtension {
         }
         
         let contentType = getNotificationContentType()
-        
-        print("dsfasdfasdfsdfsdfas", contentType.rawValue)
 
         let userInfo = content.userInfo
                 

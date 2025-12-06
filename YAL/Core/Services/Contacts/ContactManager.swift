@@ -48,9 +48,18 @@ final class ContactManager {
     private let contactsSubject = PassthroughSubject<[ContactLite], Never>()
     private let cacheContactsSubject = PassthroughSubject<[ContactLite], Never>()
 
-    // Thread-safe cache of userId → ContactModel
     private var _contactCache: [String: ContactLite] = [:]
-    private var _cachedContacts: [String: ContactModel] = [:]
+    var contactCache: [String: ContactLite] {
+        get { var snap = [String: ContactLite]() ; cacheQueue.sync { snap = _contactCache }; return snap }
+        set { cacheQueue.async(flags: .barrier) { self._contactCache = newValue } }
+    }
+    
+    // Ephemeral model cache (thread-safe)
+    private let modelCache = NSCache<NSString, ContactModelBox>()
+    final class ContactModelBox: NSObject {
+        let value: ContactModel
+        init(_ value: ContactModel) { self.value = value }
+    }
     
     // MARK: - Public publishers
     @Published var accessStatus: ContactAccessStatus = .unknown
@@ -68,28 +77,6 @@ final class ContactManager {
     }
     
     // MARK: - Public cache accessors
-    var contactCache: [String: ContactLite] {
-        get {
-            var snapshot: [String: ContactLite] = [:]
-            cacheQueue.sync { snapshot = _contactCache }
-            return snapshot
-        }
-        set {
-            cacheQueue.async(flags: .barrier) { self._contactCache = newValue }
-        }
-    }
-
-    var cachedContacts: [String: ContactModel] {
-        get {
-            var snapshot: [String: ContactModel] = [:]
-            cacheQueue.sync { snapshot = _cachedContacts }
-            return snapshot
-        }
-        set {
-            cacheQueue.async(flags: .barrier) { self._cachedContacts = newValue }
-        }
-    }
-    
     func clearCaches() {
         cacheQueue.async(flags: .barrier) {
             self._contactCache.removeAll()
@@ -261,15 +248,13 @@ final class ContactManager {
     
     func contact(for userId: String) -> ContactLite? {
         guard !userId.isEmpty else { return nil }
-
-        var cached: ContactLite?
-        cacheQueue.sync { cached = _contactCache[userId] }
-        if let cached { return cached }
-
+        var lite: ContactLite?
+        cacheQueue.sync { lite = _contactCache[userId] }
+        if let lite { return lite }
+        
+        // Fallback to DB then seed in-memory
         if let dbContact = DBManager.shared.fetchContact(userId: userId) {
-            cacheQueue.async(flags: .barrier) {
-                self._contactCache[userId] = dbContact
-            }
+            cacheQueue.async(flags: .barrier) { self._contactCache[userId] = dbContact }
             return dbContact
         }
         return nil
@@ -277,18 +262,13 @@ final class ContactManager {
     
     func contactModel(for userId: String) -> ContactModel? {
         guard !userId.isEmpty else { return nil }
-        
-        var cached: ContactModel?
-        cacheQueue.sync { cached = _cachedContacts[userId] }
-        if let cached { return cached }
-        
-        if let liteContact = contact(for: userId) {
-            let contactModel = ContactModel.fromLite(liteContact)
-            cacheQueue.async(flags: .barrier) {
-                self._cachedContacts[userId] = contactModel
-            }
+        if let boxed = modelCache.object(forKey: userId as NSString) {
+            return boxed.value
         }
-        return nil
+        guard let lite = contact(for: userId) else { return nil }
+        let model = ContactModel.fromLite(lite)
+        modelCache.setObject(ContactModelBox(model), forKey: userId as NSString)
+        return model
     }
     
     @discardableResult
@@ -301,26 +281,24 @@ final class ContactManager {
     ) -> ContactModel? {
         guard !userId.isEmpty else { return nil }
         
-        var lite  = contact(for: userId) ?? ContactLite(userId: userId, fullName: "", phoneNumber: "")
-        let model = contactModel(for: userId) ?? ContactModel.fromLite(lite)
-        
+        var lite = contact(for: userId) ?? ContactLite(userId: userId, fullName: "", phoneNumber: "")
         lite.updatePresence(isOnline: isOnline, lastSeen: lastSeen, avatarURL: avatarURL, statusMessage: statusMessage)
-        model.updatePresence(isOnline: isOnline, lastSeen: lastSeen, avatarURL: avatarURL, statusMessage: statusMessage)
-        
+
         cacheQueue.async(flags: .barrier) {
-            self._contactCache[userId]  = lite
-            self._cachedContacts[userId] = model
+            self._contactCache[userId] = lite
+            self.modelCache.removeObject(forKey: userId as NSString) // invalidate model view
         }
-        
-         DBManager.shared.upsertContactPresence(
+
+        DBManager.shared.upsertContactPresence(
             userId: userId,
+            phoneNumber: lite.phoneNumber,
             currentlyActive: isOnline,
             lastActiveAgoMs: lastSeen,
             avatarURL: avatarURL,
             statusMessage: statusMessage
          )
         
-        return model
+        return ContactModel.fromLite(lite)
     }
 }
 
@@ -341,36 +319,27 @@ extension ContactManager {
     
     func updateMemoryCaches(for contacts: [ContactLite]) {
         guard !contacts.isEmpty else { return }
-
-        var liteById: [String: ContactLite] = [:]
-        var modelById: [String: ContactModel] = [:]
-        liteById.reserveCapacity(contacts.count)
-        modelById.reserveCapacity(contacts.count)
-
-        for c in contacts {
-            guard let uid = c.userId, !uid.isEmpty else { continue }
-            liteById[uid] = c
-            modelById[uid] = ContactModel.fromLite(c) // your existing converter
+        
+        // Build a stable map of incoming
+        var byId: [String: ContactLite] = [:]
+        byId.reserveCapacity(contacts.count)
+        for contact in contacts {
+            guard let uid = contact.userId?.trimmingCharacters(in: .whitespacesAndNewlines), !uid.isEmpty else { continue }
+            byId[uid] = contact
         }
-        guard !liteById.isEmpty else { return }
-
+        guard !byId.isEmpty else { return }
+        
         cacheQueue.async(flags: .barrier) { [weak self] in
             guard let self else { return }
-
-            for (uid, incoming) in liteById {
+            
+            for (uid, incoming) in byId {
                 if let existing = self._contactCache[uid] {
                     self._contactCache[uid] = self.mergeLite(existing, with: incoming)
                 } else {
                     self._contactCache[uid] = incoming
                 }
-            }
-
-            for (uid, incomingModel) in modelById {
-                if let existingModel = self._cachedContacts[uid] {
-                    self.mergeModelInPlace(existingModel, with: incomingModel)
-                } else {
-                    self._cachedContacts[uid] = incomingModel
-                }
+                // Invalidate model view for this user so next read rehydrates from lite
+                self.modelCache.removeObject(forKey: uid as NSString)
             }
         }
     }

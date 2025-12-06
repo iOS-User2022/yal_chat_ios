@@ -21,6 +21,68 @@ enum MediaType: String, PersistableEnum {
     case gif = "m.gif"
 }
 
+final class MediaLoader: ObservableObject {
+    @Published var image: UIImage?
+    @Published var localURL: URL?
+    @Published var progress: Double = 0
+    @Published var error: Error? = nil
+
+    func load(remoteURL: String, type: MediaType, localURL: URL? = nil) {
+        if let localURL {
+            DispatchQueue.main.async {
+                self.localURL = localURL
+                self.preparePreviewIfNeeded(for: type, from: localURL)
+            }
+        }
+        
+        if remoteURL.isEmpty { return }
+        
+        MediaCacheManager.shared.getMedia(
+            url: remoteURL,
+            type: type,
+            progressHandler: { [weak self] p in
+                DispatchQueue.main.async { self?.progress = p }
+            },
+            completion: { [weak self] result in
+                guard let self else { return }
+                switch result {
+                case .success(let pathString):
+                    let url = pathString.hasPrefix("file://")
+                        ? URL(string: pathString)!
+                        : URL(fileURLWithPath: pathString)
+                    DispatchQueue.main.async {
+                        self.localURL = url
+                    }
+
+                    // For images, decode off-main and publish on main
+                    DispatchQueue.global(qos: .userInitiated).async {
+                        let uiImage = UIImage(contentsOfFile: url.path) ?? (try? Data(contentsOf: url)).flatMap(UIImage.init)
+                        let final = uiImage?.preparingForDisplay() ?? uiImage
+                        DispatchQueue.main.async {
+                            self.image = final
+                        }
+                    }
+
+                case .failure(let err):
+                    DispatchQueue.main.async { self.error = err }
+                }
+            }
+        )
+    }
+    
+    private func preparePreviewIfNeeded(for type: MediaType, from url: URL) {
+        previewImage(for: type, url: url) { [weak self] result in
+            guard let self else { return }
+            switch result {
+            case .success(let ui):
+                self.image = ui
+            case .failure(let err):
+                self.error = err
+            }
+        }
+    }
+}
+
 struct MediaView<Placeholder: View, ErrorView: View>: View {
     let mediaURL: String
     let userName: String?
@@ -31,154 +93,159 @@ struct MediaView<Placeholder: View, ErrorView: View>: View {
     let isSender: Bool
     let downloadedImage: UIImage?
     let senderImage: String
+    var localURLOverride: URL? = nil
+    var externalProgress: Double? = nil
+    var isUploading: Bool = false
     
-    @State private var progress: Double = 0
-    @State private var localURL: String?
-    @State private var error: Error?
-    @State private var thumbnail: UIImage?
+    @StateObject private var loader = MediaLoader()
     @State private var showFullScreen = false
+    @State private var thumbnail: UIImage?
     
     var body: some View {
         ZStack {
-            if let url = localURL {
-                switch mediaType {
-                case .image:
-                    let fileURL: URL = url.hasPrefix("file://") ? URL(string: url)! : URL(fileURLWithPath: url)
-                    if let uiImage = UIImage(contentsOfFile: fileURL.path) ?? {
-                        // fallback if the path form fails for some reason
-                        guard let data = try? Data(contentsOf: fileURL) else { return nil }
-                        return UIImage(data: data)
-                    }() {
-                        // Optional: pre-decompress for smoother UI on iOS 15+
-                        let finalImage = uiImage.preparingForDisplay() ?? uiImage
-                        Image(uiImage: finalImage)
-                            .resizable()
-                            .scaledToFit()
-                            .onTapGesture {
-                                showFullScreen = true
-                            }
-                            .fullScreenCover(isPresented: $showFullScreen) {
-                                FullScreenImageView(
-                                    source: .uiImage(finalImage),
-                                    userName: userName ?? "",
-                                    timeText: timeText ?? "",
-                                    isPresented: $showFullScreen
-                                )
-                            }
-                    } else {
-                        placeholder
-                    }
-                    
-                case .video:
-                    
-                    if FileManager.default.fileExists(atPath: url) {
-                        let videoURL = URL(fileURLWithPath: url)
-                        ZStack {
-                            if let thumb = thumbnail {
-                                Image(uiImage: thumb)
-                                    .resizable()
-                                    .scaledToFit()
-                            } else {
-                                Rectangle()
-                                    .fill(Color.black.opacity(0.1))
-                                    .frame(height: 200)
-                            }
-                            
-                            Image(systemName: "play.circle.fill")
-                                .font(.system(size: 50))
-                                .foregroundColor(.white)
-                        }.onAppear {
-                            if thumbnail == nil {
-                                generateVideoThumbnail(for: videoURL)
-                            }
-                        }
-                        .onTapGesture {
-                            showFullScreen = true
-                        }
+            switch mediaType {
+            case .image:
+                if let img = loader.image {
+                    Image(uiImage: img)
+                        .resizable()
+                        .scaledToFit()
+                        .onTapGesture { showFullScreen = true }
                         .fullScreenCover(isPresented: $showFullScreen) {
                             FullScreenImageView(
-                                source: .uiImage(UIImage()),
+                                source: .uiImage(img),
                                 userName: userName ?? "",
                                 timeText: timeText ?? "",
-                                mediaType: .video,
-                                mediaUrl: url,
                                 isPresented: $showFullScreen
                             )
                         }
-                    } else {
-                        Text("Video file not found")
-                    }
-                    
-                case .document:
-                    let docURL = url.hasPrefix("file://") ? URL(string: url)! : URL(fileURLWithPath: url)
-                       DocumentMessageRow(
-                           fileURL: docURL,
-                           fileName: docURL.lastPathComponent,
-                           pageCountText: "0",   // compute if you want
-                           fileSizeText: ""
-                       )
-                case .audio:
-                    if FileManager.default.fileExists(atPath: url) {
-                        AudioMessageRow(avatar: downloadedImage ?? UIImage(), fileURL: URL(fileURLWithPath: url), isSender: isSender, senderImage: senderImage, senderName: userName ?? "")
-                      } else {
-                          Text("Audio not found")
-                      }
-                case .gif:
-                    let gifURL = URL(fileURLWithPath: url)
+                } else if loader.progress > 0 && loader.progress < 1 {
+                    placeholder
+                } else if loader.error != nil {
+                    errorView
+                } else {
+                    placeholder
+                }
+            
+            case .gif:
+                if let localURL = loader.localURL?.absoluteString, let fileURL = URL(string: localURL) {
+                    let gifURL = URL(fileURLWithPath: fileURL.path)
                     WebImage(url: gifURL)
                         .resizable()
                         .scaledToFit()
                         .frame(maxWidth: 220)
                         .clipped()
-                }
-            } else if progress > 0 && progress < 1 {
-                VStack(spacing: 8) {
+                } else {
                     placeholder
                 }
-            } else if error != nil {
-                placeholder
-            } else {
-                placeholder
+
+            case .video:
+                if let url = loader.localURL {
+                    ZStack {
+                        if let thumb = thumbnail {
+                            Image(uiImage: thumb).resizable().scaledToFit()
+                        } else {
+                            Rectangle().fill(Color.black.opacity(0.1)).frame(height: 200)
+                        }
+                        Image(systemName: "play.circle.fill")
+                            .font(.system(size: 50)).foregroundColor(.white)
+                    }
+                    .onAppear {
+                        if thumbnail == nil { generateVideoThumbnail(for: url) }
+                    }
+                    .onTapGesture { showFullScreen = true }
+                    .fullScreenCover(isPresented: $showFullScreen) {
+                        FullScreenImageView(
+                            source: .uiImage(UIImage()),
+                            userName: userName ?? "",
+                            timeText: timeText ?? "",
+                            mediaType: .video,
+                            mediaUrl: url.path,          // pass path, not raw string
+                            isPresented: $showFullScreen
+                        )
+                    }
+                } else if loader.progress > 0 && loader.progress < 1 {
+                    placeholder
+                } else if loader.error != nil {
+                    errorView
+                } else {
+                    placeholder
+                }
+
+            case .document:
+                if let url = loader.localURL {
+                    DocumentMessageRow(
+                        fileURL: url,
+                        fileName: url.lastPathComponent,
+                        pageCountText: "0",
+                        fileSizeText: ""
+                    )
+                } else if loader.progress > 0 && loader.progress < 1 {
+                    placeholder
+                } else if loader.error != nil {
+                    errorView
+                } else {
+                    placeholder
+                }
+
+            case .audio:
+                if let url = loader.localURL {
+                    AudioMessageRow(
+                        avatar: downloadedImage ?? UIImage(),
+                        fileURL: url,
+                        isSender: isSender,
+                        senderImage: senderImage,
+                        senderName: userName ?? ""
+                    )
+                } else if loader.progress > 0 && loader.progress < 1 {
+                    placeholder
+                } else if loader.error != nil {
+                    errorView
+                } else {
+                    placeholder
+                }
             }
         }
+        .overlay(progressOverlay, alignment: .bottom)
         .onAppear {
-            MediaCacheManager.shared.getMedia(
-                url: mediaURL,
-                type: mediaType,
-                progressHandler: { prog in
-                    progress = prog
-                },
-                completion: { result in
-                    DispatchQueue.main.async {
-                        switch result {
-                        case .success(let imagePath):
-                            DispatchQueue.main.async {
-                                localURL = imagePath
-                            }
-                        case .failure(let err):
-                            self.error = err
-                        }
-                    }
+            if loader.localURL == nil && loader.image == nil {
+                if let local = localURLOverride {
+                    loader.load(remoteURL: mediaURL, type: mediaType, localURL: local)
+                } else if !mediaURL.isEmpty {
+                    loader.load(remoteURL: mediaURL, type: mediaType, localURL: nil)
                 }
-            )
+            }
         }
+    }
+    
+    private var progressOverlay: some View {
+        let p = clamp((externalProgress ?? loader.progress), min: 0, max: 1)
+        let shouldShow = (isUploading && p < 1) || (p > 0 && p < 1)
+        return Group {
+            if shouldShow {
+                VStack(spacing: 0) {
+                    ProgressView(value: p)
+                        .progressViewStyle(.linear)
+                        .frame(height: 4)
+                        .frame(maxWidth: .infinity)
+                        .background(Color.white.opacity(0.6))
+                }
+                .transition(.opacity)
+            }
+        }
+    }
+    
+    private func clamp(_ v: Double, min: Double, max: Double) -> Double {
+        Swift.max(min, Swift.min(max, v))
     }
     
     private func generateVideoThumbnail(for url: URL) {
         let asset = AVAsset(url: url)
-        let imageGenerator = AVAssetImageGenerator(asset: asset)
-        imageGenerator.appliesPreferredTrackTransform = true
-        let time = CMTime(seconds: 1, preferredTimescale: 60)
-        
+        let gen = AVAssetImageGenerator(asset: asset)
+        gen.appliesPreferredTrackTransform = true
+        let t = CMTime(seconds: 1, preferredTimescale: 60)
         DispatchQueue.global().async {
-            do {
-                let cgImage = try imageGenerator.copyCGImage(at: time, actualTime: nil)
-                let uiImage = UIImage(cgImage: cgImage)
-                DispatchQueue.main.async {
-                    self.thumbnail = uiImage
-                }
-            } catch {
-                print("Thumbnail generation failed: \(error.localizedDescription)")
+            if let cg = try? gen.copyCGImage(at: t, actualTime: nil) {
+                DispatchQueue.main.async { thumbnail = UIImage(cgImage: cg) }
             }
         }
     }
@@ -187,7 +254,18 @@ struct MediaView<Placeholder: View, ErrorView: View>: View {
 // MARK: - Extension for default placeholder/error
 
 extension MediaView where Placeholder == Image, ErrorView == Image {
-    init(mediaURL: String, mediaType: MediaType, time: String, userName: String, isSender: Bool, downloadedImage: UIImage, senderImage: String) {
+    init(
+        mediaURL: String,
+        mediaType: MediaType,
+        time: String,
+        userName: String,
+        isSender: Bool,
+        downloadedImage: UIImage,
+        senderImage: String,
+        localURLOverride: URL? = nil,
+        externalProgress: Double? = nil,
+        isUploading: Bool = false
+    ) {
         self.init(
             mediaURL: mediaURL,
             userName: userName,
@@ -196,8 +274,12 @@ extension MediaView where Placeholder == Image, ErrorView == Image {
             placeholder: Image(systemName: "photo"),
             errorView: Image(systemName: "exclamationmark.triangle"),
             isSender: isSender,
-            downloadedImage: downloadedImage, senderImage: senderImage
+            downloadedImage: downloadedImage,
+            senderImage: senderImage
         )
+        self.localURLOverride = localURLOverride
+        self.externalProgress = externalProgress
+        self.isUploading = isUploading
     }
 }
 
@@ -456,8 +538,20 @@ final class AudioBubblePlayer: NSObject, ObservableObject, AVAudioPlayerDelegate
         if p.isPlaying { pause() } else { play() }
     }
 
+    func playThroughSpeaker() {
+        let session = AVAudioSession.sharedInstance()
+        do {
+            try session.setCategory(.playback, mode: .default, options: [.defaultToSpeaker])
+            try session.setActive(true)
+        } catch {
+            print("Failed to set audio session:", error)
+        }
+    }
+    
+    
     func play() {
         guard let p = player else { return }
+        playThroughSpeaker()
         p.rate = playbackRate
         p.play()
         isPlaying = true

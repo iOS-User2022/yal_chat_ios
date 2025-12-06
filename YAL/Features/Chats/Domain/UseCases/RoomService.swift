@@ -102,6 +102,10 @@ final class RoomService: RoomServiceProtocol {
         chatRepository.chatMessagesPublisher.eraseToAnyPublisher()
     }
     
+    var messagesClearedPublisher: AnyPublisher<String, Never> {
+        chatRepository.messagesClearedPublisher.eraseToAnyPublisher()
+    }
+    
     var ephemeralPublisher: AnyPublisher<ReceiptUpdate, Never> {
         chatRepository.ephemeralPublisher.eraseToAnyPublisher()
     }
@@ -189,10 +193,35 @@ final class RoomService: RoomServiceProtocol {
                         
                         // If nothing to fetch, just build/update room immediately
                         guard !unsyncedIds.isEmpty else {
-                            if let (roomSummaryModel, isExisting) = self.chatRepository.getRoomSummaryModel(roomId: roomId, events: events) {
-                                self.chatRepository.updateRoom(room: roomSummaryModel, isExisting: isExisting)
-                                let roomModel = self.chatRepository.upsertRoom(from: roomSummaryModel)
-                                return Just(roomModel).setFailureType(to: APIError.self).eraseToAnyPublisher()
+                            if let (model, isExisting) = self.chatRepository.getRoomSummaryModel(roomId: roomId, events: events) {
+                                var roomSummaryModel = model
+                                let resolver: ([String]) -> [String: ContactLite] = { ids in
+                                    var out: [String: ContactLite] = [:]
+                                    out.reserveCapacity(ids.count)
+                                    for raw in ids {
+                                        let uid = raw.formattedMatrixUserId
+                                        out[uid] = ContactManager.shared.contact(for: uid)
+                                            ?? ContactLite(userId: uid, fullName: "", phoneNumber: "")
+                                    }
+                                    return out
+                                }
+
+                                roomSummaryModel.update(
+                                    stateEvents: events,
+                                    timelineEvents: nil,
+                                    unreadCount: nil,
+                                    rehydrateWith: resolver
+                                )
+                                return Just((roomSummaryModel, isExisting))
+                                    .setFailureType(to: APIError.self)
+                                    .receive(on: DispatchQueue.main)
+                                    .map { [weak self] summary, isExisting -> RoomModel? in
+                                        guard let self = self else { return nil }
+                                        self.chatRepository.updateRoom(room: summary, isExisting: isExisting)
+                                        let model = self.chatRepository.upsertRoom(from: summary)
+                                        return model
+                                    }
+                                    .eraseToAnyPublisher()
                             } else {
                                 return Just(nil).setFailureType(to: APIError.self).eraseToAnyPublisher()
                             }
@@ -243,10 +272,30 @@ final class RoomService: RoomServiceProtocol {
                                 }
                                 return events
                             }
-                            .map { updatedEvents -> RoomModel? in
-                                if let (roomSummaryModel, isExisting) = self.chatRepository.getRoomSummaryModel(roomId: roomId, events: updatedEvents) {
-                                    self.chatRepository.updateRoom(room: roomSummaryModel, isExisting: isExisting)
-                                    let model = self.chatRepository.upsertRoom(from: roomSummaryModel)
+                            .receive(on: DispatchQueue.main)
+                            .map { [weak self] updatedEvents -> RoomModel? in
+                                guard let self = self else { return nil }
+                                if let (model, isExisting) = self.chatRepository.getRoomSummaryModel(roomId: roomId, events: updatedEvents) {
+                                    var summary = model
+                                    let resolver: ([String]) -> [String: ContactLite] = { ids in
+                                        var out: [String: ContactLite] = [:]
+                                        out.reserveCapacity(ids.count)
+                                        for raw in ids {
+                                            let uid = raw.formattedMatrixUserId
+                                            out[uid] = ContactManager.shared.contact(for: uid)
+                                                ?? ContactLite(userId: uid, fullName: "", phoneNumber: "")
+                                        }
+                                        return out
+                                    }
+
+                                    summary.update(
+                                        stateEvents: updatedEvents,
+                                        timelineEvents: nil,
+                                        unreadCount: nil,
+                                        rehydrateWith: resolver
+                                    )
+                                    self.chatRepository.updateRoom(room: summary, isExisting: isExisting)
+                                    let model = self.chatRepository.upsertRoom(from: summary)
                                     return model
                                 }
                                 return nil
@@ -280,6 +329,10 @@ final class RoomService: RoomServiceProtocol {
     
     func getMessages(forRoom roomId: String) {
         chatRepository.getMessages(fromRoom: roomId, limit: 10)
+    }
+    
+    func stopMessageSync() {
+        chatRepository.stopMessageFetch()
     }
     
     func sendMessage(message: ChatMessageModel) -> AnyPublisher<APIResult<SendMessageResponse>, APIError> {
@@ -503,7 +556,25 @@ final class RoomService: RoomServiceProtocol {
 
                             // If nothing to fetch, build/update room immediately
                             if unsyncedIds.isEmpty {
-                                if let (roomSummaryModel, isExisting) = self.chatRepository.getRoomSummaryModel(roomId: roomId, events: events) {
+                                if let (model, isExisting) = self.chatRepository.getRoomSummaryModel(roomId: roomId, events: events) {
+                                    var roomSummaryModel = model
+                                    let resolver: ([String]) -> [String: ContactLite] = { ids in
+                                        var out: [String: ContactLite] = [:]
+                                        out.reserveCapacity(ids.count)
+                                        for raw in ids {
+                                            let uid = raw.formattedMatrixUserId
+                                            out[uid] = ContactManager.shared.contact(for: uid)
+                                                ?? ContactLite(userId: uid, fullName: "", phoneNumber: "")
+                                        }
+                                        return out
+                                    }
+
+                                    roomSummaryModel.update(
+                                        stateEvents: events,
+                                        timelineEvents: nil,
+                                        unreadCount: nil,
+                                        rehydrateWith: resolver
+                                    )
                                     return Just((roomSummaryModel, isExisting))
                                         .setFailureType(to: APIError.self)
                                         .receive(on: DispatchQueue.main)
@@ -564,7 +635,25 @@ final class RoomService: RoomServiceProtocol {
                                 .receive(on: DispatchQueue.main)
                                 .map { [weak self] updatedEvents -> RoomModel? in
                                     guard let self = self else { return nil }
-                                    if let (summary, isExisting) = self.chatRepository.getRoomSummaryModel(roomId: roomId, events: updatedEvents) {
+                                    if let (model, isExisting) = self.chatRepository.getRoomSummaryModel(roomId: roomId, events: updatedEvents) {
+                                        var summary = model
+                                        let resolver: ([String]) -> [String: ContactLite] = { ids in
+                                            var out: [String: ContactLite] = [:]
+                                            out.reserveCapacity(ids.count)
+                                            for raw in ids {
+                                                let uid = raw.formattedMatrixUserId
+                                                out[uid] = ContactManager.shared.contact(for: uid)
+                                                    ?? ContactLite(userId: uid, fullName: "", phoneNumber: "")
+                                            }
+                                            return out
+                                        }
+
+                                        summary.update(
+                                            stateEvents: updatedEvents,
+                                            timelineEvents: nil,
+                                            unreadCount: nil,
+                                            rehydrateWith: resolver
+                                        )
                                         self.chatRepository.updateRoom(room: summary, isExisting: isExisting)
                                         let model = self.chatRepository.upsertRoom(from: summary)
                                         return model
@@ -644,7 +733,7 @@ final class RoomService: RoomServiceProtocol {
     
     func deleteRoom(room: RoomModel, reason: String) -> AnyPublisher<APIResult<EmptyResponse>, APIError> {
         let currentUserId = room.currentUser?.userId
-        let otherMembers = room.joinedMembers.filter { $0.userId != currentUserId }
+        let otherMembers = room.participants.filter { $0.userId != currentUserId }
         
         let kickPublishers = otherMembers.map { member in
             kickUserFromRoom(room: room, user: member, reason: reason)
@@ -696,7 +785,8 @@ final class RoomService: RoomServiceProtocol {
 
                 // If nothing to fetch, just update room immediately
                 if unsyncedIds.isEmpty {
-                    if var (roomSummaryModel, existing) = self.chatRepository.getRoomSummaryModel(roomId: room.id, events: stateEvents) {
+                    if let (model, existing) = self.chatRepository.getRoomSummaryModel(roomId: room.id, events: stateEvents) {
+                        var roomSummaryModel = model
                         let resolver: ([String]) -> [String: ContactLite] = { ids in
                             var out: [String: ContactLite] = [:]
                             out.reserveCapacity(ids.count)
@@ -765,7 +855,8 @@ final class RoomService: RoomServiceProtocol {
                             }
                         }
 
-                        if var (roomSummaryModel, existing) = self.chatRepository.getRoomSummaryModel(roomId: room.id, events: stateEvents) {
+                        if let (model, existing) = self.chatRepository.getRoomSummaryModel(roomId: room.id, events: stateEvents) {
+                            var roomSummaryModel = model
                             let resolver: ([String]) -> [String: ContactLite] = { ids in
                                 var out: [String: ContactLite] = [:]
                                 out.reserveCapacity(ids.count)
@@ -842,7 +933,8 @@ final class RoomService: RoomServiceProtocol {
                     // Fetch updated room state after successful invite
                     return self.chatRepository.getStateEvents(forRoom: room.id)
                         .map { stateEvents in
-                            if var (roomSummaryModel, existing) = self.chatRepository.getRoomSummaryModel(roomId: room.id, events: stateEvents) {
+                            if let (model, existing) = self.chatRepository.getRoomSummaryModel(roomId: room.id, events: stateEvents) {
+                                var roomSummaryModel = model
                                 let resolver: ([String]) -> [String: ContactLite] = { ids in
                                     var out: [String: ContactLite] = [:]
                                     out.reserveCapacity(ids.count)

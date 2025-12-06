@@ -2,7 +2,7 @@
 //  WebviewController.swift
 //  YAL
 //
-//  Created by Amutha on 27/11/25.
+//  Created by Hari krishna on 28/11/25.
 //
 
 import SwiftUI
@@ -14,7 +14,6 @@ struct WebViewContainer: UIViewRepresentable {
 
     func makeUIView(context: Context) -> WKWebView {
         let prefs = WKPreferences()
-//        prefs.javaScriptEnabled = true
 
         let config = WKWebViewConfiguration()
         config.preferences = prefs
@@ -24,8 +23,6 @@ struct WebViewContainer: UIViewRepresentable {
         let webview = WKWebView(frame: .zero, configuration: config)
         webview.navigationDelegate = context.coordinator
         webview.allowsBackForwardNavigationGestures = true
-//        webview.scrollView.isZooming = true
-
         return webview
     }
 
@@ -62,6 +59,7 @@ struct WebViewContainer: UIViewRepresentable {
         }
     }
 }
+
 import Foundation
 import Combine
 import WebKit

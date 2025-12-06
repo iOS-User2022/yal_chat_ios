@@ -184,7 +184,9 @@ struct ReceiverMessageView: View {
             placeholder: placeholderWithProgress,
             errorView: errorView,
             isSender: false,
-            downloadedImage: downloadedImage, senderImage: ""
+            downloadedImage: downloadedImage,
+            senderImage: "",
+            localURLOverride: nil
         )
         .id(message.mediaUrl ?? UUID().uuidString)
         .frame(width: mediaType == .audio ? 260 : 220,

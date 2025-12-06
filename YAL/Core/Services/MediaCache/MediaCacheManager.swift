@@ -58,18 +58,21 @@ final class MediaCacheManager: ObservableObject {
     private var downloadTasks: [String: TaskState] = [:]
 
     /// Protects `memoryCache` and `downloadTasks`
-    private let stateQ = DispatchQueue(label: "yal.media.cache.state",
-                                       qos: .userInitiated,
-                                       attributes: .concurrent)
+    private let stateQ = DispatchQueue(
+        label: "yal.media.cache.state",
+        qos: .userInitiated,
+        attributes: .concurrent
+    )
 
     /// File I/O (moves/copies/checks)
-    private let ioQ = DispatchQueue(label: "yal.media.cache.io",
-                                    qos: .userInitiated,
-                                    attributes: .concurrent)
+    private let ioQ = DispatchQueue(
+        label: "yal.media.cache.io",
+        qos: .userInitiated,
+        attributes: .concurrent
+    )
 
     /// DB metadata writes (serialized to avoid write conflicts)
-    private let metadataQ = DispatchQueue(label: "yal.media.cache.metadata",
-                                          qos: .utility)
+    private let metadataQ = DispatchQueue(label: "yal.media.cache.metadata", qos: .utility)
 
     /// Throttle map for DB persistence: url -> (lastTime, lastValue)
     private var persistMap: [String: (CFAbsoluteTime, Double)] = [:]
@@ -99,7 +102,6 @@ final class MediaCacheManager: ObservableObject {
         progressHandler: @escaping (Double) -> Void,
         completion: @escaping (Result<String, Error>) -> Void
     ) {
-        // 1) Memory cache hit (fast, thread-safe)
         if let path = stateRead({ memoryCache[url] }),
            fileManager.fileExists(atPath: path) {
             DispatchQueue.main.async { completion(.success(path)) }
@@ -107,7 +109,6 @@ final class MediaCacheManager: ObservableObject {
             return
         }
 
-        // 2) Disk/Realm check off the main thread
         ioQ.async { [weak self] in
             guard let self else { return }
 
@@ -123,7 +124,6 @@ final class MediaCacheManager: ObservableObject {
                 }
             }
 
-            // 3) Coalesce with in-flight (SYNC barrier so `shouldStart` is correct)
             let shouldStart: Bool = self.stateWriteSync {
                 if var s = self.downloadTasks[url] {
                     s.progressHandlers.append(progressHandler)
@@ -228,7 +228,9 @@ final class MediaCacheManager: ObservableObject {
         let cancellable = matrixApiManager
             .downloadMediaFile(
                 mxcUrl: url,
-                onProgress: { [weak self] p in self?.emitProgress(url: url, type: type, raw: p) }
+                onProgress: { [weak self] p in
+                    self?.emitProgress(url: url, type: type, raw: p)
+                }
             )
             .sink(receiveCompletion: { [weak self] completion in
                 guard let self else { return }
@@ -259,21 +261,24 @@ final class MediaCacheManager: ObservableObject {
 
     private func emitProgress(url: String, type: MediaType, raw: Double) {
         let value = max(0.0, min(1.0, raw))
-        var handlers: [(Double) -> Void] = []
-        var shouldEmit = false
 
-        stateWrite { [self] in
-            guard var s = downloadTasks[url] else { return }
+        // Atomically read/mutate state and capture handlers
+        let (handlers, shouldEmit): ([(Double) -> Void], Bool) = stateWriteSync {
+            guard var s = downloadTasks[url] else { return ([], false) }
             let now = CFAbsoluteTimeGetCurrent()
-            if value <= 0.0 || value >= 1.0
-                || (now - s.lastEmit) >= config.minProgressInterval
-                || abs(value - s.lastValue) >= config.minProgressDelta {
+            let doEmit =
+                value <= 0.0 || value >= 1.0 ||
+                (now - s.lastEmit) >= config.minProgressInterval ||
+                abs(value - s.lastValue) >= config.minProgressDelta
 
+            if doEmit {
                 s.lastEmit = now
                 s.lastValue = value
-                handlers = s.progressHandlers
+                let hs = s.progressHandlers
                 downloadTasks[url] = s
-                shouldEmit = true
+                return (hs, true)
+            } else {
+                return ([], false)
             }
         }
 
@@ -307,16 +312,21 @@ final class MediaCacheManager: ObservableObject {
         persist(url: url, type: type, state: .downloaded, path: path, progress: 1.0, force: true)
     }
 
+    @inline(__always)
     private func finish(url: String, result: Result<String, Error>) {
-        var completions: [(Result<String, Error>) -> Void] = []
-        stateWrite { [self] in
+        let completions: [(Result<String, Error>) -> Void] = stateWriteSync {
             if let s = downloadTasks[url] {
-                completions = s.completionHandlers
+                s.cancellable?.cancel()
                 downloadTasks[url] = nil
+                return s.completionHandlers
             }
+            return []
         }
+
         guard !completions.isEmpty else { return }
-        DispatchQueue.main.async { completions.forEach { $0(result) } }
+        DispatchQueue.main.async {
+            completions.forEach { $0(result) }
+        }
     }
 
     // MARK: - Metadata / Realm (throttled, off-main)

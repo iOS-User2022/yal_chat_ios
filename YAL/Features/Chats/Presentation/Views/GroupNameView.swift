@@ -136,9 +136,42 @@ struct GroupNameView: View {
                             VStack(spacing: 8) {
                                 ZStack(alignment: .topTrailing) {
                                     // Avatar
-                                    if let imageData = contact.imageData, let img = UIImage(data: imageData) {
+                                    if let imageURLString = contact.avatarURL {
+                                        MediaView(
+                                            mediaURL: imageURLString,
+                                            userName: "",
+                                            timeText: "",
+                                            mediaType: .image,
+                                            placeholder: placeholderInitialsView(for: contact),
+                                            errorView: placeholderInitialsView(for: contact),
+                                            isSender: false,
+                                            downloadedImage: nil,
+                                            senderImage: "",
+                                            localURLOverride: nil
+                                        )
+                                        .scaledToFill()
+                                        .frame(width: 40, height: 40)
+                                        .clipShape(Circle())
+                                    } else if let imageURLString = contact.imageURL {
+                                        MediaView(
+                                            mediaURL: imageURLString,
+                                            userName: "",
+                                            timeText: "",
+                                            mediaType: .image,
+                                            placeholder: placeholderInitialsView(for: contact),
+                                            errorView: placeholderInitialsView(for: contact),
+                                            isSender: false,
+                                            downloadedImage: nil,
+                                            senderImage: "",
+                                            localURLOverride: nil
+                                        )
+                                        .scaledToFill()
+                                        .frame(width: 40, height: 40)
+                                        .clipShape(Circle())
+                                    } else if let imageData = contact.imageData, let img = UIImage(data: imageData) {
                                         Image(uiImage: img)
                                             .resizable()
+                                            .scaledToFill()
                                             .frame(width: 40, height: 40)
                                             .clipShape(Circle())
                                     } else {
@@ -245,5 +278,18 @@ struct GroupNameView: View {
             .fill(Design.Color.appGradient.opacity(0.12))
             .frame(height: 8)
 
+    }
+    
+    private func placeholderInitialsView(for contact: ContactLite) -> some View {
+        return Text(getInitials(from: contact.fullName ?? contact.displayName ?? contact.phoneNumber))
+            .font(Design.Font.bold(8))
+            .frame(width: 40, height: 40)
+            .background(randomBackgroundColor())
+            .foregroundColor(Design.Color.primaryText.opacity(0.7))
+            .clipShape(Circle())
+            .overlay(
+                Circle()
+                    .stroke(Design.Color.white, lineWidth: 1)
+            )
     }
 }

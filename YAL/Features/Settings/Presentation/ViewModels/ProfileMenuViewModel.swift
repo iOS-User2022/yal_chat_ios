@@ -73,6 +73,7 @@ final class ProfileMenuViewModel: ObservableObject {
             profileImageUrl: Endpoint.profileImageBasePath + (profile.profilePic ?? "")
         )
         Storage.save(editable, for: .cachedProfile, type: .userDefaults)
+        print("proifile image saved priyanka")
     }
 
     private func loadProfileFromStorage() -> EditableProfile? {

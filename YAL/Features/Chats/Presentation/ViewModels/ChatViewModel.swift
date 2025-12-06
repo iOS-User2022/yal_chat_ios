@@ -22,8 +22,6 @@ final class ChatViewModel: ObservableObject {
     @Published var messages: [ChatMessageModel] = []
     @Published var typingUsers: [ContactModel] = []
     @Published var showNotAMemberBar: Bool = false
-    @Published var firstMessageEventId: String?
-    private var allMessages: [ChatMessageModel] = []
     private var oldMessagesPageSize: Int = 10
     
     let audioPlayer = AudioPlayer()
@@ -31,6 +29,7 @@ final class ChatViewModel: ObservableObject {
     @Published var selectedMessagesToForword: [ChatMessageModel] = []
     @Published var sharedMediaPayload: [ChatMessageModel]?
     @Published private(set) var isPagingTop = false
+    var didLoadMessages: Bool = false
     private var canLoadMoreTop = true
 
     var currentRoomId: String?
@@ -84,29 +83,34 @@ final class ChatViewModel: ObservableObject {
             }
             .store(in: &cancellables)
 
-        // Incoming messages — merge off-main, then publish once on main
+        roomService.messagesClearedPublisher
+            .subscribe(on: processQ)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.messages = []
+                self?.sections = []
+            }
+            .store(in: &cancellables)
+        
         roomService.chatMessagesPublisher
             .subscribe(on: processQ)
             .receive(on: processQ)
             .map { [weak self] incoming -> [ChatMessageModel] in
                 guard let self else { return [] }
                 let mergedMessages = self.mergedMessages(
-                    current: self.allMessages,
+                    current: self.messages,
                     incoming: incoming,
                     currentRoomId: self.currentRoomId
                 )
-                self.allMessages = mergedMessages
                 return mergedMessages
             }
             .sink(receiveValue: { [weak self] merged in
-                //print("Merged messsages: \(merged.count)")
+                print("Merged messsages: \(merged.count)")
                 guard let self else { return }
                 let sections = self.buildSections(from: merged) // off-main safe
-                DispatchQueue.main.async {
+                DispatchQueue.main.async { [self] in
                     if self.messages.isEmpty {
-                        self.firstMessageEventId = merged.first?.eventId
-                    } else if self.messages.count % 10 == 0 {
-                        self.firstMessageEventId = self.messages.first?.eventId
+                        self.didLoadMessages = true
                     }
                     self.messages = merged
                     self.sections = sections
@@ -190,53 +194,64 @@ final class ChatViewModel: ObservableObject {
         cancellables.forEach { $0.cancel() }
         cancellables.removeAll()
     }
+    
+    // MARK: - Active room lifecycle
+    // Set or clear the active room. Handles enabling/disabling observation + light UI reset.
+    func setActiveRoom(_ roomId: String?) {
+        // no-op if unchanged
+        if currentRoomId == roomId { return }
 
-    func sendMessageWithURLPreview(toRoom roomId: String, inReplyTo: ChatMessageModel? = nil) {
-            // Extract URLs
-            let urls = URLDetector.extractURLs(from: newMessage)
-            
-            if let firstURL = urls.first {
-                // Send message immediately
-                sendMessage(toRoom: roomId, inReplyTo: inReplyTo)
-                
-                // Fetch preview in background
-                Task {
-                    let fetcher = URLPreviewFetcher()
-                    await fetcher.fetchPreview(for: firstURL)
-                    
-                    if let preview = fetcher.previewData {
-                        // Store in cache for future use
-                        URLPreviewCache.shared.setPreview(preview, for: firstURL)
-                    }
-                }
-            } else {
-                sendMessage(toRoom: roomId, inReplyTo: inReplyTo)
-            }
-        }
-    func switchRoom(to roomId: String) {
-        guard currentRoomId != roomId else { return }
-
-        disableMessageObservation()
-
-        processQ.async { [weak self] in
-            self?.allMessages.removeAll()
-        }
-        DispatchQueue.main.async { [weak self] in
-            guard let self else { return }
-            self.messages.removeAll()
-            self.sections.removeAll()
-            self.firstMessageEventId = nil
-            self.typingUsers.removeAll()
-            self.isPagingTop = false
-            self.canLoadMoreTop = true
-            self.errorMessage = nil
-            self.isLoading = true
+        // Tear down previous room (if any)
+        if currentRoomId != nil {
+            disableMessageObservation()
+            stopFetchingMessages()
         }
 
         currentRoomId = roomId
 
-        enableMessageObservation()
-        fetchMessages(forRoom: roomId)
+        if let id = roomId {
+            // Fresh state for new room
+            DispatchQueue.main.async {
+                self.messages.removeAll()
+                self.sections.removeAll()
+                self.typingUsers.removeAll()
+                self.isPagingTop = false
+                self.didLoadMessages = false
+                self.errorMessage = nil
+                self.isLoading = true
+                self.canLoadMoreTop = true
+            }
+
+            enableMessageObservation()
+            fetchMessages(forRoom: id)
+        } else {
+            // Cleared: not inside any chat
+            DispatchQueue.main.async {
+                self.messages.removeAll()
+                self.sections.removeAll()
+                self.typingUsers.removeAll()
+                self.isLoading = false
+                self.canLoadMoreTop = false
+            }
+        }
+    }
+
+    // Convenience: call when pushing a Chat screen
+    func enterRoom(id: String) {
+        setActiveRoom(id)
+    }
+
+    // Convenience: call when leaving a Chat screen
+    func leaveCurrentRoom() {
+        // Only tear down if we actually own a room
+        guard currentRoomId != nil else { return }
+        setActiveRoom(nil)
+    }
+
+    // Safer “leave” that won’t nuke observation if another chat replaced it.
+    func leaveIfMatches(_ roomId: String) {
+        guard currentRoomId == roomId else { return }
+        setActiveRoom(nil)
     }
     
     func enableMessageObservation() {
@@ -340,6 +355,10 @@ final class ChatViewModel: ObservableObject {
         roomService.getMessages(forRoom: roomId)
     }
 
+    func stopFetchingMessages() {
+        roomService.stopMessageSync()
+    }
+    
     func updateMessages(incoming: [ChatMessageModel]) {
         // Kept for compatibility (if something else calls it), but do the work off-main.
         processQ.async { [weak self] in
@@ -373,86 +392,50 @@ final class ChatViewModel: ObservableObject {
     }
 
     func sendMessage(toRoom roomId: String, inReplyTo: ChatMessageModel? = nil) {
-        guard !newMessage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+        guard !newMessage.isEmpty,
               let userId = currentUser?.userId,
               let currentRoomId = currentRoomId else { return }
-        
-        let messageContent = newMessage
-        let urls = URLDetector.extractURLs(from: messageContent)
-        
-        // Create the message
+
         let tempId = UUID().uuidString
         let ts = Int64(Date().timeIntervalSince1970 * 1000)
-        
         let message = ChatMessageModel(
-            eventId: tempId,
-            sender: userId,
-            content: messageContent,
-            timestamp: ts,
-            msgType: MessageType.text.rawValue,
-            mediaUrl: nil,
-            mediaInfo: nil,
-            userId: userId,
-            roomId: currentRoomId,
-            receipts: [],
-            downloadState: .notStarted,
-            downloadProgress: 0.0,
-            messageStatus: .sending
+            eventId: tempId, sender: userId, content: newMessage,
+            timestamp: ts, msgType: MessageType.text.rawValue,
+            userId: userId, roomId: currentRoomId, inReplyTo: inReplyTo
         )
-        
-        // Add to messages immediately for optimistic UI
-        DispatchQueue.main.async {
-            self.messages.append(message)
-        }
-        
-        // Clear the input field
-        newMessage = ""
-        
-        // Send the message
+
         roomService.sendMessage(message: message)
             .subscribe(on: processQ)
             .receive(on: processQ)
-            .sink(receiveCompletion: { completion in
-                if case .failure(let error) = completion {
-                    print("[sendMessage] Failed: \(error.localizedDescription)")
+            .sink(receiveCompletion: { [weak self] completion in
+                guard let self else { return }
+                DispatchQueue.main.async {
+                    if case let .failure(error) = completion {
+                        self.errorMessage = "Message send failed: \(error.localizedDescription)"
+                    }
+                    self.isLoading = false
+                }
+            }, receiveValue: { [weak self] response in
+                guard let self else { return }
+                if case .success(let resp) = response {
                     DispatchQueue.main.async {
                         if let idx = self.messages.firstIndex(where: { $0.eventId == tempId }) {
-//                            self.messages[idx].messageStatus = .failed
+                            self.messages[idx].eventId = resp.eventId
                         }
                     }
-                }
-            }, receiveValue: { [weak self] result in
-                switch result {
-                case .success(let response):
-                    DispatchQueue.main.async {
-                        if let idx = self?.messages.firstIndex(where: { $0.eventId == tempId }) {
-                            self?.messages[idx].eventId = response.eventId
-                            self?.messages[idx].messageStatus = .sent
-                        }
-                    }
-                case .unsuccess(let error):
-                    print("[sendMessage] API Error: \(error.localizedDescription)")
-                    DispatchQueue.main.async {
-                        if let idx = self?.messages.firstIndex(where: { $0.eventId == tempId }) {
-//                            self?.messages[idx].messageStatus = .failed
-                        }
-                    }
+                } else if case .unsuccess(let e) = response {
+                    DispatchQueue.main.async { self.errorMessage = "Message send failed: \(e.localizedDescription)" }
                 }
             })
             .store(in: &cancellables)
         
-        // Fetch URL preview in background (if applicable)
-        if let firstURL = urls.first {
-            Task {
-                let fetcher = URLPreviewFetcher()
-                await fetcher.fetchPreview(for: firstURL)
-                
-                if let preview = fetcher.previewData {
-                    URLPreviewCache.shared.setPreview(preview, for: firstURL)
-                }
-            }
+        DispatchQueue.main.async {
+            self.messages.append(message)
+            self.isLoading = true
+            self.newMessage = ""
         }
     }
+
     func markMessageAsRead(roomId: String, eventId: String, usePrivate: Bool = false) {
         roomService.sendReadMarker(
             roomId: roomId,
@@ -551,7 +534,7 @@ final class ChatViewModel: ObservableObject {
         message: ChatMessageModel,
         roomId: String,
         messageType: String,
-        localURL: String? = nil,
+        localURL: URL? = nil,
         mediaURL: String? = nil,
         thumbnailURL: String? = nil,
         fileName: String,
@@ -560,19 +543,23 @@ final class ChatViewModel: ObservableObject {
         size: Int64? = nil,
         completion: @escaping (_ sendMessageResponse: SendMessageResponse) -> Void
     ) {
-        getMediaDimensions(mediaType: messageType, localURL: localURL) { [weak self] width, height in
+        let (width, height) = getMediaDimensions(mediaType: messageType, localURL: localURL?.absoluteString)
+
+        var mediaInfo = MediaInfo(
+            thumbnailUrl: thumbnailURL,
+            thumbnailInfo: nil,
+            w: width, h: height,
+            duration: Int(duration ?? 0),
+            size: Int(size ?? 0),
+            mimetype: mimeType
+        )
+        mediaInfo.localURL = localURL
+
+        let temp = message
+
+        let start: () -> Void = { [weak self] in
             guard let self else { return }
 
-            let mediaInfo = MediaInfo(
-                thumbnailUrl: thumbnailURL,
-                thumbnailInfo: nil,
-                w: width, h: height,
-                duration: Int(duration ?? 0),
-                size: Int(size ?? 0),
-                mimetype: mimeType
-            )
-
-            let temp = message
             temp.mediaUrl = mediaURL
             temp.mediaInfo = mediaInfo
             temp.downloadProgress = 0.0
@@ -580,7 +567,7 @@ final class ChatViewModel: ObservableObject {
 
             self.roomService.sendMessage(message: temp)
                 .subscribe(on: self.processQ)
-                .receive(on: self.processQ)
+                .receive(on: DispatchQueue.main)
                 .sink(receiveCompletion: { completionStatus in
                     if case .failure(let error) = completionStatus {
                         print("[sendMediaMessage] Failed: \(error.localizedDescription)")
@@ -588,48 +575,79 @@ final class ChatViewModel: ObservableObject {
                 }, receiveValue: { result in
                     switch result {
                     case .success(let resp):
-                        DispatchQueue.main.async { completion(resp) }
+                        completion(resp)
                     case .unsuccess(let e):
                         print("[sendMediaMessage] API Error: \(e.localizedDescription)")
                     }
                 })
                 .store(in: &self.cancellables)
         }
+
+        if Thread.isMainThread {
+            start()
+        } else {
+            DispatchQueue.main.async(execute: start)
+        }
     }
 
-    func uploadAndSendMediaMessage(fileURL: URL,
-                                   fileName: String,
-                                   mimeType: String,
-                                   duration: Double? = nil,
-                                   size: Int64? = nil,
-                                   localPreview: UIImage? = nil) {
-        guard let roomId = selectedRoom?.id,
-              let userId = currentUser?.userId else { return }
-
+    func uploadAndSendMediaMessage(
+        fileURL: URL,
+        fileName: String,
+        mimeType: String,
+        duration: Double? = nil,
+        size: Int64? = nil,
+        localPreview: UIImage? = nil,
+    ) {
+        guard let roomId = selectedRoom?.id, let userId = currentUser?.userId else { return }
+        
         let tempId = UUID().uuidString
         let ts = Int64(Date().timeIntervalSince1970 * 1000)
-
+        
         let temp = ChatMessageModel(
-            eventId: tempId, sender: userId, content: "",
-            timestamp: ts, msgType: messageType(for: mimeType).rawValue,
-            mediaUrl: nil, mediaInfo: nil, userId: userId, roomId: roomId,
-            receipts: [], downloadState: .downloading, downloadProgress: 0.1, messageStatus: .sending
+            eventId: tempId,
+            sender: userId,
+            content: "",
+            timestamp: ts,
+            msgType: messageType(for: mimeType).rawValue,
+            mediaUrl: nil,
+            mediaInfo: nil,
+            userId: userId,
+            roomId: roomId,
+            receipts: [],
+            downloadState: .downloading,
+            downloadProgress: 0.1,
+            messageStatus: .sending
         )
         temp.localPreviewImage = localPreview
-        DispatchQueue.main.async { self.messages.append(temp) }
-
+        
+        do {
+            let mt = messageType(for: mimeType).rawValue
+            let (w, h) = getMediaDimensions(mediaType: mt, localURL: fileURL.absoluteString)
+            let localInfo = MediaInfo(
+                thumbnailUrl: nil,
+                thumbnailInfo: nil,
+                w: w, h: h,
+                duration: Int(duration ?? 0),
+                size: Int(size ?? 0),
+                mimetype: mimeType
+            )
+            var infoWithLocal = localInfo
+            infoWithLocal.localURL = fileURL
+            temp.mediaInfo = infoWithLocal
+        }
+        var messageIndex = 0
+        DispatchQueue.main.async {
+            self.messages.append(temp)
+            messageIndex = self.messages.firstIndex(where: { $0.eventId == tempId }) ?? 0
+        }
+        
         roomService.uploadMedia(fileURL: fileURL, fileName: fileName, mimeType: mimeType, onProgress: { [weak self] p in
             guard let self else { return }
             // Coalesce on a serial queue
             self.processQ.async { [weak self] in
-                var lastTick = CFAbsoluteTimeGetCurrent()
-                let now = CFAbsoluteTimeGetCurrent()
-                if now - lastTick > (1.0 / 15.0) { // ~15fps
-                    lastTick = now
-                    DispatchQueue.main.async {
-                        if let i = self?.messages.firstIndex(where: { $0.eventId == tempId }) {
-                            self?.messages[i].downloadProgress = p
-                        }
+                DispatchQueue.main.async {
+                    if let self = self, !self.messages.isEmpty, messageIndex < self.messages.count {
+                        self.messages[messageIndex].downloadProgress = p
                     }
                 }
             }
@@ -641,8 +659,8 @@ final class ChatViewModel: ObservableObject {
             if case .failure(let e) = completion {
                 print("[upload] failed: \(e.localizedDescription)")
                 DispatchQueue.main.async {
-                    if let i = self.messages.firstIndex(where: { $0.eventId == tempId }) {
-                        self.messages[i].downloadState = .failed
+                    if !self.messages.isEmpty, messageIndex < self.messages.count {
+                        self.messages[messageIndex].downloadState = .failed
                     }
                 }
             }
@@ -651,25 +669,28 @@ final class ChatViewModel: ObservableObject {
             switch result {
             case .success(let mediaURL):
                 self.sendMediaMessage(
-                    message: temp, roomId: roomId,
+                    message: temp,
+                    roomId: roomId,
                     messageType: messageType(for: mimeType).rawValue,
+                    localURL: fileURL,
                     mediaURL: mediaURL.absoluteString,
-                    fileName: fileName, mimeType: mimeType
+                    fileName: fileName,
+                    mimeType: mimeType
                 ) { resp in
                     DispatchQueue.main.async {
-                        if let i = self.messages.firstIndex(where: { $0.eventId == tempId }) {
-                            self.messages[i].eventId = resp.eventId
-                            self.messages[i].mediaUrl = mediaURL.absoluteString
-                            self.messages[i].downloadState = .downloaded
-                            self.messages[i].messageStatus = .sent
+                        if !self.messages.isEmpty, messageIndex < self.messages.count {
+                            self.messages[messageIndex].eventId = resp.eventId
+                            self.messages[messageIndex].mediaUrl = mediaURL.absoluteString
+                            self.messages[messageIndex].downloadState = .downloaded
+                            self.messages[messageIndex].messageStatus = .sent
                         }
                     }
                 }
             case .unsuccess(let e):
                 print("[upload] API error: \(e.localizedDescription)")
                 DispatchQueue.main.async {
-                    if let i = self.messages.firstIndex(where: { $0.eventId == tempId }) {
-                        self.messages[i].downloadState = .failed
+                    if !self.messages.isEmpty, messageIndex < self.messages.count {
+                        self.messages[messageIndex].downloadState = .failed
                     }
                 }
             }

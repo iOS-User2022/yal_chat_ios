@@ -482,22 +482,24 @@ final class DBManager: DBManageable {
 
     func upsertContactPresence(
         userId: String,
+        phoneNumber: String?,
         currentlyActive: Bool?,
         lastActiveAgoMs: Int?,
         avatarURL: String?,
         statusMessage: String?
     ) {
         let key = userId.formattedMatrixUserId
-        guard !key.isEmpty else { return }
+        guard !key.isEmpty, let phoneNumber else { return }
 
         let r = realm
 
         do {
             try r.write {
-                let obj = r.object(ofType: ContactObject.self, forPrimaryKey: key) ?? {
+                let obj = r.object(ofType: ContactObject.self, forPrimaryKey: phoneNumber) ?? {
                     let o = ContactObject()
-                    o.id = key
+                    o.id = phoneNumber
                     o.userId = key
+                    o.phoneNumber = phoneNumber
                     r.add(o, update: .modified)
                     return o
                 }()
@@ -629,45 +631,6 @@ final class DBManager: DBManageable {
     }
     
     // MARK: — Room CRUD
-    
-    func saveRooms(rooms: [RoomModel]) {
-        let r = realm
-        autoreleasepool {
-            try? r.write {
-                for rm in rooms {
-                    let obj = RoomObject()
-                    obj.id            = rm.id
-                    obj.name          = rm.name
-                    obj.creator       = rm.creator
-                    obj.createdAt     = rm.createdAt
-                    obj.currentUser   = try? JSONEncoder().encode(rm.currentUser?.userId)
-                    obj.joinedMembersData = try? JSONEncoder().encode(rm.joinedMembers.map(\.userId))
-                    obj.invitedMembersData = try? JSONEncoder().encode(rm.invitedMembers.map(\.userId))
-                    obj.leftMembersData = try? JSONEncoder().encode(rm.leftMembers.map(\.userId))
-                    obj.bannedMembersData = try? JSONEncoder().encode(rm.bannedMembers.map(\.userId))
-                    obj.lastMessage   = rm.lastMessage
-                    obj.lastMessageType = rm.lastMessageType
-                    obj.lastSender    = rm.lastSender
-                    obj.lastSenderName = rm.lastSenderName
-                    obj.unreadCount   = rm.unreadCount
-                    obj.numberOfParticipants = rm.participantsCount
-                    obj.avatarUrl     = rm.avatarUrl
-                    obj.adminData     = try? JSONEncoder().encode(rm.admins)
-                    obj.serverTimestamp = rm.serverTimestamp
-                    obj.lastServerTimestamp = rm.lastServerTimestamp
-                    obj.isLeft        = rm.isLeft
-                    obj.state         = try? JSONEncoder().encode(rm.state?.events)
-                    r.add(obj, update: .modified)
-                }
-            }
-        }
-
-    }
-    
-    func saveRoom(room: RoomModel) {
-        saveRooms(rooms: [room])
-    }
-    
     func saveRoomSummary(_ summary: RoomSummaryModel) {
         queue.async {
             let realm = self.realm
@@ -693,7 +656,7 @@ final class DBManager: DBManageable {
                             existing.invitedMembersData = try? JSONEncoder().encode(summary.invitedUserIds)
                             existing.leftMembersData    = try? JSONEncoder().encode(summary.leftUserIds)
                             existing.bannedMembersData  = try? JSONEncoder().encode(summary.bannedUserIds)
-                            existing.adminData = try? JSONEncoder().encode(summary.admins)
+                            existing.adminData = try? JSONEncoder().encode(summary.adminIds)
                             existing.opponentUserData = try? JSONEncoder().encode(summary.opponentUserId)
                             // Realm auto-updates existing object, no need to re-add
                         } else {
@@ -717,7 +680,7 @@ final class DBManager: DBManageable {
                             new.invitedMembersData = try? JSONEncoder().encode(summary.invitedUserIds)
                             new.leftMembersData    = try? JSONEncoder().encode(summary.leftUserIds)
                             new.bannedMembersData  = try? JSONEncoder().encode(summary.bannedUserIds)
-                            new.adminData = try? JSONEncoder().encode(summary.admins)
+                            new.adminData = try? JSONEncoder().encode(summary.adminIds)
                             
                             realm.add(new, update: .modified)
                         }
@@ -761,7 +724,8 @@ final class DBManager: DBManageable {
             createdAt: o.createdAt,
             isLeft: o.isLeft,
             isGroup: isGroup,
-            admins: admins,
+            adminIds: admins,
+            admins: [],
             joinedUserIds: joined,
             invitedUserIds: invited,
             leftUserIds: left,
@@ -807,6 +771,7 @@ final class DBManager: DBManageable {
                     createdAt: nil,
                     isLeft: false,
                     isGroup: c.numberOfParticipants > 2,
+                    adminIds: [],
                     admins: [],
                     joinedUserIds: [],
                     invitedUserIds: [],
@@ -846,6 +811,7 @@ final class DBManager: DBManageable {
                     createdAt: nil,
                     isLeft: false,
                     isGroup: s.numberOfParticipants > 2,
+                    adminIds: [],
                     admins: [],
                     joinedUserIds: [],
                     invitedUserIds: [],
@@ -1095,7 +1061,7 @@ final class DBManager: DBManageable {
     
     func deleteRoomById(roomId: String) {
         let r = realm
-        let toDel = r.objects(RoomObject.self)
+        let toDel = r.objects(RoomSummaryObject.self)
             .filter("id == %@", roomId)
         try? r.write { r.delete(toDel) }
     }
@@ -1649,7 +1615,7 @@ extension DBManager {
         let invitedIds     = (o.invitedMembersData).flatMap { try? decoder.decode([String].self, from: $0) } ?? []
         let leftIds        = (o.leftMembersData).flatMap { try? decoder.decode([String].self, from: $0) } ?? []
         let bannedIds      = (o.bannedMembersData).flatMap { try? decoder.decode([String].self, from: $0) } ?? []
-        let admins         = (o.adminData).flatMap { try? decoder.decode([String].self, from: $0) } ?? []
+        let adminIds        = (o.adminData).flatMap { try? decoder.decode([String].self, from: $0) } ?? []
 
         let allIds = Array(Set(joinedIds + invitedIds + leftIds + bannedIds))
         let isGroup = allIds.count > 2
@@ -1661,7 +1627,8 @@ extension DBManager {
         let resolvedLeft: [ContactLite]    = includeContacts ? leftIds.compactMap    { resolveContact?($0) ?? self._fallbackResolve($0) } : []
         let resolvedBanned: [ContactLite]  = includeContacts ? bannedIds.compactMap  { resolveContact?($0) ?? self._fallbackResolve($0) } : []
         let resolvedAll: [ContactLite]     = includeContacts ? (resolvedJoined + resolvedInvited + resolvedLeft + resolvedBanned) : []
-
+        let admins: [ContactLite]          = includeContacts ? adminIds.compactMap({ resolveContact?($0) ?? self._fallbackResolve($0) }) : []
+        
         return RoomSummaryModel(
             id: o.id,
             currentUserId: currentUserId,
@@ -1679,6 +1646,7 @@ extension DBManager {
             createdAt: o.createdAt,
             isLeft: o.isLeft,
             isGroup: isGroup,
+            adminIds: adminIds,
             admins: admins,
             joinedUserIds: joinedIds,
             invitedUserIds: invitedIds,
@@ -1705,7 +1673,7 @@ extension DBManager {
         let invitedIds     = (s.invitedMembersData).flatMap { try? decoder.decode([String].self, from: $0) } ?? []
         let leftIds        = (s.leftMembersData).flatMap { try? decoder.decode([String].self, from: $0) } ?? []
         let bannedIds      = (s.bannedMembersData).flatMap { try? decoder.decode([String].self, from: $0) } ?? []
-        let admins         = (s.adminData).flatMap { try? decoder.decode([String].self, from: $0) } ?? []
+        let adminIds       = (s.adminData).flatMap { try? decoder.decode([String].self, from: $0) } ?? []
 
         let allIds = Array(Set(joinedIds + invitedIds + leftIds + bannedIds))
         let isGroup = allIds.count > 2
@@ -1717,6 +1685,7 @@ extension DBManager {
         let resolvedLeft    = includeContacts ? leftIds.compactMap    { resolveContact?($0) ?? self._fallbackResolve($0) } : []
         let resolvedBanned  = includeContacts ? bannedIds.compactMap  { resolveContact?($0) ?? self._fallbackResolve($0) } : []
         let resolvedAll     = includeContacts ? (resolvedJoined + resolvedInvited + resolvedLeft + resolvedBanned) : []
+        let admins          = includeContacts ? adminIds.compactMap { resolveContact?($0) ?? self._fallbackResolve($0) } : []
 
         return RoomSummaryModel(
             id: s.id,
@@ -1735,6 +1704,7 @@ extension DBManager {
             createdAt: s.createdAt,
             isLeft: s.isLeft,
             isGroup: isGroup,
+            adminIds: adminIds,
             admins: admins,
             joinedUserIds: joinedIds,
             invitedUserIds: invitedIds,
@@ -1772,5 +1742,73 @@ extension DBManager {
             lastSeen: lite.lastSeen,
             randomeProfileColor: nil
         )
+    }
+}
+
+extension DBManager {
+    
+    func backfillRoom(
+        roomId: String,
+        messages: [ChatMessageModel],
+        redactedEventIds: [String],
+        reactions: [ReactionRecord]
+    ) {
+        queue.sync { [self] in
+            autoreleasepool {
+                do {
+                    try write { realm in
+                        if !redactedEventIds.isEmpty {
+                            let objs = realm.objects(MessageObject.self)
+                                .filter("eventId IN %@", redactedEventIds)
+                            for o in objs {
+                                o.isRedacted = true
+                                o.content = thisMessageWasDeleted
+                                o.msgType = MessageType.text.rawValue
+                                o.mediaUrl = nil
+                            }
+                        }
+
+                        if !messages.isEmpty {
+                            for m in messages {
+                                let obj = MessageObject(from: m)
+                                obj.roomId = roomId
+                                if let replyId = m.inReplyTo?.eventId {
+                                    obj.inReplyTo = replyId
+                                }
+                                realm.add(obj, update: .modified)
+                            }
+                        }
+
+                        if !reactions.isEmpty {
+                            let originals = Array(Set(reactions.map { $0.original }))
+                            let existing = realm.objects(MessageObject.self)
+                                .filter("eventId IN %@", originals)
+                            let byId = Dictionary(uniqueKeysWithValues: existing.map { ($0.eventId, $0) })
+
+                            for item in reactions {
+                                guard let target = byId[item.original] else { continue }
+
+                                if let idx = target.reactions.firstIndex(where: { $0.eventId == item.reaction }) {
+                                    target.reactions.remove(at: idx)
+                                }
+
+                                if let idx = target.reactions.firstIndex(where: { $0.userId == item.userId && $0.key == item.emoji }) {
+                                    target.reactions.remove(at: idx)
+                                }
+
+                                let r = MessageReactionObject()
+                                r.eventId   = item.reaction
+                                r.userId    = item.userId
+                                r.key       = item.emoji
+                                r.timestamp = item.ts
+                                target.reactions.append(r)
+                            }
+                        }
+                    }
+                } catch {
+                    print("[DB] backfillRoom write failed: \(error)")
+                }
+            }
+        }
     }
 }

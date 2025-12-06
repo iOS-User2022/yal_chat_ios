@@ -236,12 +236,38 @@ struct NewGroupContactSelectorView: View {
     // Avatar helper
     @ViewBuilder
     private func avatarView(for contact: ContactLite) -> some View {
-        if let imageURLString = contact.imageURL, let imageURL = URL(string: imageURLString) {
-            WebImage(url: imageURL, options: [.retryFailed, .continueInBackground])
-                .resizable()
-                .scaledToFill()
-                .frame(width: 40, height: 40)
-                .clipShape(Circle())
+        if let imageURLString = contact.avatarURL {
+            MediaView(
+                mediaURL: imageURLString,
+                userName: "",
+                timeText: "",
+                mediaType: .image,
+                placeholder: placeholderInitialsView(for: contact),
+                errorView: placeholderInitialsView(for: contact),
+                isSender: false,
+                downloadedImage: nil,
+                senderImage: "",
+                localURLOverride: nil
+            )
+            .scaledToFill()
+            .frame(width: 40, height: 40)
+            .clipShape(Circle())
+        } else if let imageURLString = contact.imageURL {
+            MediaView(
+                mediaURL: imageURLString,
+                userName: "",
+                timeText: "",
+                mediaType: .image,
+                placeholder: placeholderInitialsView(for: contact),
+                errorView: placeholderInitialsView(for: contact),
+                isSender: false,
+                downloadedImage: nil,
+                senderImage: "",
+                localURLOverride: nil
+            )
+            .scaledToFill()
+            .frame(width: 40, height: 40)
+            .clipShape(Circle())
         } else if let imageData = contact.imageData, let img = UIImage(data: imageData) {
             Image(uiImage: img)
                 .resizable()
@@ -256,6 +282,19 @@ struct NewGroupContactSelectorView: View {
                 .background(contact.randomeProfileColor.opacity(0.3))
                 .clipShape(Circle())
         }
+    }
+    
+    private func placeholderInitialsView(for contact: ContactLite) -> some View {
+        return Text(getInitials(from: contact.fullName ?? contact.displayName ?? contact.phoneNumber))
+            .font(Design.Font.bold(8))
+            .frame(width: 40, height: 40)
+            .background(randomBackgroundColor())
+            .foregroundColor(Design.Color.primaryText.opacity(0.7))
+            .clipShape(Circle())
+            .overlay(
+                Circle()
+                    .stroke(Design.Color.white, lineWidth: 1)
+            )
     }
     
     @ViewBuilder
@@ -278,12 +317,38 @@ struct ContactSelectRow: View {
     var body: some View {
         HStack(spacing: 12) {
             ZStack(alignment: .center) {
-                if let imageURLString = contact.imageURL, let imageURL = URL(string: imageURLString) {
-                    WebImage(url: imageURL, options: [.retryFailed, .continueInBackground])
-                        .resizable()
-                        .scaledToFill()
-                        .frame(width: 40, height: 40)
-                        .clipShape(Circle())
+                if let imageURLString = contact.avatarURL {
+                    MediaView(
+                        mediaURL: imageURLString,
+                        userName: "",
+                        timeText: "",
+                        mediaType: .image,
+                        placeholder: placeholderInitialsView,
+                        errorView: placeholderInitialsView,
+                        isSender: false,
+                        downloadedImage: nil,
+                        senderImage: "",
+                        localURLOverride: nil
+                    )
+                    .scaledToFill()
+                    .frame(width: 40, height: 40)
+                    .clipShape(Circle())
+                } else if let imageURLString = contact.imageURL {
+                    MediaView(
+                        mediaURL: imageURLString,
+                        userName: "",
+                        timeText: "",
+                        mediaType: .image,
+                        placeholder: placeholderInitialsView,
+                        errorView: placeholderInitialsView,
+                        isSender: false,
+                        downloadedImage: nil,
+                        senderImage: "",
+                        localURLOverride: nil
+                    )
+                    .scaledToFill()
+                    .frame(width: 40, height: 40)
+                    .clipShape(Circle())
                 } else if let imageData = contact.imageData, let img = UIImage(data: imageData) {
                     Image(uiImage: img)
                         .resizable()
@@ -350,6 +415,19 @@ struct ContactSelectRow: View {
         }
         .padding(.vertical, 6)
         .padding(.horizontal, 4)
+    }
+    
+    private var placeholderInitialsView: some View {
+        return Text(getInitials(from: contact.fullName ?? contact.displayName ?? contact.phoneNumber))
+            .font(Design.Font.bold(8))
+            .frame(width: 40, height: 40)
+            .background(randomBackgroundColor())
+            .foregroundColor(Design.Color.primaryText.opacity(0.7))
+            .clipShape(Circle())
+            .overlay(
+                Circle()
+                    .stroke(Design.Color.white, lineWidth: 1)
+            )
     }
 }
 

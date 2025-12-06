@@ -378,36 +378,45 @@ extension MatrixAPIManager {
     }
     
     // MARK: - Fetch Messages
-    func fetchMessages(forRoom roomId: String, from: String? = nil, limit: Int? = 10, dir: String = "f") -> AnyPublisher<APIResult<GetMessagesResponse>, APIError> {
+    func fetchMessages(
+        forRoom roomId: String,
+        from: String? = nil,
+        limit: Int? = 10,
+        dir: String = "f"
+    ) -> AnyPublisher<APIResult<GetMessagesResponse>, APIError> {
+        let filter = MessagesFilter(types: ["m.room.message", "m.room.encrypted"])
         guard self.accessToken != nil else {
             return Just(.unsuccess(.unauthorized))
                 .setFailureType(to: APIError.self)
                 .eraseToAnyPublisher()
         }
-        
-        var endpoint = MatrixAPIEndpoints.getMessages.urlString(withPathParameters: ["roomId": roomId])
-        
-        // Add query parameters dynamically if provided
+
+        var endpoint = MatrixAPIEndpoints.getMessages
+            .urlString(withPathParameters: ["roomId": roomId])
+
         var urlComponents = URLComponents(string: endpoint)!
-        
-        var queryItems = [URLQueryItem]()
-        
-        // Add 'since' parameter if provided
+        var queryItems: [URLQueryItem] = []
+
         queryItems.append(URLQueryItem(name: "dir", value: dir))
-        
-        if let from = from, !from.isEmpty {
+
+        if let from, !from.isEmpty {
             queryItems.append(URLQueryItem(name: "from", value: from))
         }
-        
-        // Add 'timeout' parameter if provided
-        if let limit = limit {
-            queryItems.append(URLQueryItem(name: "limit", value: "\(limit)"))
+
+        if let limit {
+            queryItems.append(URLQueryItem(name: "limit", value: String(limit)))
         }
-        
-        // Attach the query items to the URL
+
+        let enc = JSONEncoder()
+        enc.outputFormatting = []
+        if let data = try? enc.encode(filter),
+           let json = String(data: data, encoding: .utf8) {
+            queryItems.append(URLQueryItem(name: "filter", value: json))
+        }
+
         urlComponents.queryItems = queryItems
         endpoint = urlComponents.url!.absoluteString
-        
+
         return performGet(endpoint, expecting: GetMessagesResponse.self)
             .map { result in
                 switch result {
@@ -516,7 +525,7 @@ extension MatrixAPIManager {
     private func startMessageFetching(forRoom roomId: String) {
         stopMessageFetching()
         let timer = DispatchSource.makeTimerSource(queue: syncQ)
-        timer.schedule(deadline: .now(), repeating: .seconds(30), leeway: .milliseconds(50))
+        timer.schedule(deadline: .now(), repeating: .milliseconds(250), leeway: .milliseconds(0))
         timer.setEventHandler { [weak self] in
             self?.startMessageFetchingIfNeeded(forRoom: roomId)
         }
@@ -538,7 +547,7 @@ extension MatrixAPIManager {
 
         self.fetchMessages(forRoom: roomId, from: self.lastMessageEventId)
             .subscribe(on: syncQ)   // run upstream on background
-            .receive(on: syncQ)     // handle on background
+            .receive(on: DispatchQueue.main)     // handle on background
             .sink(receiveCompletion: { [weak self] completion in
                 if case .failure(let error) = completion {
                     print("Failed to fetch messages: \(error.localizedDescription)")

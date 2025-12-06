@@ -144,7 +144,10 @@ struct ProfileView: View {
                     }
                 }
         }
-        .onAppear { viewModel.loadProfile() }
+        .onAppear {
+            viewModel.loadProfile()
+            downloadProfileImage()
+        }
         .sheet(isPresented: $isImagePickerPresented) {
             ImagePicker { url, fileName, mimeType, filesize in
                 if let url = url,
@@ -156,6 +159,10 @@ struct ProfileView: View {
                 }
             }
             .onChange(of: selectedImage) { _ in uploadProfileImage() }
+        }.onChange(of: viewModel.originalProfile?.profileImageUrl) { newUrl in
+            if let newUrl, !newUrl.isEmpty {
+                downloadProfileImage()
+            }
         }
     }
 
@@ -176,7 +183,10 @@ struct ProfileView: View {
                     let fileURL: URL = fileURL.hasPrefix("file://") ? URL(string: fileURL)! : URL(fileURLWithPath: fileURL)
                     if let uiImage = UIImage(contentsOfFile: fileURL.path) ??
                         (try? Data(contentsOf: fileURL)).flatMap(UIImage.init(data:)) {
-                        DispatchQueue.main.async { downloadedImage = uiImage.preparingForDisplay() ?? uiImage }
+                        DispatchQueue.main.async {
+                            downloadedImage = uiImage.preparingForDisplay() ?? uiImage
+                            fullScreenUIImage = uiImage.preparingForDisplay() ?? uiImage
+                        }
                     }
                 case .failure(let error):
                     print("❌ Failed to download media: \(error)")
@@ -191,6 +201,7 @@ struct ProfileView: View {
         chatViewModel.uploadUserProfile(fileURL: imageDataToPass.0,
                                         fileName: imageDataToPass.1,
                                         mimeType: imageDataToPass.2) { success, mediaURL in
+            print("mediaURLmediaURL", mediaURL)
             LoaderManager.shared.hide()
             guard success, let mediaURL = mediaURL else {
                 self.viewModel.showAlertForDeniedPermission(success: success)

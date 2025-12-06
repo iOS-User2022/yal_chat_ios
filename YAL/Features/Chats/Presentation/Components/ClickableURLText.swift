@@ -2,7 +2,7 @@
 //  ClickableURLText.swift
 //  YAL
 //
-//  Created for URL handling in chat messages
+//  Created by Hari krishna on 28/11/25.
 //
 
 import SwiftUI

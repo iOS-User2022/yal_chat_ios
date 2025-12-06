@@ -17,6 +17,7 @@ final class ContactSyncCoordinator {
     }
     
     private var _lastSyncedHash: String?
+    private var lastEmittedHash: String?
     
     private var lastSyncedHash: String? {
         get { _lastSyncedHash ?? Storage.get(for: .contactSyncHash, type: .userDefaults, as: String.self) }
@@ -46,13 +47,6 @@ final class ContactSyncCoordinator {
                 self?.enrichContactsWithUserIds(rawContacts)
             }
             .store(in: &cancellables)
-        
-        ContactManager.shared.cacheContactsPublisher
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] cachedContacts in
-                self?.enrichedSubject.send(cachedContacts)
-            }
-            .store(in: &cancellables)
     }
     
     private func cacheKey(for contact: ContactObject) -> String? {
@@ -76,12 +70,15 @@ final class ContactSyncCoordinator {
                 guard let self else { return contacts }
                 switch response {
                 case .success(let mapping):
-                    var enriched = contacts
+                    var enrichedByPhone: [String: ContactLite] = [:]
+                    contacts.forEach { enrichedByPhone[$0.phoneNumber] = $0 }
+                    
                     for user in mapping.data {
-                        if let i = enriched.firstIndex(where: { $0.phoneNumber == user.phone }) {
-                            enriched[i].setUserId(user.userId)
+                        if let i = enrichedByPhone[user.phone] {
+                            enrichedByPhone[user.phone]?.setUserId(user.userId)
                         }
                     }
+                    var enriched = Array(enrichedByPhone.values)
                     DBManager.shared.saveContacts(contacts: enriched)
                     self.lastSyncedHash = hash
                     return enriched
@@ -104,8 +101,6 @@ final class ContactSyncCoordinator {
                     }
                 },
                 receiveValue: { [weak self] enriched in
-                    self?.warmContactsCacheIfNeeded(enriched: enriched)
-                    self?.enrichedSubject.send(enriched)
                     self?.fetchProfilesIfNeeded(for: enriched)
                 }
             )
@@ -149,36 +144,10 @@ final class ContactSyncCoordinator {
                     }
 
                     // Persist & refresh caches
-                    DBManager.shared.saveContacts(contacts: contacts)
-                    ContactManager.shared.updateMemoryCaches(for: updated)
-                    self.enrichedSubject.send(updated)
+                    DBManager.shared.saveContacts(contacts: updated)
                 }
             )
             .store(in: &cancellables)
-    }
-    
-    private func warmContactsCacheIfNeeded(enriched: [ContactLite]) {
-        var alreadyWarm = false
-        cacheQueue.sync { alreadyWarm = !ContactManager.shared.contactCache.isEmpty }
-        guard !alreadyWarm else { return }
-
-        let pairs: [(String, ContactLite)] = enriched.compactMap { contact in
-            let raw = (contact.userId as String?).map {
-                $0.trimmingCharacters(in: .whitespacesAndNewlines)
-            }
-            guard let id = raw, !id.isEmpty else { return nil }
-
-            let key = id.lowercased()
-            return (key, contact)
-        }
-
-        // Build dictionary without crashing on duplicate keys
-        // Choose merge policy: here "last write wins"
-        let dict = Dictionary(pairs, uniquingKeysWith: { _, new in new })
-
-        cacheQueue.async(flags: .barrier) {
-            ContactManager.shared.contactCache = dict
-        }
     }
     
     func observeContacts() {
@@ -209,27 +178,57 @@ final class ContactSyncCoordinator {
         }
 
         var newCache = oldCache
-        var models: [ContactLite] = []
-        models.reserveCapacity(results.count)
 
         for object in results {
-            if let model = upsertContact(from: object, into: &newCache) {
-                models.append(model)
-            }
+            _ = upsertContact(from: object, into: &newCache)
         }
 
-        let validKeys = Set(results.map(cacheKey(for:)))
+        // Remove any cache entries that no longer exist in DB
+        let validKeys = Set(results.compactMap(cacheKey(for:))) // <-- compactMap to drop nils
         for key in newCache.keys where !validKeys.contains(key) {
             newCache.removeValue(forKey: key)
         }
 
+        // Do this outside the barrier block (cheap work)
+        let allModels: [ContactLite] = results
+            .map(asLite(_:))
+            .sorted { $0.phoneNumber < $1.phoneNumber }
+
         ContactManager.shared.cacheQueue.async(flags: .barrier) {
             ContactManager.shared.contactCache = newCache
             DispatchQueue.main.async {
-                ContactManager.shared.publishCachedContacts(models)
-                self.enrichedSubject.send(models)
+                let hash = stableContactsHash(allModels)
+                if self.lastEmittedHash != hash {
+                    self.lastEmittedHash = hash
+                    self.enrichedSubject.send(allModels)
+                }
             }
         }
+    }
+    
+    private func asLite(_ o: ContactObject) -> ContactLite {
+        let emails: [String] = {
+            guard let data = o.emailData, !data.isEmpty else { return [] }
+            return (try? JSONDecoder().decode([String].self, from: data)) ?? []
+        }()
+
+        return ContactLite(
+            userId: o.userId?.formattedMatrixUserId,
+            fullName: o.fullName ?? "",
+            phoneNumber: o.phoneNumber,
+            emailAddresses: emails,
+            imageURL: o.avatarURL,
+            avatarURL: o.avatarURL,
+            displayName: o.displayName,
+            about: o.statusMessage,
+            dob: o.dob,
+            gender: o.gender,
+            profession: o.profession,
+            isBlocked: false,
+            isSynced: (o.userId?.isEmpty == false),
+            isOnline: false,
+            lastSeen: nil
+        )
     }
     
     private func upsertContact(

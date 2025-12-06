@@ -297,25 +297,25 @@ class ForwardMessageViewModel: ObservableObject {
         }
         
         // Fetch media dimensions (width & height)
-        getMediaDimensions(mediaType: message.msgType, localURL: "") { width, height in
-            let mediaInfo = MediaInfo(
-                thumbnailUrl: "",
-                thumbnailInfo: nil, // Can be computed if needed
-                w: width,
-                h: height,
-                duration: Int(message.mediaInfo?.duration ?? 0),
-                size: Int(message.mediaInfo?.size ?? 0),
-                mimetype: "image/jpeg" // This could be dynamic based on message type
-            )
-            
-            var tempmsg = message
-            tempmsg.mediaInfo = mediaInfo
-            tempmsg.downloadProgress = 0.0
-            tempmsg.downloadState = .notStarted
-            
-            // Return the updated message
-            completion(tempmsg)
-        }
+        let (width, height) = getMediaDimensions(mediaType: message.msgType, localURL: "")
+
+        let mediaInfo = MediaInfo(
+            thumbnailUrl: "",
+            thumbnailInfo: nil, // Can be computed if needed
+            w: width,
+            h: height,
+            duration: Int(message.mediaInfo?.duration ?? 0),
+            size: Int(message.mediaInfo?.size ?? 0),
+            mimetype: "image/jpeg" // This could be dynamic based on message type
+        )
+        
+        let tempmsg = message
+        tempmsg.mediaInfo = mediaInfo
+        tempmsg.downloadProgress = 0.0
+        tempmsg.downloadState = .notStarted
+        
+        // Return the updated message
+        completion(tempmsg)
     }
     
     func findExistingDirectRoom(with userId: String) -> RoomModel? {

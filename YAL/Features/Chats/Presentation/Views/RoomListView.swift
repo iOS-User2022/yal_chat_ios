@@ -19,10 +19,10 @@ enum NavigationTarget: Hashable {
 }
 
 struct RoomListView: View {
-
     @State private var showContactsList = false
     @StateObject private var viewModel: RoomListViewModel
     @EnvironmentObject var router: Router
+    @ObservedObject private var chatViewModel: ChatViewModel
 
     private var chatRepository: ChatRepository
     @Binding var navPath: NavigationPath
@@ -65,6 +65,10 @@ struct RoomListView: View {
         self._navPath = navPath
         let viewModel = DIContainer.shared.container.resolve(RoomListViewModel.self)!
         _viewModel = StateObject(wrappedValue: viewModel)
+        
+        let vm = DIContainer.shared.container.resolve(ChatViewModel.self)!
+        _chatViewModel = ObservedObject(wrappedValue: vm)
+        
         self.chatRepository = DIContainer.shared.container.resolve(ChatRepository.self)!
     }
 
@@ -177,10 +181,7 @@ struct RoomListView: View {
                 }
             }
             .onAppear {
-                    print("==================================================")
-                    print("ROOM LIST VIEW ENTERED")
-                    print("==================================================")
-                
+                chatViewModel.leaveCurrentRoom()
                 guard !didRunInitialLoad else { return }
                 didRunInitialLoad = true
                 restoreSession()
@@ -481,6 +482,7 @@ struct RoomListView: View {
                     roomModel: roomModel,
                     currentUser: currentUser,
                     sharedMediaPayload: sharedMedia,
+                    roomListViewModel: self.viewModel,
                     navPath: $navPath,
                     onDeleteGroup: {
                         viewModel.selectedRoom = nil

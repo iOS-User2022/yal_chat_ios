@@ -19,6 +19,7 @@ struct TabContainerView: View {
     @State private var navPath = NavigationPath()
     @State private var showProfileMenu = false
     @StateObject private var viewModel: TabBarViewModel
+    @StateObject private var profileViewModel: ProfileViewModel
     @StateObject private var keyboard = KeyboardResponder()
     @EnvironmentObject var router: Router
     @EnvironmentObject var appSettings: AppSettings
@@ -30,6 +31,9 @@ struct TabContainerView: View {
     init() {
         let viewModel = DIContainer.shared.container.resolve(TabBarViewModel.self)!
         _viewModel = StateObject(wrappedValue: viewModel)
+        
+        let profileViewModel = DIContainer.shared.container.resolve(ProfileViewModel.self)!
+        _profileViewModel = StateObject(wrappedValue: profileViewModel)
     }
     
     var body: some View {
@@ -61,18 +65,18 @@ struct TabContainerView: View {
                                     .transition(.move(edge: .bottom).combined(with: .opacity))
                                 }
                             }
-                        }
-                    ) {
-                        VStack(spacing: 0) {
-                            switch selectedTab {
-                            case .sms:
-                                SMSListView()
-                            case .chats:
-                                RoomListView(navPath: $navPath)
-                            case .calls:
-                                CallLogView()
-                            case .contacts:
-                                ContactsView()
+                        },
+                        profileViewModel: profileViewModel) {
+                            VStack(spacing: 0) {
+                                switch selectedTab {
+                                case .sms:
+                                    SMSListView()
+                                case .chats:
+                                    RoomListView(navPath: $navPath)
+                                case .calls:
+                                    CallLogView()
+                                case .contacts:
+                                    ContactsView()
                             }
                         }
                     }
@@ -104,6 +108,8 @@ struct TabContainerView: View {
                     .zIndex(1)
                 }
 
+            }.onAppear() {
+                profileViewModel.loadProfile()
             }
         }
         .onReceive(

@@ -16,6 +16,7 @@ protocol ChatRepositoryProtocol {
     var roomModelsPublisher: AnyPublisher<[RoomModel], Never> { get }
     var inviteResponsePublisher: AnyPublisher<[String], APIError> { get }
     var chatMessagesPublisher: AnyPublisher<[ChatMessageModel], Never> { get }
+    var messagesClearedPublisher: AnyPublisher<String, Never> { get }
     var ephemeralPublisher: AnyPublisher<ReceiptUpdate, Never> { get }
     var typingPublisher: AnyPublisher<TypingUpdate, Never> { get }
     var roomsPublisher: Published<[RoomModel]>.Publisher { get }
@@ -43,6 +44,7 @@ protocol ChatRepositoryProtocol {
     func sendMessage(message: ChatMessageModel, roomId: String) -> AnyPublisher<APIResult<SendMessageResponse>, APIError>
     func createRoom(currentUser: String, invitees: [String], roomName: String?, roomDisplayImageUrl: String?) -> AnyPublisher<APIResult<CreateRoomResponse>, APIError>
     func getMessages(fromRoom roomId: String, limit: Int)
+    func stopMessageFetch()
     func leaveRoom(roomId: String) -> AnyPublisher<APIResult<MatrixEmptyResponse>, APIError>
     func forgetRoom(roomId: String) -> AnyPublisher<APIResult<MatrixEmptyResponse>, APIError>
     
@@ -54,7 +56,6 @@ protocol ChatRepositoryProtocol {
     //func getRoomModel(forRoomId roomId: String) -> AnyPublisher<RoomModel?, APIError>
     func loadCachedRooms() -> AnyPublisher<[RoomSummaryModel], Never>
     func hydrateRoomSummaries(_ items: [RoomSummaryModel])
-    func hydrateRooms(snaps: [RoomModel])
     func getCurrentUserContact() -> ContactLite?
     func getRoomSummaryModel(roomId: String, events: [Event]) -> (RoomSummaryModel, Bool)?
     func updateRooms(with newRooms: [RoomSummaryModel])

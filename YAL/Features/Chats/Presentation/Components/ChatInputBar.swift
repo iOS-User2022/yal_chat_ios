@@ -41,7 +41,6 @@ struct ChatInputBar: View {
                 .padding(.bottom, 2)
                 .transition(.opacity)
             }
-            
             replyView()
 
             // Show live URL preview if URL detected

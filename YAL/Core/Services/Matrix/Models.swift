@@ -280,6 +280,22 @@ struct GetMessagesResponse: Codable {
     // Coding Keys are automatically handled due to snake_case and camelCase mapping.
 }
 
+struct MessagesFilter: Codable {
+    var types: [String]?          // e.g. ["m.room.message", "m.room.encrypted"]
+    var notTypes: [String]?
+    var senders: [String]?
+    var notSenders: [String]?
+    var containsURL: Bool?
+
+    enum CodingKeys: String, CodingKey {
+        case types
+        case notTypes    = "not_types"
+        case senders
+        case notSenders  = "not_senders"
+        case containsURL = "contains_url"
+    }
+}
+
 // MARK: - Message (Individual chat message)
 struct Message: Codable {
     let eventId: String?  // Event ID

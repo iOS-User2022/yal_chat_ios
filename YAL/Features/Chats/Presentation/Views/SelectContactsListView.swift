@@ -48,10 +48,6 @@ struct SelectContactsListView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(Design.Color.white)
             .onAppear {
-                print("==================================================")
-                print("select contact LIST VIEW ENTERED")
-                print("==================================================")
-            
                 viewModel.startContactSync()
             }
             .navigationDestination(for: GroupCreateRoute.self) { route in
@@ -258,7 +254,39 @@ struct ContactRow: View {
     var body: some View {
         HStack(alignment: .center, spacing: 12) {
             // Avatar
-            if let imageData = contact.imageData, let uiImage = UIImage(data: imageData) {
+            if let imageURLString = contact.avatarURL {
+                MediaView(
+                    mediaURL: imageURLString,
+                    userName: "",
+                    timeText: "",
+                    mediaType: .image,
+                    placeholder: placeholderInitialsView,
+                    errorView: placeholderInitialsView,
+                    isSender: false,
+                    downloadedImage: nil,
+                    senderImage: "",
+                    localURLOverride: nil
+                )
+                .scaledToFill()
+                .frame(width: 40, height: 40)
+                .clipShape(Circle())
+            } else if let imageURLString = contact.imageURL {
+                MediaView(
+                    mediaURL: imageURLString,
+                    userName: "",
+                    timeText: "",
+                    mediaType: .image,
+                    placeholder: placeholderInitialsView,
+                    errorView: placeholderInitialsView,
+                    isSender: false,
+                    downloadedImage: nil,
+                    senderImage: "",
+                    localURLOverride: nil
+                )
+                .scaledToFill()
+                .frame(width: 40, height: 40)
+                .clipShape(Circle())
+            } else if let imageData = contact.imageData, let uiImage = UIImage(data: imageData) {
                 Image(uiImage: uiImage)
                     .resizable()
                     .scaledToFill()
@@ -284,5 +312,18 @@ struct ContactRow: View {
             }
             Spacer()
         }
+    }
+    
+    private var placeholderInitialsView: some View {
+        return Text(getInitials(from: contact.fullName ?? contact.displayName ?? contact.phoneNumber))
+            .font(Design.Font.bold(8))
+            .frame(width: 40, height: 40)
+            .background(randomBackgroundColor())
+            .foregroundColor(Design.Color.primaryText.opacity(0.7))
+            .clipShape(Circle())
+            .overlay(
+                Circle()
+                    .stroke(Design.Color.white, lineWidth: 1)
+            )
     }
 }

@@ -13,6 +13,7 @@ struct GroupDetailsView: View {
     @State private var searchText = ""
     @State private var safeAreaInsets: EdgeInsets = .init()
     @StateObject private var roomDetailsViewModel: RoomDetailsViewModel
+    @ObservedObject private var roomListViewModel: RoomListViewModel
     @StateObject private var selectContactListViewModel: SelectContactListViewModel
     @State private var downloadedImage: UIImage?
     @State private var downloadProgress: Double = 0.0
@@ -35,7 +36,7 @@ struct GroupDetailsView: View {
     @State private var invitedToAdd: [ContactLite] = []
     @State private var isEditingName = false
     @State private var editedGroupName = ""
-    @State private var showEditSuccessAlert: Bool = false
+    @State private var shouldShowAlert: Bool = false
     @Binding var navPath: NavigationPath
 
     private var admins: [ContactModel] {
@@ -50,7 +51,7 @@ struct GroupDetailsView: View {
         let baseList: [ContactModel]
 
         if searchText.isEmpty {
-            baseList = roomModel.participants
+            baseList = roomModel.activeParticipants
         } else {
             baseList = roomModel.participants.filter {
                 $0.fullName?.localizedCaseInsensitiveContains(searchText) ?? false ||
@@ -90,6 +91,7 @@ struct GroupDetailsView: View {
         roomModel: RoomModel,
         currentUser: ContactModel? = nil,
         sharedMediaPayload: [ChatMessageModel]?,
+        roomListViewModel: RoomListViewModel,
         navPath: Binding<NavigationPath> = .constant(NavigationPath()),
         onAddMemberTap: (() -> Void)? = nil,
         onRemoveMember: ((ContactModel) -> Void)? = nil,
@@ -103,7 +105,7 @@ struct GroupDetailsView: View {
         _roomDetailsViewModel = StateObject(wrappedValue: viewModel)
         
         let selectContactListViewModel = DIContainer.shared.container.resolve(SelectContactListViewModel.self)!
-        selectContactListViewModel.excludedContactIds = roomModel.participants.compactMap { $0.userId }
+        selectContactListViewModel.excludedContactIds = roomModel.activeParticipants.compactMap { $0.userId }
         _selectContactListViewModel = StateObject(wrappedValue: selectContactListViewModel)
         
         let vm = DIContainer.shared.container.resolve(ChatViewModel.self)!
@@ -120,6 +122,7 @@ struct GroupDetailsView: View {
         self.onDeleteGroup = onDeleteGroup
         self.onClearChat = onClearChat
         self.sharedMedia = sharedMediaPayload
+        _roomListViewModel = ObservedObject(wrappedValue: roomListViewModel)
     }
     
     var body: some View {
@@ -204,24 +207,21 @@ struct GroupDetailsView: View {
                                 roomDetailsViewModel.updateRoomImage(to: uploadedUrl.absoluteString)
                             } else {
                                 self.roomDetailsViewModel.showAlertForDeniedPermission(success: true)
-                                showEditSuccessAlert = true
                             }
                             roomDetailsViewModel.updateRoomImage(to: uploadedUrl?.absoluteString ?? "")
                         }
                     }
                 }
             }
-            
-            if showEditSuccessAlert, let alertModel = roomDetailsViewModel.alertModel {
-                AlertView(model: alertModel) {
-                    showEditSuccessAlert = false
-                }
+            .onReceive(roomDetailsViewModel.$alertModel) { model in
+                shouldShowAlert = (model != nil)
             }
-
-            // Custom Alert Overlay
-            if showEditSuccessAlert, let alertModel = roomDetailsViewModel.alertModel {
-                AlertView(model: alertModel) {
-                    showEditSuccessAlert = false
+            .overlay {
+                if shouldShowAlert, let alertModel = roomDetailsViewModel.alertModel {
+                    AlertView(model: alertModel) {
+                        shouldShowAlert = false
+                        roomDetailsViewModel.alertModel = nil
+                    }
                 }
             }
         }
@@ -258,10 +258,7 @@ struct GroupDetailsView: View {
                                     if !editedGroupName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                                         if editedGroupName != roomModel.name {
                                             onEditGroupName?()
-                                            roomDetailsViewModel.updateRoomName(to: editedGroupName) { result in
-                                                showEditSuccessAlert = true
-                                            }
-
+                                            roomDetailsViewModel.updateRoomName(to: editedGroupName)
                                         }
                                     }
                                     isEditingName = false
@@ -479,11 +476,32 @@ struct GroupDetailsView: View {
     }
 
     private var placeholderAvatar: some View {
-        return ZStack {
-            Circle().fill(roomModel.randomeProfileColor.opacity(0.3))
-            Text(getInitials(from: roomModel.name))
-                .font(.system(size: 20, weight: .semibold))
-                .foregroundColor(.black)
+        return ZStack(alignment: .bottomTrailing) {
+            ZStack {
+                Circle().fill(roomModel.randomeProfileColor.opacity(0.3))
+                Text(getInitials(from: roomModel.name))
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundColor(.black)
+            }
+            
+            if let currentUserId = currentUser?.userId, isAdmin(userId: currentUserId) {
+                Button(action: {
+                    isImagePickerPresented = true
+                }) {
+                    Circle()
+                        .fill(Design.Color.appGradient)
+                        .frame(width: 30, height: 30)
+                        .overlay(
+                            Image("edit-light")
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 16, height: 16)
+                                .foregroundColor(.white)
+                        )
+                        .overlay(Circle().stroke(Color.white, lineWidth: 2))
+                        .shadow(radius: 2)
+                }
+            }
         }
         .frame(width: 100, height: 100)
     }
@@ -673,9 +691,56 @@ struct GroupDetailsView: View {
                         showActions: !isAdmin(userId: userId) && isAdmin(userId: currentUserId),
                         isCurrentUser: userId == currentUserId
                     ) {
-                        roomDetailsViewModel.kickOutUser(member)
+                        present(roomDetailsViewModel.makeConfirmKickAlert(for: member))
+                    } onTap: {
+                        self.redirectToUserDetail(member: member)
                     }
                 }
+            }
+        }
+    }
+    
+    func redirectToUserDetail(member: ContactModel) {
+        if let room = roomListViewModel.getDirectRoomModel(for: member) {
+            // navigate directly
+            roomListViewModel.selectedRoom = room
+            navPath.append(NavigationTarget.userDetails(room: room,
+                                                        user: member,
+                                                        sharedMedia: []))
+            
+        } else {
+            print("new room is created")
+            // create new chat
+            roomListViewModel.startChat(
+                with: member.userId ?? "",
+                currentUserId: roomListViewModel.currentUser?.userId ?? ""
+            ) { newRoom in
+                roomListViewModel.selectedRoom = newRoom
+                newRoom?.opponent?.avatarURL = member.avatarURL
+                navPath.append(NavigationTarget.userDetails(room: newRoom!,
+                                                            user: member,
+                                                            sharedMedia: []))
+            }
+        }
+    }
+    
+    func redirectToUserChat(member: ContactModel) {
+        if let room = roomListViewModel.getDirectRoomModel(for: member) {
+            // navigate directly
+            roomListViewModel.selectedRoom = room
+             navPath.append(NavigationTarget.chat(room: room))
+        } else {
+            print("nre room is created")
+            // create new chat
+            roomListViewModel.startChat(
+                with: member.userId ?? "",
+                currentUserId: roomListViewModel.currentUser?.userId ?? ""
+            ) { newRoom in
+                roomListViewModel.selectedRoom = newRoom
+                newRoom?.opponent?.avatarURL = member.avatarURL
+                print(" newRoom?.opponent?.avatarURL ",  newRoom?.opponent?.avatarURL ?? "")
+
+                navPath.append(NavigationTarget.chat(room: newRoom!))
             }
         }
     }
@@ -691,7 +756,9 @@ struct GroupDetailsView: View {
                         isAdmin: false,
                         showActions: false,
                         isCurrentUser: userId == currentUserId,
-                        onRemove: nil
+                        onRemove: nil, onTap: {
+                            self.redirectToUserDetail(member: member)
+                        }
                     )
                 }
             }
@@ -734,7 +801,9 @@ struct GroupDetailsView: View {
             Divider()
             
             Button(action: {
-                onClearChat?()
+                present(roomDetailsViewModel.makeConfirmClearChatAlert(onConfirm: {
+                    onClearChat?()
+                }))
             }) {
                 HStack(alignment: .bottom, spacing: 12) {
                     Image("broom")
@@ -754,15 +823,9 @@ struct GroupDetailsView: View {
 
             if roomModel.isLeft {
                 Button {
-                    roomDetailsViewModel.deleteRoom() { result in
-                        switch result {
-                        case .success:
-                            print("Room deleted successfully")
-                            onDeleteGroup?()
-                        case .failure(let error):
-                            print("Failed to delete room: \(error)")
-                        }
-                    }
+                    present(roomDetailsViewModel.makeConfirmDeleteGroupAlert(onSuccess: {
+                        onDeleteGroup?()
+                    }))
                 } label: {
                     HStack(spacing: 8) {
                         Spacer()
@@ -776,62 +839,45 @@ struct GroupDetailsView: View {
                     .padding(.vertical, 12)
                 }
             } else if let currentUserId = currentUser?.userId, isAdmin(userId: currentUserId) {
-                Button {
-                    roomDetailsViewModel.deleteRoom { result in
-                        switch result {
-                        case .success:
-                            // Show success UI, pop view, show toast, etc.
-                            print("Room deleted successfully")
-                            onDeleteGroup?()
-                        case .failure(let error):
-                            // Show error UI
-                            print("Failed to delete room: \(error)")
-                        }
+                Button(action: {
+                    present(roomDetailsViewModel.makeConfirmDeleteGroupAlert(onSuccess: {
+                        onDeleteGroup?()
+                    }))
+                }) {
+                    HStack(alignment: .bottom, spacing: 8) {
+                        Spacer()
+                        Image("logout")
+                            .frame(width: 16, height: 16)
+                        Text("Delete Group")
+                            .font(Design.Font.regular(14))
+                            .foregroundColor(Design.Color.destructiveRed)
+                        Spacer()
                     }
-                } label: {
-                    
-                    Button(action: {
-                       
-                    }) {
-                        HStack(alignment: .bottom, spacing: 8) {
-                            Spacer()
-                            Image("logout")
-                                .frame(width: 16, height: 16)
-                            Text("Delete Group")
-                                .font(Design.Font.regular(14))
-                                .foregroundColor(Design.Color.destructiveRed)
-                            Spacer()
-                        }
-                        .padding(.horizontal, 32)
-                        .padding(.vertical, 12)
-                    }
-                    .background(Design.Color.lightGrayBackground)
-                    .cornerRadius(8)
                     .padding(.horizontal, 32)
+                    .padding(.vertical, 12)
                 }
+                .background(Design.Color.lightGrayBackground)
+                .cornerRadius(8)
+                .padding(.horizontal, 32)
             } else {
-                Button {
-                    roomDetailsViewModel.leaveRoom()
-                } label: {
-                    Button(action: {
-                       
-                    }) {
-                        HStack(alignment: .bottom, spacing: 8) {
-                            Spacer()
-                            Image("logout")
-                                .frame(width: 16, height: 16)
-                            Text("Exit Group")
-                                .font(Design.Font.regular(14))
-                                .foregroundColor(Design.Color.destructiveRed)
-                            Spacer()
-                        }
-                        .padding(.horizontal, 32)
-                        .padding(.vertical, 12)
+                Button(action: {
+                    present(roomDetailsViewModel.makeConfirmLeaveGroupAlert())
+                }) {
+                    HStack(alignment: .bottom, spacing: 8) {
+                        Spacer()
+                        Image("logout")
+                            .frame(width: 16, height: 16)
+                        Text("Exit Group")
+                            .font(Design.Font.regular(14))
+                            .foregroundColor(Design.Color.destructiveRed)
+                        Spacer()
                     }
-                    .background(Design.Color.lightGrayBackground)
-                    .cornerRadius(8)
                     .padding(.horizontal, 32)
+                    .padding(.vertical, 12)
                 }
+                .background(Design.Color.lightGrayBackground)
+                .cornerRadius(8)
+                .padding(.horizontal, 32)
             }
         }
         .padding(.bottom, 20)
@@ -857,6 +903,11 @@ struct GroupDetailsView: View {
     func isAdmin(userId: String) -> Bool {
         admins.contains(where: { $0.userId == userId })
     }
+    
+    private func present(_ model: AlertViewModel) {
+        roomDetailsViewModel.alertModel = model
+        shouldShowAlert = true
+    }
 }
 
 struct GroupMemberRow: View {
@@ -865,6 +916,7 @@ struct GroupMemberRow: View {
     let showActions: Bool
     let isCurrentUser: Bool
     let onRemove: (() -> Void)?
+    let onTap: (() -> Void)?
     @State private var downloadedImage: UIImage?
     @State private var downloadProgress: Double = 0.0
 
@@ -918,6 +970,9 @@ struct GroupMemberRow: View {
             }
         }
         .padding(.vertical, 8)
+        .onTapGesture {
+            onTap?()
+        }
     }
     
     private var avatarView: some View {

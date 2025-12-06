@@ -19,6 +19,7 @@ protocol RoomServiceProtocol {
     var messageBackfillProgressPublisher: AnyPublisher<(done: Int, total: Int), Never> { get }
     var redactionPublisher: AnyPublisher<String, Never> { get }
     var chatMessagesPublisher: AnyPublisher<[ChatMessageModel], Never> { get }
+    var messagesClearedPublisher: AnyPublisher<String, Never> { get }
     var ephemeralPublisher: AnyPublisher<ReceiptUpdate, Never> { get }
     var typingPublisher: AnyPublisher<TypingUpdate, Never> { get }
     var roomsPublisher: AnyPublisher<[RoomModel], Never> { get }
@@ -30,6 +31,7 @@ protocol RoomServiceProtocol {
     func warmRoomsCacheIfNeeded(shouldWarmCache: Bool) -> AnyPublisher<Void, Never>
     func setExpectedRoomsIds(_ ids: [String])
     func getMessages(forRoom roomId: String)
+    func stopMessageSync()
     func sendMessage(message: ChatMessageModel) -> AnyPublisher<APIResult<SendMessageResponse>, APIError>
     func sendMessage(message: ChatMessageModel, roomId: String) -> AnyPublisher<APIResult<SendMessageResponse>, APIError>
     func uploadMedia(fileURL: URL, fileName: String, mimeType: String, onProgress: ((Double) -> Void)?) -> AnyPublisher<APIResult<URL>, APIError>

@@ -10,7 +10,7 @@ import SwiftUI
 struct HeaderView: View {
     var onMenuTap: () -> Void = {}
     var onProfileTap: () -> Void = {}
-    @State private var imageUrl: URL? = nil
+    @ObservedObject var profileViewModel: ProfileViewModel
 
     var body: some View {
         VStack {
@@ -19,23 +19,13 @@ struct HeaderView: View {
                 Spacer()
                 HeaderLogo()
                 Spacer()
-                ProfileImageView(imageUrl: imageUrl, onTap: onProfileTap)
+                ProfileImageView(onTap: onProfileTap,
+                                 profileViewModel: profileViewModel)
             }
             .padding(.horizontal)
-            .padding(.top, safeAreaTop()) // 👈 dynamically adjusts for notch
+            .padding(.top, safeAreaTop())
             .padding(.bottom, 8)
             .background(Color.white)
-        }
-        .onAppear {
-            loadProfileImage()
-        }
-    }
-
-    private func loadProfileImage() {
-        if let profile = Storage.get(for: .cachedProfile, type: .userDefaults, as: EditableProfile.self),
-           let imageUrlString = profile.profileImageUrl,
-           let url = URL(string: imageUrlString) {
-            imageUrl = url
         }
     }
 

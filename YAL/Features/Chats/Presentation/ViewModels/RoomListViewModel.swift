@@ -225,6 +225,7 @@ final class RoomListViewModel: ObservableObject {
                 self.unFilteredRooms = fast
                 self.lockedRooms     = fast.filter { $0.isLocked }
                 self.blockedRooms    = fast.filter { $0.isBlocked }
+                self.roomService.startSync()
             }
         } else {
             // No in-memory snapshot → stream cached rooms in batches (delta append)
@@ -282,6 +283,7 @@ final class RoomListViewModel: ObservableObject {
                     .store(in: &cancellables)
             } else {
                 roomService.loadCacheAndHydrateRoomsNow(includeContacts: true)
+                self.roomService.startSync()
             }
         }
     }
@@ -601,7 +603,7 @@ private extension RoomListViewModel {
         let unreadIDs   = Set(roomService.getUnreadRooms())
         let blockedIDs  = Set(roomService.getBlockedRooms())
         let lockedIDs   = Set(roomService.getLockedRooms())
-
+        
         let out = rooms
         for i in out.indices {
             let id = out[i].id
@@ -632,3 +634,18 @@ private extension RoomListViewModel {
         array.insert(element, at: low)
     }
 }
+        
+extension RoomListViewModel {
+    
+    /// Returns the direct chat room with a specific contact (if exists)
+    func getDirectRoomModel(for contact: ContactModel) -> RoomModel? {
+        guard let userId = contact.userId else { return nil }
+        
+        return unFilteredRooms.first(where: { room in
+            !room.isGroup &&
+            room.participants.count == 2 &&
+            room.participants.contains(where: { $0.userId == userId })
+        })
+    }
+}
+

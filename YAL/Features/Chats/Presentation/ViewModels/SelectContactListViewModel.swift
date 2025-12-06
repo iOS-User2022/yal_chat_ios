@@ -66,16 +66,28 @@ class SelectContactListViewModel: ObservableObject {
 
     private func updateContactGroups(contactModels: [ContactLite]) {
         yalContacts = contactModels
-            .filter {
-                $0.userId != nil && !$0.userId!.isEmpty &&
-                !excludedContactIds.contains($0.userId!)
-            }
-            .sorted { ($0.fullName?.lowercased() ?? "", $0.userId ?? "") < ($1.fullName?.lowercased() ?? "", $1.userId ?? "") }
-
+                .filter { m in
+                    guard let userId = m.userId, !userId.isEmpty else { return false }
+                    guard let name = m.fullName?.trimmingCharacters(in: .whitespacesAndNewlines),
+                          !name.isEmpty else { return false }
+                    let phone = m.phoneNumber.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if phone.isEmpty { return false }
+                    return !excludedContactIds.contains(userId)
+                }
+                .sorted { lhs, rhs in
+                    let lName = lhs.fullName?.lowercased() ?? ""
+                    let rName = rhs.fullName?.lowercased() ?? ""
+                    if lName == rName {
+                        return (lhs.userId ?? "") < (rhs.userId ?? "")
+                    }
+                    return lName < rName
+                }
         otherContacts = contactModels
-            .filter { $0.userId == nil || $0.userId!.isEmpty }
-            .sorted { $0.fullName?.lowercased() ?? "" < $1.fullName?.lowercased() ?? "" }
-        // Removed duplicated updateFilteredContacts; now in the publisher's sink
+            .filter { contact in
+                (contact.userId?.isEmpty ?? true)
+                && !(contact.phoneNumber.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+            .sorted { ($0.fullName?.lowercased() ?? "") < ($1.fullName?.lowercased() ?? "") }
     }
 
     func getSections() -> [SelectContactSection] {
@@ -106,7 +118,7 @@ class SelectContactListViewModel: ObservableObject {
             filteredYalContacts = yalContacts.filter {
                 (($0.userId?.isEmpty) != nil) && !isSelf($0) &&
                 ($0.fullName?.lowercased().contains(lower) ?? false ||
-                 $0.phoneNumber.contains(lower))
+                 $0.phoneNumber.contains(lower)) || $0.displayName?.contains(lower) ?? false
             }
             filteredOtherContacts = otherContacts.filter {
                 !isSelf($0) &&

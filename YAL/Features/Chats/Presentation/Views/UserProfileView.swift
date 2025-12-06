@@ -64,7 +64,6 @@ struct UserProfileView: View {
             .background(Design.Color.appGradient.opacity(0.12))
             .ignoresSafeArea(.all)
             .onAppear {
-                print("user profile view")
                 topInsets = 0
             }
             .overlay{
@@ -135,7 +134,7 @@ struct UserProfileView: View {
     var headerSection: some View {
         ZStack(alignment: .topLeading) {
             VStack(alignment: .center, spacing: 0) {
-                UserImageView(url: viewModel.userDetails?.avatarURL, size: 100, roomModel: roomModel)
+                UserImageView(url: roomModel.opponent?.avatarURL, size: 100, roomModel: roomModel)
                 Spacer().frame(height: 8)
                 
                 if let displayName = viewModel.userDetails?.fullName {

@@ -17,7 +17,7 @@ enum ProfileRoute: Hashable {
 }
 
 final class AppSettings: ObservableObject {
-    @Published var disableScreenshot: Bool = (Storage.get(for: .screenshotEnabled, type: .userDefaults, as: Bool.self) ?? true)
+    @Published var disableScreenshot: Bool = (Storage.get(for: .screenshotEnabled, type: .userDefaults, as: Bool.self) ?? false)
 }
 
 struct ProfileMenuView: View {

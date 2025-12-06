@@ -22,11 +22,9 @@ protocol DBManageable {
     func fetchContacts() -> [ContactLite]?
     func fetchContact(userId: String) -> ContactLite? 
     func update(contacts: [ContactModel])
-    func upsertContactPresence(userId: String, currentlyActive: Bool?, lastActiveAgoMs: Int?, avatarURL: String?, statusMessage: String?)
+    func upsertContactPresence(userId: String, phoneNumber: String?, currentlyActive: Bool?, lastActiveAgoMs: Int?, avatarURL: String?, statusMessage: String?)
     
     func fetchRooms() -> [RoomSummaryModel]?
-    func saveRooms(rooms: [RoomModel])
-    func saveRoom(room: RoomModel)
     func saveRoomSummary(_ summary: RoomSummaryModel)
     func loadRoomSummary(roomId: String) -> RoomSummaryModel?
     
@@ -62,4 +60,11 @@ protocol DBManageable {
         includeContacts: Bool,
         resolveContact: ((String) -> ContactLite?)?
     ) -> [RoomSummaryModel]
+    
+    func backfillRoom(
+        roomId: String,
+        messages: [ChatMessageModel],
+        redactedEventIds: [String],
+        reactions: [ReactionRecord]
+    )
 }

@@ -162,6 +162,10 @@ struct SenderMessageView: View {
     @ViewBuilder
     private var mediaSection: some View {
         let mediaType = MediaType(rawValue: message.msgType) ?? .image
+        let localOverride: URL? = {
+            message.mediaInfo?.localURL.flatMap { URL(string: $0.absoluteString) }
+        }()
+        
         MediaView(
             mediaURL: message.mediaUrl ?? "",
             userName: "You",
@@ -169,10 +173,17 @@ struct SenderMessageView: View {
             mediaType: MediaType(rawValue: message.msgType) ?? .image,
             placeholder: placeholderWithProgress,
             errorView: errorView,
-            isSender: true, downloadedImage: UIImage(), senderImage: senderImage
+            isSender: true,
+            downloadedImage: UIImage(),
+            senderImage: senderImage,
+            localURLOverride: localOverride,
+            externalProgress: message.downloadProgress,
+            isUploading: (message.messageStatus == .sending) || (message.downloadState == .downloading)
         )
-        .frame(width: mediaType == .audio ? 260 : 220,
-               height: (mediaType == .image || mediaType == .video || mediaType == .gif) ? 215: 56)
+        .frame(
+            width: mediaType == .audio ? 260 : 220,
+            height: (mediaType == .image || mediaType == .video || mediaType == .gif) ? 215: 56
+        )
         .padding(.horizontal, 4)
         .padding(.top, 4)
         .clipShape(CustomRoundedCornersShape(radius: 8, roundedCorners: [.topRight, .topLeft]))

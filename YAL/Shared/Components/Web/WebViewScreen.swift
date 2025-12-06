@@ -5,6 +5,7 @@
 //  Created by Vishal Bhadade on 10/04/25.
 //
 
+
 import SwiftUI
 import WebKit
 
@@ -138,105 +139,23 @@ struct WebViewScreen: View {
     
     // MARK: - Error View
     private var errorView: some View {
-        VStack(spacing: 24) {
-            Spacer()
+        VStack(spacing: 75) {
             
             // Error message
             Text("Page failed to load")
-                .font(Design.Font.bold(18))
+                .font(Design.Font.semiBold(32))
                 .foregroundColor(Design.Color.primaryText)
             
-            // Robot icon - try to use custom image, fallback to custom drawn robot
+            // Robot icon - custom image
             Group {
                 if let robotImage = UIImage(named: "robotIcon") {
                     Image(uiImage: robotImage)
                         .resizable()
                         .aspectRatio(contentMode: .fit)
-                        .frame(width: 120, height: 120)
-                } else {
-                    // Fallback: Custom drawn sad robot
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 30)
-                            .fill(
-                                LinearGradient(
-                                    stops: [
-                                        .init(color: Color(red: 0.2, green: 0.4, blue: 0.8), location: 0.0),
-                                        .init(color: Color(red: 0.1, green: 0.2, blue: 0.6), location: 1.0)
-                                    ],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
-                            .frame(width: 100, height: 100)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 30)
-                                    .stroke(Color.white.opacity(0.3), lineWidth: 2)
-                            )
-                        
-                        VStack(spacing: 0) {
-                            // Antenna
-                            Circle()
-                                .fill(Color(red: 0.1, green: 0.2, blue: 0.6))
-                                .frame(width: 6, height: 6)
-                                .offset(y: -48)
-                            
-                            // Face area (dark background)
-                            RoundedRectangle(cornerRadius: 8)
-                                .fill(Color.black.opacity(0.8))
-                                .frame(width: 70, height: 50)
-                                .offset(y: -5)
-                                .overlay(
-                                    VStack(spacing: 4) {
-                                        // Eyes
-                                        HStack(spacing: 12) {
-                                            Circle()
-                                                .fill(Color.white)
-                                                .frame(width: 18, height: 18)
-                                                .overlay(
-                                                    Circle()
-                                                        .fill(Color.black)
-                                                        .frame(width: 10, height: 10)
-                                                        .offset(x: 0, y: 2)
-                                                )
-                                            Circle()
-                                                .fill(Color.white)
-                                                .frame(width: 18, height: 18)
-                                                .overlay(
-                                                    Circle()
-                                                        .fill(Color.black)
-                                                        .frame(width: 10, height: 10)
-                                                        .offset(x: 0, y: 2)
-                                                )
-                                        }
-                                        .offset(y: 8)
-                                        
-                                        // Sad mouth
-                                        Capsule()
-                                            .fill(Color.white.opacity(0.8))
-                                            .frame(width: 30, height: 3)
-                                            .offset(y: 12)
-                                    }
-                                )
-                            
-                            // Arms
-                            HStack {
-                                Circle()
-                                    .fill(Color(red: 0.1, green: 0.2, blue: 0.6))
-                                    .frame(width: 16, height: 16)
-                                    .offset(x: -45, y: 15)
-                                Circle()
-                                    .fill(Color(red: 0.1, green: 0.2, blue: 0.6))
-                                    .frame(width: 16, height: 16)
-                                    .offset(x: 45, y: 15)
-                            }
-                        }
-                    }
-                    .frame(width: 120, height: 120)
+                        .frame(width: 120, height: 150)
                 }
             }
             .padding(.top, 8)
-            
-            Spacer()
             
             // Action buttons
             VStack(spacing: 12) {
@@ -245,12 +164,11 @@ struct WebViewScreen: View {
                     reloadPage()
                 }) {
                     Text("Reload")
-                        .font(Design.Font.bold(16))
+                        .font(Design.Font.semiBold(16))
                         .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 50)
+                        .frame(width: 290, height: 60)
                         .background(Design.Color.appGradient)
-                        .cornerRadius(12)
+                        .cornerRadius(20)
                         .shadow(color: Color.black.opacity(0.15), radius: 8, x: 0, y: 4)
                 }
                 
@@ -259,13 +177,12 @@ struct WebViewScreen: View {
                     openInSafari()
                 }) {
                     Text("Open in browser")
-                        .font(Design.Font.bold(16))
+                        .font(Design.Font.semiBold(16))
                         .foregroundColor(Design.Color.blue)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 50)
+                        .frame(width: 290, height: 60)
                         .background(Color.clear)
                         .overlay(
-                            RoundedRectangle(cornerRadius: 12)
+                            RoundedRectangle(cornerRadius: 20)
                                 .stroke(Design.Color.blue, lineWidth: 1.5)
                         )
                 }
@@ -289,24 +206,20 @@ struct WebViewScreen: View {
                         .resizable()
                         .aspectRatio(contentMode: .fit)
                         .frame(width: 20, height: 20)
-                } else {
-                    Image(systemName: "globe")
-                        .font(.system(size: 16, weight: .medium))
                 }
                 Text("Open in browser")
                     .font(Design.Font.bold(16))
             }
             .foregroundColor(.white)
-            .frame(maxWidth: .infinity)
-            .frame(height: 50)
+            .frame(width: 290, height: 60)
             .background(Design.Color.appGradient)
-            .cornerRadius(12)
+            .cornerRadius(20)
             .shadow(color: Color.black.opacity(0.15), radius: 8, x: 0, y: 4)
         }
         .padding(.horizontal, 16)
         .padding(.bottom, 20)
         .background(
-            Design.Color.white
+            Design.Color.clear
                 .shadow(color: Color.black.opacity(0.05), radius: 4, x: 0, y: -2)
         )
     }
@@ -315,15 +228,11 @@ struct WebViewScreen: View {
     private func setupWebView() {
         // Normalize URL - add https:// if missing
         let normalizedURLString = normalizeURL(urlString)
-        print("🌐 WebViewScreen: Setting up with URL: \(normalizedURLString)")
-        
         if let url = URL(string: normalizedURLString) {
             currentURL = url
             displayURL = url.host ?? normalizedURLString
             viewModel.currentURL = url
-            print("🌐 WebViewScreen: Successfully created URL object: \(url.absoluteString)")
         } else {
-            print("❌ WebViewScreen: Failed to create URL from string: \(normalizedURLString)")
             // Set error only if URL is truly invalid
             viewModel.error = NSError(domain: "WebViewError", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid URL"])
         }
@@ -352,7 +261,6 @@ struct WebViewScreen: View {
     }
     
     private func reloadPage() {
-        print("🔄 WebViewScreen: Reloading page")
         viewModel.error = nil
         if let webView = webViewRef {
             webView.reload()
@@ -370,11 +278,11 @@ struct WebViewScreen: View {
     
     private func openInSafari() {
         let normalizedURLString = normalizeURL(urlString)
-        print("🌐 WebViewScreen: Opening in Safari: \(normalizedURLString)")
+        print("WebViewScreen: Opening in Safari: \(normalizedURLString)")
         if let url = currentURL ?? URL(string: normalizedURLString) {
             UIApplication.shared.open(url)
         } else {
-            print("❌ WebViewScreen: Failed to create URL for Safari: \(normalizedURLString)")
+            print("WebViewScreen: Failed to create URL for Safari: \(normalizedURLString)")
         }
     }
     
@@ -433,7 +341,6 @@ struct InAppWebView: UIViewRepresentable {
             let isLoading = uiView.isLoading
             
             if currentURL != url && !isLoading {
-                print("🔄 WebView: Loading new URL: \(url.absoluteString)")
                 uiView.load(URLRequest(url: url))
             }
         }
@@ -473,14 +380,12 @@ struct InAppWebView: UIViewRepresentable {
                 hasNotifiedWebViewCreated = true
             }
             let urlString = webView.url?.absoluteString ?? "unknown"
-            print("🌐 WebView: Started loading URL: \(urlString)")
             viewModel.isLoading = true
             viewModel.error = nil // Clear any previous errors
         }
         
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
             let urlString = webView.url?.absoluteString ?? "unknown"
-            print("✅ WebView: Successfully finished loading URL: \(urlString)")
             viewModel.isLoading = false
             viewModel.canGoBack = webView.canGoBack
             viewModel.currentURL = webView.url
@@ -497,7 +402,7 @@ struct InAppWebView: UIViewRepresentable {
             // Error code 102 is WKErrorFrameLoadInterruptedByPolicyChange (Frame load interrupted)
             // Error code -1001 is timeout, -1003 is host not found, -1009 is no internet
             if nsError.code != -999 && nsError.code != 102 {
-                print("❌ WebView: Failed to load URL: \(urlString), Error: \(error.localizedDescription), Code: \(nsError.code)")
+                print("WebView: Failed to load URL: \(urlString), Error: \(error.localizedDescription), Code: \(nsError.code)")
                 viewModel.isLoading = false
                 viewModel.error = error
             }
@@ -512,7 +417,7 @@ struct InAppWebView: UIViewRepresentable {
             // Error code -999 is WKErrorFrameLoadInterruptedByPolicyChange (cancellation)
             // Error code 102 is WKErrorFrameLoadInterruptedByPolicyChange (Frame load interrupted)
             if nsError.code != -999 && nsError.code != 102 {
-                print("❌ WebView: Failed provisional navigation for URL: \(urlString), Error: \(error.localizedDescription), Code: \(nsError.code)")
+                print("WebView: Failed provisional navigation for URL: \(urlString), Error: \(error.localizedDescription), Code: \(nsError.code)")
                 viewModel.isLoading = false
                 viewModel.error = error
             }
@@ -531,4 +436,3 @@ struct InAppWebView: UIViewRepresentable {
         }
     }
 }
-

@@ -7,6 +7,9 @@
 
 import SwiftUI
 import UniformTypeIdentifiers
+import AVFoundation
+import UIKit
+import Combine
 
 extension Notification.Name {
     static let scrollToPreviousSearchResult = Notification.Name("scrollToPreviousSearchResult")
@@ -22,12 +25,26 @@ extension Notification.Name {
     static let deepLinkScrollToMessageProxy = Notification.Name("deepLinkScrollToMessageProxy")
 }
 
-private struct TopSentinel: View {
-    let onVisible: () -> Void
+private struct TopEdgeKey: PreferenceKey {
+    static var defaultValue: Bool = false
+    static func reduce(value: inout Bool, nextValue: () -> Bool) { value = nextValue() }
+}
+
+private struct TopEdgeWatcher: View {
+    let threshold: CGFloat
+    let onChange: (Bool) -> Void
+
     var body: some View {
-        Color.clear
-            .frame(height: 1)
-            .onAppear(perform: onVisible)
+        GeometryReader { geo in
+            let minY = geo.frame(in: .named("chatScroll")).minY
+            Color.clear
+                .preference(key: TopEdgeKey.self, value: minY >= threshold)
+//                .onChange(of: minY) { v in
+//                    print("TopEdgeWatcher minY:", v) // remove later
+//                }
+        }
+        .frame(height: 1)
+        .onPreferenceChange(TopEdgeKey.self, perform: onChange)
     }
 }
 
@@ -82,8 +99,6 @@ struct ChatView: View {
 
     init(selectedRoom: RoomModel, navPath: Binding<NavigationPath>, isSearching: Bool = false, onDismiss: (() -> Void)? = nil, onReturnFromProfile: (() -> Void)? = nil) {
         let vm = DIContainer.shared.container.resolve(ChatViewModel.self)!
-        vm.switchRoom(to: selectedRoom.id)
-        vm.currentRoomId = selectedRoom.id
         vm.selectedRoom = selectedRoom
         _chatViewModel = StateObject(wrappedValue: vm)
         self.selectedRoom = selectedRoom
@@ -93,7 +108,7 @@ struct ChatView: View {
         self.onReturnFromProfile = onReturnFromProfile
         self._isSearching = State(initialValue: isSearching)
     }
-
+    
     var body: some View {
         GeometryReader { geometry in
             ZStack {
@@ -257,6 +272,8 @@ struct ChatView: View {
                                     } else {
                                         inputBar
                                     }
+                                } else {
+                                    inputBar
                                 }
                                 
                             } else {
@@ -281,10 +298,7 @@ struct ChatView: View {
                     }
                 }
                 .onAppear {
-                    print("chat view")
-
-                    chatViewModel.enableMessageObservation()
-                    chatViewModel.fetchMessages(forRoom: selectedRoom.id)
+                    chatViewModel.setActiveRoom(selectedRoom.id)
                     // Trigger search if returning from UserProfileView
                     onReturnFromProfile?()
                     NotificationCenter.default.addObserver(forName: Notification.Name("ChatSearchTapped"), object: nil, queue: .main) { _ in
@@ -292,7 +306,7 @@ struct ChatView: View {
                         }
                 }
                 .onDisappear {
-                    chatViewModel.disableMessageObservation()
+                    chatViewModel.leaveIfMatches(selectedRoom.id)
                     chatViewModel.audioPlayer.stop()
                 }
                 .fullScreenCover(isPresented: Binding(
@@ -318,18 +332,25 @@ struct ChatView: View {
                     )
                 }
                 .sheet(isPresented: $showImagePicker) {
-                    ImagePicker(
-                        source: useCamera ? .camera : .photoLibrary,
-                    ) { url, fileName, mimeType, fileSize in
-                        if let url, let fileName, let mimeType {
-                            var pickedImage: UIImage? = nil
-                            if let data = try? Data(contentsOf: url) {
-                                pickedImage = UIImage(data: data)
-                            }
-                            chatViewModel.uploadAndSendMediaMessage(fileURL: url,
-                                                                    fileName: fileName,
-                                                                    mimeType: mimeType,
-                                                                    localPreview: pickedImage)
+                    ImagePicker(source: useCamera ? .camera : .photoLibrary) { url, fileName, mimeType, fileSize in
+                        guard let url, let fileName, let mimeType else { return }
+                        
+                        if mimeType.hasPrefix("image/") {
+                            let preview: UIImage? = (try? Data(contentsOf: url)).flatMap(UIImage.init(data:))
+                            chatViewModel.uploadAndSendMediaMessage(
+                                fileURL: url,
+                                fileName: fileName,
+                                mimeType: mimeType,
+                                localPreview: preview
+                            )
+                        } else if mimeType.hasPrefix("video/") {
+                            let thumb = videoThumbnail(url: url) // (func provided below)
+                            chatViewModel.uploadAndSendMediaMessage(
+                                fileURL: url,
+                                fileName: fileName,
+                                mimeType: mimeType,
+                                localPreview: thumb,
+                            )
                         }
                     }
                 }
@@ -338,43 +359,70 @@ struct ChatView: View {
                     allowedContentTypes: allowedFileTypes,
                     allowsMultipleSelection: false
                 ) { result in
-                    DispatchQueue.main.async {
-                        switch result {
-                        case .success(let urls):
-                            guard let url = urls.first else { return }
+                    switch result {
+                    case .success(let urls):
+                        guard let pickedURL = urls.first else { return }
 
-                            // Start accessing security-scoped resource
-                            guard url.startAccessingSecurityScopedResource() else {
-                                print("Couldn't access the file")
-                                return
+                        // Security scope
+                        guard pickedURL.startAccessingSecurityScopedResource() else {
+                            print("Couldn't access the file"); return
+                        }
+                        defer { pickedURL.stopAccessingSecurityScopedResource() }
+
+                        // Copy to a unique temp location (avoid name clashes)
+                        let ext = pickedURL.pathExtension
+                        let base = pickedURL.deletingPathExtension().lastPathComponent
+                        let safeName = "\(base)_\(UUID().uuidString.prefix(8)).\(ext)"
+                        let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(safeName)
+
+                        do {
+                            if FileManager.default.fileExists(atPath: tempURL.path) {
+                                try FileManager.default.removeItem(at: tempURL)
                             }
-                            defer { url.stopAccessingSecurityScopedResource() }
+                            try FileManager.default.copyItem(at: pickedURL, to: tempURL)
+                        } catch {
+                            print("Copy to temp failed: \(error)")
+                            return
+                        }
 
-                            // Make a local copy if needed
-                            let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(url.lastPathComponent)
-                            do {
-                                if FileManager.default.fileExists(atPath: tempURL.path) {
-                                    try FileManager.default.removeItem(at: tempURL)
+                        // Derive metadata
+                        let mime = mimeTypeForFileExtension(ext)
+                        let size = fileSizeBytes(at: tempURL)
+
+
+                        let contentType = (try? tempURL.resourceValues(forKeys: [.contentTypeKey]))?.contentType
+
+                        if let contentType {
+                            if contentType.conforms(to: .movie)
+                                || contentType.conforms(to: .audiovisualContent)
+                                || contentType.conforms(to: .audio) {
+                                // Video/Audio: get duration using the non-deprecated API
+                                loadDurationSeconds(at: tempURL) { duration in
+                                    let preview = contentType.conforms(to: .movie) ? makeVideoThumbnail(url: tempURL) : nil
+                                    chatViewModel.uploadAndSendMediaMessage(
+                                        fileURL: tempURL,
+                                        fileName: tempURL.lastPathComponent,
+                                        mimeType: mime,
+                                        duration: duration,
+                                        size: size,
+                                        localPreview: preview
+                                    )
                                 }
-                                try FileManager.default.copyItem(at: url, to: tempURL)
-
-                                // Now you can safely read the file
-                                let data = try Data(contentsOf: tempURL)
-                                let fileName = tempURL.lastPathComponent
-                                let mimeType = mimeTypeForFileExtension(tempURL.pathExtension)
-
+                            } else {
+                                // Images / Documents (no duration needed)
                                 chatViewModel.uploadAndSendMediaMessage(
                                     fileURL: tempURL,
-                                    fileName: fileName,
-                                    mimeType: mimeType
+                                    fileName: tempURL.lastPathComponent,
+                                    mimeType: mime,
+                                    duration: nil,
+                                    size: size,
+                                    localPreview: contentType.conforms(to: .image) ? loadImagePreview(from: tempURL) : nil
                                 )
-                            } catch {
-                                print("Failed to read or copy file: \(error)")
                             }
-
-                        case .failure(let error):
-                            print("File selection error: \(error)")
                         }
+
+                    case .failure(let error):
+                        print("File selection error: \(error)")
                     }
                 }
                 .padding(.bottom, keyboard.currentHeight)
@@ -581,7 +629,6 @@ struct ChatView: View {
     func startForward(for messages: [ChatMessageModel]) {
         forwardPayload = .init(messages: messages)
     }
-
 }
 
 // MARK: - Chat Header Section
@@ -647,13 +694,25 @@ struct MessagesSection: View {
     @State private var bottomObserver: NSObjectProtocol?
     @State private var pendingAutoscroll = false
     @State private var didInitialScroll = false
-
+    @State private var userIsDragging = false
+    @State private var lastTopTrigger: CFAbsoluteTime = 0
+    private let topTriggerCooldown: CFTimeInterval = 0.8
+    
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView(showsIndicators: true) {
                 LazyVStack(spacing: 20) {
-                    TopSentinel {
-                        guard didInitialScroll, !chatViewModel.isPagingTop else { return }
+                    TopEdgeWatcher(threshold: 12) { isAtTop in
+                        guard isAtTop,
+                              userIsDragging,
+                              chatViewModel.didLoadMessages,
+                              didInitialScroll,
+                              !chatViewModel.isPagingTop
+                        else { return }
+
+                        let now = CFAbsoluteTimeGetCurrent()
+                        guard now - lastTopTrigger > topTriggerCooldown else { return }
+                        lastTopTrigger = now
                         chatViewModel.loadOlderIfNeeded()
                     }
                     
@@ -739,15 +798,25 @@ struct MessagesSection: View {
                         }
                 }
                 .onReceive(chatViewModel.$sections) { _ in
-                    if !didInitialScroll, let last = chatViewModel.messages.last {
+                    if !didInitialScroll {
                         didInitialScroll = true
-                        DispatchQueue.main.async {
-                            withAnimation(nil) { proxy.scrollTo(last.eventId, anchor: .bottom) }
-                        }
-                    } else if let eventId = chatViewModel.firstMessageEventId {
-                        DispatchQueue.main.async {
-                            withAnimation(nil) { proxy.scrollTo(eventId, anchor: .top) }
-                        }
+                        scrollToBottomEnsuringLayout(proxy)
+                    }
+//                    else if chatViewModel.isPagingTop {
+//                        // pin back to the same first id when paging up
+//                        var tx = Transaction(); tx.disablesAnimations = true
+//                        withTransaction(tx) { proxy.scrollTo(eventId, anchor: .top) }
+//                    }
+                }
+                .onReceive(chatViewModel.$messages.map { $0.last?.eventId }.removeDuplicates()) { _ in
+                    if didInitialScroll && !showScrollToBottomButton {
+                        scrollToBottomEnsuringLayout(proxy)
+                    }
+                }
+                // when existing messages mutate height (image replaces placeholder), pin if at bottom
+                .onReceive(chatViewModel.$messages) { _ in
+                    if didInitialScroll && !showScrollToBottomButton {
+                        scrollToBottomEnsuringLayout(proxy)
                     }
                 }
                 .onChange(of: chatViewModel.typingUsers) { newUsers in
@@ -834,6 +903,36 @@ struct MessagesSection: View {
         }
         .onPreferenceChange(MessageBubbleAnchorKey.self) { value in
             bubbleFrame = value
+        }
+        .coordinateSpace(name: "chatScroll")
+        .simultaneousGesture(
+            DragGesture()
+                .onChanged { _ in userIsDragging = true }
+                .onEnded { _ in
+                    // settle a moment after finger lifts
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                        userIsDragging = false
+                    }
+                }
+        )
+    }
+    
+    // 1) Put this helper inside MessagesSection
+    private func scrollToBottomEnsuringLayout(_ proxy: ScrollViewProxy) {
+        let jump = {
+            var tx = Transaction()
+            tx.disablesAnimations = true
+            withTransaction(tx) {
+                proxy.scrollTo(bottomID, anchor: .bottom)
+            }
+        }
+        // multiple passes to catch late layout (image decode, async heights)
+        DispatchQueue.main.async {
+            jump()
+            DispatchQueue.main.async {
+                jump()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.03) { jump() }
+            }
         }
     }
     

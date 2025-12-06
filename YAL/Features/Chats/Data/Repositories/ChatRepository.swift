@@ -15,6 +15,34 @@ enum Direction: String, Codable {
     case backward = "b"
 }
 
+enum SyncMode { case realtime, backfill }
+
+typealias ReactionTuple = (
+    originalEventId: String,
+    reactionEventId: String,
+    userId: String,
+    emojiKey: String,
+    timestamp: Int64
+)
+
+struct ReactionRecord {
+    let original: String
+    let reaction: String
+    let userId: String
+    let emoji: String
+    let ts: Int64
+}
+
+extension ReactionRecord {
+    var asTuple: ReactionTuple {
+        (originalEventId: original,
+         reactionEventId: reaction,
+         userId: userId,
+         emojiKey: emoji,
+         timestamp: ts)
+    }
+}
+
 final class ChatRepository: ChatRepositoryProtocol {
     private let matrixAPIManager: MatrixAPIManagerProtocol
     private var cancellables = Set<AnyCancellable>()
@@ -62,6 +90,11 @@ final class ChatRepository: ChatRepositoryProtocol {
     private let redactionSubject = PassthroughSubject<String, Never>() // eventId
     var redactionPublisher: AnyPublisher<String, Never> {
         redactionSubject.eraseToAnyPublisher()
+    }
+    
+    private let messagesClearedSubject = PassthroughSubject<String, Never>()
+    var messagesClearedPublisher: AnyPublisher<String, Never> {
+        messagesClearedSubject.eraseToAnyPublisher()
     }
 
     @Published var rooms: [RoomModel] = []
@@ -214,7 +247,6 @@ final class ChatRepository: ChatRepositoryProtocol {
             switch changes {
 
             case .initial(let collection):
-                // ❗️Do NOT send initial batch unless enabled
                 guard enabled else { return }
 
                 let models: [ChatMessageModel] = collection
@@ -241,9 +273,16 @@ final class ChatRepository: ChatRepositoryProtocol {
                     .mapValues { $0.count }
                 self.messageCountsSubject.send(counts)
 
-            case .update(let collection, _, let insertions, let modifications):
+            case .update(let collection, let deletions, let insertions, let modifications):
+                
+                if let roomId = roomFilter, !deletions.isEmpty {
+                    let remaining = collection.filter("roomId == %@", roomId).count
+                    if remaining == 0 {
+                        messagesClearedSubject.send(roomId)
+                    }
+                }
+                
                 guard enabled else { return }
-
                 let changedIndices = insertions + modifications
                 guard !changedIndices.isEmpty else { return }
 
@@ -373,14 +412,12 @@ final class ChatRepository: ChatRepositoryProtocol {
             s.applyFull(to: existing)
             upsertRoomInArray(existing)
             // Optional: persist (you already do this elsewhere; keep if you want DB to mirror UI)
-            DBManager.shared.saveRoom(room: existing)
         } else {
             // Create a room from summary and register it
             let created = s.materializeRoomModel()
             roomsAccumulatedById[s.id] = created
             upsertRoomInArray(created)
             hydrationState.sync { hydrationRoomsById[s.id] = created }
-            DBManager.shared.saveRoom(room: created)
         }
     }
         
@@ -419,6 +456,7 @@ final class ChatRepository: ChatRepositoryProtocol {
                         createdAt: o.createdAt,
                         isLeft: false,
                         isGroup: o.numberOfParticipants > 2,
+                        adminIds: self.decodeIds(o.adminData),
                         admins: [],
                         joinedUserIds: self.decodeIds(o.joinedMembersData),
                         invitedUserIds: self.decodeIds(o.invitedMembersData),
@@ -480,8 +518,8 @@ final class ChatRepository: ChatRepositoryProtocol {
                         let id = o.id
                        
                         if var existing = self.hydratedSummariesById[id] {
-                            let (changed, _) = self.patchSummary(&existing, with: o)
-                            guard changed else { continue }               // skip no-ops
+//                            let (changed, _) = self.patchSummary(&existing, with: o)
+                            //guard changed else { continue }               // skip no-ops
 
                             // Save patched copy in memory so latest state is visible immediately
                             self.hydratedSummariesById[id] = existing
@@ -527,7 +565,8 @@ final class ChatRepository: ChatRepositoryProtocol {
             createdAt: o.createdAt,
             isLeft: false,
             isGroup: o.numberOfParticipants > 2,
-            admins: [], // fill later if you persist
+            adminIds: decodeIds(o.adminData),
+            admins: [],
             joinedUserIds: decodeIds(o.joinedMembersData),
             invitedUserIds: decodeIds(o.invitedMembersData),
             leftUserIds: decodeIds(o.leftMembersData),
@@ -576,10 +615,10 @@ final class ChatRepository: ChatRepositoryProtocol {
     }
     
     private func startDrainingSummariesIfNeeded() {
-        summaryQueue.async { [weak self] in
-            guard let self,
-                  !self.isDrainingSummaries,
-                  !self.pendingSummaries.isEmpty else { return }
+        summaryWrite { [weak self] in
+            guard let self, !self.isDrainingSummaries,
+            !self.pendingSummaries.isEmpty else { return }
+            
             self.isDrainingSummaries = true
             self.roomDrainQueue.async { [weak self] in
                 self?.drainNextSummary()
@@ -592,9 +631,8 @@ final class ChatRepository: ChatRepositoryProtocol {
     }
     
     private func enqueueSummaries(_ items: [RoomSummaryModel]) {
-        summaryQueue.async { [weak self] in
+        summaryWrite { [weak self] in
             guard let self else { return }
-            // de-dupe by id
             for s in items {
                 if let i = self.pendingSummaries.firstIndex(where: { $0.id == s.id }) {
                     self.pendingSummaries[i] = s
@@ -638,9 +676,8 @@ final class ChatRepository: ChatRepositoryProtocol {
                     self.hydratedSummaries.append(hydrated)
                 }
                 self.hydratedSummariesById[hydrated.id] = hydrated
+                self.scheduleSummaryCommitIfNeeded()
             }
-
-            self.scheduleSummaryCommitIfNeeded()
 
             self.roomDrainQueue.async { [weak self] in
                 guard let self else { return }
@@ -689,11 +726,23 @@ final class ChatRepository: ChatRepositoryProtocol {
 
     @inline(__always)
     private func upsertRoomInArray(_ model: RoomModel) {
-        if let idx = rooms.firstIndex(where: { $0.id == model.id }) {
-            rooms[idx] = model
+        var updatedRooms = rooms
+
+        if let idx = updatedRooms.firstIndex(where: { $0.id == model.id }) {
+            updatedRooms[idx] = model
         } else {
-            rooms.append(model)
+            updatedRooms.append(model)
         }
+
+        // Use your existing stable sort method — modify it to take array input
+        updatedRooms.sort { lhs, rhs in
+            let l = activityTimestamp(for: lhs)
+            let r = activityTimestamp(for: rhs)
+            if l != r { return l > r }
+            return lhs.id < rhs.id
+        }
+
+        rooms = updatedRooms
     }
     
     private func scheduleSummaryCommitIfNeeded() {
@@ -715,21 +764,23 @@ final class ChatRepository: ChatRepositoryProtocol {
             return
         }
         
-        // ContactLite -> ContactModel (you already added this)
         let joined  = s.joinedMembers.map(ContactModel.fromLite)
         let invited = s.invitedMembers.map(ContactModel.fromLite)
         let left    = s.leftMembers.map(ContactModel.fromLite)
         let banned  = s.bannedMembers.map(ContactModel.fromLite)
+        let admins = s.admins.map(ContactModel.fromLite)
         
         // participants = joined ∪ invited (de-dupe by userId or phone fallback)
         let participants: [ContactModel] = {
             var dict: [String: ContactModel] = [:]
-            for m in joined + invited {
+            for m in joined + invited + left + banned {
                 let key = (m.userId?.isEmpty == false) ? m.userId! : m.phoneNumber
                 dict[key] = m
             }
             return Array(dict.values)
         }()
+        
+        let opponent = participants.first { $0.userId != s.currentUserId }
         
         if let existing = roomsAccumulatedById[s.id] {
             existing.applySummary(
@@ -741,24 +792,31 @@ final class ChatRepository: ChatRepositoryProtocol {
                 lastSenderName: s.lastSenderName,
                 unreadCount: s.unreadCount,
                 participantsCount: s.participantsCount,
+                serverTimestamp: s.serverTimestamp,
                 lastServerTimestamp: s.lastServerTimestamp,
                 joinedMemberIds: s.joinedUserIds,
                 invitedMemberIds: s.invitedUserIds,
                 leftMemberIds: s.leftUserIds,
-                bannedMemberIds: s.bannedUserIds
+                bannedMemberIds: s.bannedUserIds,
+                adminMemberIds: s.adminIds
             )
             existing.joinedMembers = joined
             existing.invitedMembers = invited
             existing.leftMembers    = left
             existing.bannedMembers  = banned
             existing.participants   = participants
+            existing.activeParticipants = joined + invited
+            if existing.isGroup {
+                existing.admins = admins
+            } else {
+                existing.opponent = opponent
+            }
             
             upsertRoomInArray(existing)
             hydrationState.sync {
                 hydrationRoomsById[s.id] = existing
                 hydrationProgressSubject.send((hydrationRoomsById.count, expectedRoomsTotal))
             }
-            DBManager.shared.saveRoom(room: existing)
         } else {
             let model = RoomModel(
                 id: s.id,
@@ -770,17 +828,25 @@ final class ChatRepository: ChatRepositoryProtocol {
                 lastSenderName: s.lastSenderName,
                 unreadCount: s.unreadCount,
                 participantsCount: s.participantsCount,
+                serverTimestamp: s.serverTimestamp,
                 lastServerTimestamp: s.lastServerTimestamp,
                 joinedMemberIds: s.joinedUserIds,
                 invitedMemberIds: s.invitedUserIds,
                 leftMemberIds: s.leftUserIds,
-                bannedMemberIds: s.bannedUserIds
+                bannedMemberIds: s.bannedUserIds,
+                adminIds: s.adminIds
             )
             model.joinedMembers = joined
             model.invitedMembers = invited
             model.leftMembers    = left
             model.bannedMembers  = banned
             model.participants   = participants
+            model.activeParticipants = joined + invited
+            if model.isGroup {
+                model.admins = admins
+            } else {
+                model.opponent = opponent
+            }
             
             roomsAccumulatedById[s.id] = model
             upsertRoomInArray(model)
@@ -788,7 +854,6 @@ final class ChatRepository: ChatRepositoryProtocol {
                 hydrationRoomsById[s.id] = model
                 hydrationProgressSubject.send((hydrationRoomsById.count, expectedRoomsTotal))
             }
-            DBManager.shared.saveRoom(room: model)
         }
                 
         DispatchQueue.main.async { [weak self] in
@@ -828,17 +893,18 @@ final class ChatRepository: ChatRepositoryProtocol {
     
     
     private func startBackfillForAllRooms() {
-        let roomIds: [String] = summaryQueue.sync {
-            Array(self.hydratedSummariesById.keys)
-        }
+        let roomIds: [String] = summaryRead { Array(hydratedSummariesById.keys) }
 
-        messageBackfillProgressSubject.send((self.messageBackfillDoneRooms.count, roomIds.count))
+        summaryWrite { [weak self] in
+            guard let self else { return }
+            let done = self.backfillState.sync { self.messageBackfillDoneRooms.count }
+            self.messageBackfillProgressSubject.send((done, roomIds.count))
+        }
 
         for id in roomIds {
             startBackfillForRoom(roomId: id, pages: 1, pageSize: 10)
         }
     }
-
     
     private func startBackfillForRoom(
         roomId: String,
@@ -942,11 +1008,10 @@ final class ChatRepository: ChatRepositoryProtocol {
                     self.fetchMessagesPage(roomId: roomId, from: token, limit: pageSize, dir: dir)
                 }
                 .handleEvents(receiveOutput: { [weak self] (response, _) in
-                    self?.handleChatSyncResponse(chatMessageResponse: response)
-
                     if let start = response.start, let end = response.end, dir == .backward {
                         DBManager.shared.saveMessageSync(roomId: roomId, firstEvent: end, lastEvent: start)
                     }
+                    self?.handleChatSyncResponse(chatMessageResponse: response)
                 })
                 .map { $0.1 } // pass next token forward
                 .eraseToAnyPublisher()
@@ -980,7 +1045,7 @@ final class ChatRepository: ChatRepositoryProtocol {
 
         return fetchMessagesPage(roomId: roomId, from: startFrom, limit: pageSize, dir: .backward)
             .handleEvents(receiveOutput: { [weak self] (response, _) in
-                self?.handleChatSyncResponse(chatMessageResponse: response)
+                self?.handleChatSyncResponse(chatMessageResponse: response, mode: .backfill)
 
                 if let end = response.end {
                     DBManager.shared.saveMessageSync(roomId: roomId, firstEvent: end, lastEvent: nil)
@@ -1028,15 +1093,14 @@ final class ChatRepository: ChatRepositoryProtocol {
                         return out
                     }
                     
-                    summaryMutate(roomId) { s in
-                        var s = s
+                    let updated = summaryMutateSync(roomId) { s in
                         s.update(
                             stateEvents: roomSummary.state?.events,
                             timelineEvents: roomSummary.timeline?.events,
                             unreadCount: roomSummary.unreadNotifications?.notificationCount,
                             rehydrateWith: resolver
                         )
-                        // presence patches…
+
                         for i in s.participants.indices {
                             if let uid = s.participants[i].userId, let pres = presenceMap[uid] {
                                 s.participants[i].setIsOnline(isOnline: pres.content?.currentlyActive ?? false)
@@ -1045,26 +1109,11 @@ final class ChatRepository: ChatRepositoryProtocol {
                                 s.participants[i].setStatusMessage(statusMessage: pres.content?.statusMessage ?? "")
                             }
                         }
-                        return s
                     }
-//                    existingRoom.update(
-//                        stateEvents: roomSummary.state?.events,
-//                        timelineEvents: roomSummary.timeline?.events,
-//                        unreadCount: roomSummary.unreadNotifications?.notificationCount,
-//                        rehydrateWith: resolver
-//                    )
-//
-//
-//                    for i in existingRoom.participants.indices {
-//                        let userId = existingRoom.participants[i].userId
-//                        if let userId = userId, let presence = presenceMap[userId] {
-//                            existingRoom.participants[i].setIsOnline(isOnline: presence.content?.currentlyActive ?? false)
-//                            existingRoom.participants[i].setLastSeen(lastSeen: presence.content?.lastActiveAgo ?? 0)
-//                            existingRoom.participants[i].setAvatarURL(avatarURL: presence.content?.avatarURL ?? "")
-//                            existingRoom.participants[i].setStatusMessage(statusMessage: presence.content?.statusMessage ?? "")
-//                        }
-//                    }
-                    updateRoom(room: existingRoom, isExisting: true)
+
+                    if let s = updated {
+                        updateRoom(room: s, isExisting: true)
+                    }
                     
                     // Extract ephemeral events (receipts)
                     if let ephemeral = roomSummary.ephemeral?.events {
@@ -1104,7 +1153,7 @@ final class ChatRepository: ChatRepositoryProtocol {
             
             if let leftRooms = syncResponse.rooms?.leave?.keys.map({ $0 }) {
                 for leftRoomId in leftRooms {
-                    if var roomSummary = hydratedSummariesById[leftRoomId] {
+                    if var roomSummary = getSummary(id: leftRoomId) {
                         roomSummary.isLeft = true
                         updateRoom(room: roomSummary, isExisting: true)
                     }
@@ -1116,17 +1165,15 @@ final class ChatRepository: ChatRepositoryProtocol {
     func updateRoom(room: RoomSummaryModel, isExisting: Bool) {
         summaryWrite { [weak self] in
             self?.hydratedSummariesById[room.id] = room
+            DBManager.shared.saveRoomSummary(room)
         }
-        DBManager.shared.saveRoomSummary(room)
     }
     
-    func handleChatSyncResponse(chatMessageResponse: GetMessagesResponse) {
+    func handleChatSyncResponse(chatMessageResponse: GetMessagesResponse, mode: SyncMode = .realtime) {
         guard
             !chatMessageResponse.chunk.isEmpty,
             let roomId = chatMessageResponse.chunk.first?.roomId
         else { return }
-
-        //print("Messages fetched for room: \(roomId) - count: \(chatMessageResponse.chunk.count)")
 
         let members: [ContactModel] = self.roomsAccumulatedById[roomId]?.participants ?? []
 
@@ -1134,73 +1181,86 @@ final class ChatRepository: ChatRepositoryProtocol {
             guard let self else { return }
 
             autoreleasepool {
-                var seenOrSaved = Set<String>()
+                var redactions: [String] = []
+                var reactions: [ReactionRecord] = []
+                var batchMessages: [ChatMessageModel] = []
+
                 var lastBody: String?
                 var lastSender: String?
                 var lastTs: Int64 = 0
-                var lastMessageType = MessageType.text.rawValue
+                var lastMsgType = MessageType.text.rawValue
 
                 for event in chatMessageResponse.chunk {
                     autoreleasepool {
                         switch event.type {
+
                         case "m.room.redaction":
                             if let redacts = event.redacts {
-                                DBManager.shared.markMessageRedacted(eventId: redacts)
-                                self.redactionSubject.send(redacts)
-                                seenOrSaved.insert(redacts)
+                                if mode == .realtime {
+                                    DBManager.shared.markMessageRedacted(eventId: redacts)
+                                    self.redactionSubject.send(redacts)
+                                } else {
+                                    redactions.append(redacts)
+                                }
                             }
 
                         case "m.reaction":
                             guard
-                                let relatesTo = event.content?.relatesTo,
-                                let emojiKey = relatesTo.key,
+                                let rel = event.content?.relatesTo,
+                                let emojiKey = rel.key,
                                 let reactionEventId = event.eventId,
                                 let sender = event.sender,
                                 let ts = event.originServerTs
                             else { break }
 
-                            let originalEventId = relatesTo.eventId ?? ""
-                            DBManager.shared.addReactionToMessage(
-                                messageEventId: originalEventId,
-                                reactionEventId: reactionEventId,
-                                userId: sender,
-                                emojiKey: emojiKey,
-                                timestamp: ts
-                            )
-                            seenOrSaved.insert(reactionEventId)
+                            let originalEventId = rel.eventId ?? ""
+                            if mode == .realtime {
+                                DBManager.shared.addReactionToMessage(
+                                    messageEventId: originalEventId,
+                                    reactionEventId: reactionEventId,
+                                    userId: sender,
+                                    emojiKey: emojiKey,
+                                    timestamp: ts
+                                )
+                            } else {
+                                reactions.append(
+                                    .init(
+                                        original: originalEventId,
+                                        reaction: reactionEventId,
+                                        userId: sender,
+                                        emoji: emojiKey,
+                                        ts: ts
+                                    )
+                                )
+                            }
 
                         case "m.room.message":
                             let isRedacted = event.unsigned?.redactedBy != nil || event.unsigned?.redactedBecause != nil
                             guard !isRedacted, let body = event.content?.body else { break }
-                            guard let eventId = event.eventId else { break }
 
-                            let replyEventId = event.content?.relatesTo?.inReplyTo?.eventId
-
-                            if !seenOrSaved.contains(eventId) {
-                                if let saved = DBManager.shared.getMessageIfExists(eventId: eventId) {
-                                    if saved.content != body {
-                                        saved.content = body
-                                        DBManager.shared.updateMessage(message: saved, inRoom: roomId, inReplyTo: replyEventId)
-                                    }
+                            if let auth = Storage.get(for: .authSession, type: .keychain, as: AuthSession.self) {
+                                let model = ChatMessageModel(
+                                    message: event,
+                                    roomId: roomId,
+                                    currentUserId: auth.userId,
+                                    members: members
+                                )
+                                if mode == .realtime {
+                                    DBManager.shared.saveMessage(
+                                        message: model,
+                                        inRoom: roomId,
+                                        inReplyTo: event.content?.relatesTo?.inReplyTo?.eventId
+                                    )
                                 } else {
-                                    if let authSession = Storage.get(for: .authSession, type: .keychain, as: AuthSession.self) {
-                                        let model = ChatMessageModel(
-                                            message: event,
-                                            roomId: roomId,
-                                            currentUserId: authSession.userId,
-                                            members: members
-                                        )
-                                        DBManager.shared.saveMessage(message: model, inRoom: roomId, inReplyTo: replyEventId)
-                                    }
+                                    batchMessages.append(model)
                                 }
-                                seenOrSaved.insert(eventId)
                             }
 
-                            if let ts = event.originServerTs, ts >= lastTs {
+                            if mode == .realtime, let ts = event.originServerTs, ts >= lastTs {
                                 lastTs = ts
                                 lastBody = body
                                 lastSender = event.sender
-                                lastMessageType = event.content?.msgType ?? MessageType.text.rawValue
+                                lastMsgType = event.content?.msgType ?? MessageType.text.rawValue
                             }
 
                         default:
@@ -1209,29 +1269,41 @@ final class ChatRepository: ChatRepositoryProtocol {
                     }
                 }
 
-                if let body = lastBody {
-                    let ts = (lastTs == 0) ? Date().millisecondsSince1970 : lastTs
+                if mode == .backfill {
+                    DBManager.shared.backfillRoom(
+                        roomId: roomId,
+                        messages: batchMessages,
+                        redactedEventIds: redactions,
+                        reactions: reactions
+                    )
+                    return
+                }
 
-                    let resolvedSenderName: String? = lastSender.flatMap { uid in
-                        if let c = ContactManager.shared.contact(for: uid) {
-                            return c.fullName ?? c.phoneNumber
-                        }
-                        return uid
+                // Realtime: patch summary header/unread only if we actually saw a newer message
+                guard let body = lastBody else { return }
+                let ts = (lastTs == 0) ? Date().millisecondsSince1970 : lastTs
+
+                let resolvedSenderName: String? = lastSender.flatMap { uid in
+                    if let c = ContactManager.shared.contact(for: uid) {
+                        return c.fullName ?? c.phoneNumber
                     }
+                    return uid
+                }
 
-                    var updated: RoomSummaryModel?
-                    self.summaryQueue.sync {
-                        guard var s = self.hydratedSummariesById[roomId] else { return }
-                        s.lastMessage       = body
-                        s.lastMessageType   = lastMessageType
-                        s.lastSender        = lastSender
-                        if let name = resolvedSenderName { s.lastSenderName = name }
-                        s.serverTimestamp   = ts
+                var updated: RoomSummaryModel?
+                self.summaryWrite { [weak self] in
+                    guard let self = self, var s = self.hydratedSummariesById[roomId] else { return }
+                    if (s.lastServerTimestamp ?? 0) <= ts { // guard against regressions
+                        s.lastMessage         = body
+                        s.lastMessageType     = lastMsgType
+                        s.lastSender          = lastSender
+                        if let n = resolvedSenderName { s.lastSenderName = n }
+                        s.serverTimestamp     = ts
                         s.lastServerTimestamp = ts
                         self.hydratedSummariesById[roomId] = s
                         updated = s
                     }
-
+                    
                     if let s = updated {
                         DBManager.shared.saveRoomSummary(s)
 
@@ -1240,27 +1312,22 @@ final class ChatRepository: ChatRepositoryProtocol {
                                 ?? self.rooms.first(where: { $0.id == roomId })
                             guard let room = live else { return }
 
-                            // update only cheap header fields
-                            room.lastMessage      = body
-                            room.lastMessageType  = lastMessageType
-                            room.lastSenderName   = resolvedSenderName ?? lastSender
-                            room.serverTimestamp  = ts   // (or lastServerTimestamp if that’s your canonical sort key)
+                            room.lastMessage     = body
+                            room.lastMessageType = lastMsgType
+                            room.lastSenderName  = resolvedSenderName ?? lastSender
+                            room.serverTimestamp = ts
 
-                            // unread logic: bump only if it's not our own message and the room isn't actively open
-                            let isViewingThisRoom: Bool = self.hydrationState.sync {
+                            let isViewing: Bool = self.hydrationState.sync {
                                 self.messageObservationEnabled && (self.activeRoomId == roomId)
                             }
-                            if let currentUserId = self.getCurrentUserContact()?.userId,
-                               lastSender != currentUserId,
-                               !isViewingThisRoom
+                            if let uid = self.getCurrentUserContact()?.userId,
+                               lastSender != uid, !isViewing
                             {
                                 room.unreadCount = max(0, room.unreadCount + 1)
                                 room.isRead = false
                             }
 
-                            // keep array + ordering consistent
                             self.upsertRoomInArray(room)
-                            self.resortRoomsStable()
                         }
                     }
                 }
@@ -1380,6 +1447,10 @@ final class ChatRepository: ChatRepositoryProtocol {
         matrixAPIManager.startSyncMesages(forRoom: roomId, lastMessageEventId: lastMessageEventId)
     }
     
+    func stopMessageFetch() {
+        matrixAPIManager.stopMessageFetching()
+    }
+    
     func banFromRoom(roomId: String, userId: String) -> AnyPublisher<APIResult<MatrixEmptyResponse>, APIError> {
         matrixAPIManager.banFromRoom(roomId: roomId, userId: userId)
             .map { [weak self] result in
@@ -1396,7 +1467,21 @@ final class ChatRepository: ChatRepositoryProtocol {
     }
     
     func leaveRoom(roomId: String) -> AnyPublisher<APIResult<MatrixEmptyResponse>, APIError> {
-        return matrixAPIManager.leaveRoom(roomId: roomId)
+        matrixAPIManager.leaveRoom(roomId: roomId, reason: "")
+            .map { [weak self] result in
+                guard case .success = result,
+                      let self = self,
+                      let currentUserId = self.getCurrentUserContact()?.userId,
+                      var roomSummary = self.getExistingRoomSummaryModel(roomId: roomId)
+                else {
+                    return result
+                }
+
+                roomSummary.applyMembershipChange(userId: currentUserId, membership: .leave)
+                self.updateRoom(room: roomSummary, isExisting: true)
+                return result
+            }
+            .eraseToAnyPublisher()
     }
     
     func forgetRoom(roomId: String) -> AnyPublisher<APIResult<MatrixEmptyResponse>, APIError> {
@@ -1546,41 +1631,41 @@ final class ChatRepository: ChatRepositoryProtocol {
 //        .eraseToAnyPublisher()
 //    }
     
-    func hydrateRooms(snaps: [RoomModel]) {
-        let roomById = Dictionary(uniqueKeysWithValues: snaps.map { ($0.id, $0) })
-        let hydrationQueue = DispatchQueue(label: "hydrations.consumer", qos: .userInitiated)
-        
-        DBManager.shared.streamRoomHydrations(sortKey: "lastServerTimestamp", ascending: false, limit: nil, batchSize: 1, batchDelay: 1.1)
-            .receive(on: hydrationQueue)       // sink on bg
-            .sink { [weak self] batch in
-                guard self != nil else { return }
-                for payload in batch {
-                    guard let room = roomById[payload.id] else { continue }
-                    
-                    DispatchQueue.main.async {
-                        room.hydrate(
-                            currentUser: payload.currentUser,
-                            creator: payload.creator,
-                            createdAt: payload.createdAt,
-                            avatarUrl: payload.avatarUrl,
-                            lastMessage: payload.lastMessage,
-                            lastSender: payload.lastSender,
-                            lastSenderName: payload.lastSenderName,
-                            unreadCount: payload.unreadCount,
-                            joinedMembers: payload.joinedMembers,
-                            invitedMembers: payload.invitedMembers,
-                            leftMembers: payload.leftMembers,
-                            bannedMembers: payload.bannedMembers,
-                            admins: payload.admins,
-                            stateEvents: payload.stateEvents,
-                            serverTimestamp: payload.serverTimestamp,
-                            lastServerTimestamp: payload.lastServerTimestamp
-                        )
-                    }
-                }
-            }
-            .store(in: &cancellables)
-    }
+//    func hydrateRooms(snaps: [RoomModel]) {
+//        let roomById = Dictionary(uniqueKeysWithValues: snaps.map { ($0.id, $0) })
+//        let hydrationQueue = DispatchQueue(label: "hydrations.consumer", qos: .userInitiated)
+//        
+//        DBManager.shared.streamRoomHydrations(sortKey: "lastServerTimestamp", ascending: false, limit: nil, batchSize: 1, batchDelay: 1.1)
+//            .receive(on: hydrationQueue)       // sink on bg
+//            .sink { [weak self] batch in
+//                guard self != nil else { return }
+//                for payload in batch {
+//                    guard let room = roomById[payload.id] else { continue }
+//                    
+//                    DispatchQueue.main.async {
+//                        room.hydrate(
+//                            currentUser: payload.currentUser,
+//                            creator: payload.creator,
+//                            createdAt: payload.createdAt,
+//                            avatarUrl: payload.avatarUrl,
+//                            lastMessage: payload.lastMessage,
+//                            lastSender: payload.lastSender,
+//                            lastSenderName: payload.lastSenderName,
+//                            unreadCount: payload.unreadCount,
+//                            joinedMembers: payload.joinedMembers,
+//                            invitedMembers: payload.invitedMembers,
+//                            leftMembers: payload.leftMembers,
+//                            bannedMembers: payload.bannedMembers,
+//                            admins: payload.admins,
+//                            stateEvents: payload.stateEvents,
+//                            serverTimestamp: payload.serverTimestamp,
+//                            lastServerTimestamp: payload.lastServerTimestamp
+//                        )
+//                    }
+//                }
+//            }
+//            .store(in: &cancellables)
+//    }
     
     func getRoomSummaryModel(roomId: String, events: [Event]) -> (RoomSummaryModel, Bool)? {
         if let roomSummaryModel = getExistingRoomSummaryModel(roomId: roomId) {
@@ -1634,20 +1719,6 @@ final class ChatRepository: ChatRepositoryProtocol {
         return events
             .filter { $0.type == EventType.roomMember.rawValue }
             .compactMap { $0.stateKey }
-    }
-
-    private func updateRoomCacheIfNeeded(roomId: String, events: [Event], currentUser: ContactModel) -> RoomModel? {
-        if let index = self.rooms.firstIndex(where: { $0.id == roomId }) {
-            self.rooms[index].update(
-                state: StateEvents(events: events),
-                timeline: nil,
-                summary: nil,
-                unreadNotifications: nil
-            )
-            return self.rooms[index]
-        } else {
-            return RoomModel(roomId: roomId, stateEvents: events, currentUser: currentUser)
-        }
     }
     
     func getCurrentUserContact() -> ContactLite? {
@@ -1768,10 +1839,26 @@ final class ChatRepository: ChatRepositoryProtocol {
     
     func leaveRoom(roomId: String, reason: String) -> AnyPublisher<APIResult<MatrixEmptyResponse>, APIError> {
         matrixAPIManager.leaveRoom(roomId: roomId, reason: reason)
+            .map { [weak self] result in
+                guard case .success = result,
+                      let self = self,
+                      let currentUserId = self.getCurrentUserContact()?.userId,
+                      var roomSummary = self.getExistingRoomSummaryModel(roomId: roomId)
+                else {
+                    return result
+                }
+                
+                roomSummary.applyMembershipChange(userId: currentUserId, membership: .leave)
+                self.updateRoom(room: roomSummary, isExisting: true)
+                return result
+            }
+            .eraseToAnyPublisher()
     }
     
     func performRoomCleanup(roomId: String) -> AnyPublisher<Void, APIError> {
         Future { [self] promise in
+            hydratedSummariesById.removeValue(forKey: roomId)
+            roomsAccumulatedById.removeValue(forKey: roomId)
             DBManager.shared.deleteRoomById(roomId: roomId)
             rooms.removeAll { $0.id == roomId }
             promise(.success(()))
@@ -2022,6 +2109,18 @@ final class ChatRepository: ChatRepositoryProtocol {
                 hydratedSummariesById[id] = change(current)
             }
         }
+    }
+    
+    @discardableResult
+    func summaryMutateSync(_ roomId: String, _ mutate: (inout RoomSummaryModel) -> Void) -> RoomSummaryModel? {
+        var out: RoomSummaryModel?
+        summaryQueue.sync(flags: .barrier) {
+            guard var s = hydratedSummariesById[roomId] else { out = nil; return }
+            mutate(&s)
+            hydratedSummariesById[roomId] = s
+            out = s
+        }
+        return out
     }
     
     @inline(__always)

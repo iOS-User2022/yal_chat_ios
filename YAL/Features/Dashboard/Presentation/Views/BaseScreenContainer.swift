@@ -12,13 +12,15 @@ struct BaseScreenContainer<Content: View, BottomBar: View>: View {
     var onMenuTap: () -> Void = {}
     var onProfileTap: () -> Void = {}
     var bottomBar: (() -> BottomBar)? = nil
+    @ObservedObject var profileViewModel: ProfileViewModel
     let content: () -> Content
 
     var body: some View {
         VStack(spacing: 0) {
             HeaderView(
                 onMenuTap: onMenuTap,
-                onProfileTap: onProfileTap
+                onProfileTap: onProfileTap,
+                profileViewModel: profileViewModel
             )
             .padding(.horizontal, 8)
             .padding(.top, 12)

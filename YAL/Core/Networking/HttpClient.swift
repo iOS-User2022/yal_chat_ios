@@ -25,7 +25,7 @@ final class HttpClient: NSObject, HttpClientProtocol {
     private let handlersQ = DispatchQueue(label: "yal.http.handlers", attributes: .concurrent)
     private let sessionDelegate = HttpClientSessionDelegate()
     
-    init(tokenProvider: TokenProvider, timeout: TimeInterval = 10.0, enableSSLPinning: Bool = false) {
+    init(tokenProvider: TokenProvider, timeout: TimeInterval = 60.0, enableSSLPinning: Bool = false) {
         self.tokenProvider = tokenProvider
         let config = URLSessionConfiguration.default
         config.timeoutIntervalForRequest = timeout
@@ -123,7 +123,7 @@ final class HttpClient: NSObject, HttpClientProtocol {
         }
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
-        request.timeoutInterval = 30000
+        //request.timeoutInterval = 30000
         request.setValue(mimeType, forHTTPHeaderField: "Content-Type")
         addHeaders(to: &request)
         
