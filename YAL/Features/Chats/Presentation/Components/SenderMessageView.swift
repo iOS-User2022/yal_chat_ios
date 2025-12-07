@@ -76,16 +76,21 @@ struct SenderMessageView: View {
                     }
                     
                     VStack(alignment: .trailing, spacing: 8) {
-                        textSection
+                        // Show text only if message doesn't contain URL, or if there's text beyond the URL
+                        if !message.containsURL || !message.contentWithoutURLs.isEmpty {
+                            textSection
+                        }
                         
-                        // URL Preview for sent messages
+                        // URL Preview for sent messages (WhatsApp style - shows preview only)
                         if message.containsURL, let urlString = message.firstURL {
                             URLPreviewForMessage(
                                 urlString: urlString,
                                 message: message,
                                 onURLTapped: onURLTapped
                             )
+                            .frame(maxWidth: .infinity, alignment: .trailing)
                             .padding(.horizontal, 8)
+                            .padding(.top, message.containsURL && !message.contentWithoutURLs.isEmpty ? 0 : 8)
                         }
                     }
                     
@@ -318,7 +323,9 @@ struct SenderMessageView: View {
 
     // MARK: - Text Section
     private var textSection: some View {
-        HighlightedText(text: message.content, searchText: searchText)
+        // Show content without URLs if URL exists, otherwise show full content
+        let displayText = message.containsURL ? message.contentWithoutURLs : message.content
+        return HighlightedText(text: displayText, searchText: searchText)
             .font(Design.Font.regular(14))
             .foregroundColor(Design.Color.white)
             .padding(.horizontal, 8)

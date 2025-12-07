@@ -16,8 +16,6 @@ struct ReceiverMessageView: View {
     @State private var downloadRequested = false
     @State private var isVideoPlayerPresented = false
     @State private var downloadedImage: UIImage?
-    
-    @StateObject private var previewFetcher = URLPreviewFetcher()
 
     var isForwarding: Bool? = false
 
@@ -98,40 +96,12 @@ struct ReceiverMessageView: View {
                         .opacity(showSenderInfo ? 1.0 : 0.0)
                         .onTapGesture { onAvatarTap?() }
                     messageBubble
-                } else {
-                    messageBubble
-                }
+            } else {
+                messageBubble
             }
-            
-            // Add URL Preview
-                     if message.containsURL, let urlString = message.firstURL {
-                         if let cachedPreview = URLPreviewCache.shared.getPreview(for: urlString) {
-                             URLPreviewCard(previewData: cachedPreview) {
-                                 openURL(urlString)
-                             }
-                             .padding(.top, 4)
-                         } else if previewFetcher.isLoading {
-                             HStack {
-                                 ProgressView()
-                                 Text("Loading preview...")
-                                     .font(.caption)
-                                     .foregroundColor(.gray)
-                             }
-                             .frame(maxWidth: .infinity)
-                             .frame(height: 60)
-                             .background(Color(.systemGray6))
-                             .cornerRadius(8)
-                         } else if let preview = previewFetcher.previewData {
-                             URLPreviewCard(previewData: preview) {
-                                 openURL(urlString)
-                             }
-                             .padding(.top, 4)
-                             .onAppear {
-                                 URLPreviewCache.shared.setPreview(preview, for: urlString)
-                             }
-                         }
-                     }
-            Spacer()
+        }
+        
+        Spacer()
         }
         .padding(.leading, 20)
         .onAppear {
@@ -141,17 +111,6 @@ struct ReceiverMessageView: View {
                 onMessageRead?()
             }
             downLoadAvatarIfNeeded()
-            
-            // Fetch preview when message appears
-                       if message.containsURL,
-                          let urlString = message.firstURL,
-                          URLPreviewCache.shared.getPreview(for: urlString) == nil,
-                          previewFetcher.previewData == nil {
-                           Task {
-                               await previewFetcher.fetchPreview(for: urlString)
-                           }
-                       }
-                   
         }
         .onChange(of: message.mediaUrl) { _ in triggerDownloadIfNeeded() }
     }
@@ -305,7 +264,9 @@ struct ReceiverMessageView: View {
 
     // MARK: - Text Section
     private var textSection: some View {
-        HighlightedText(text: message.content, searchText: searchText)
+        // Show content without URLs if URL exists, otherwise show full content
+        let displayText = message.containsURL ? message.contentWithoutURLs : message.content
+        return HighlightedText(text: displayText, searchText: searchText)
             .font(Design.Font.regular(14))
             .foregroundColor(Design.Color.primaryText)
             .padding(.leading, 8)
@@ -422,7 +383,25 @@ struct ReceiverMessageView: View {
                         )
                     }
                     
-                    textSection
+                    VStack(alignment: .leading, spacing: 0) {
+                        // Show text only if message doesn't contain URL, or if there's text beyond the URL
+                        if !message.containsURL || !message.contentWithoutURLs.isEmpty {
+                            textSection
+                        }
+                        
+                        // URL Preview for received messages (WhatsApp style - shows preview only)
+                        if message.containsURL, let urlString = message.firstURL {
+                            URLPreviewForMessage(
+                                urlString: urlString,
+                                message: message,
+                                onURLTapped: onURLTapped
+                            )
+                            .padding(.leading, 8)
+                            .padding(.trailing, 8)
+                            .padding(.top, (!message.containsURL || !message.contentWithoutURLs.isEmpty) ? 8 : 0)
+                        }
+                    }
+                    
                     timestampSection
                 }
                 

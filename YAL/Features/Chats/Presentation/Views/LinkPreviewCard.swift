@@ -143,105 +143,147 @@ class URLPreviewFetcher: ObservableObject {
     }
 }
 
-// MARK: - URL Preview Card View
+// MARK: - URL Preview Card View (WhatsApp Style)
 struct URLPreviewCard: View {
     let previewData: URLPreviewData
     let onTap: () -> Void
     
+    // Helper to get platform icon based on domain
+    private var platformIcon: String? {
+        guard let host = URL(string: previewData.url)?.host?.lowercased() else { return nil }
+        if host.contains("youtube.com") || host.contains("youtu.be") {
+            return "play.rectangle.fill" // YouTube icon
+        } else if host.contains("twitter.com") || host.contains("x.com") {
+            return "at"
+        } else if host.contains("instagram.com") {
+            return "camera.fill"
+        } else if host.contains("facebook.com") {
+            return "f.circle.fill"
+        }
+        return nil
+    }
+    
+    // Helper to get shortened URL display
+    private var displayURL: String {
+        guard let url = URL(string: previewData.url) else { return previewData.url }
+        // For YouTube, show youtu.be format
+        if let host = url.host, host.contains("youtube.com") {
+            if let videoId = extractYouTubeVideoId(from: previewData.url) {
+                return "youtu.be/\(videoId)"
+            }
+        }
+        // Otherwise show host
+        return url.host ?? previewData.url
+    }
+    
+    private func extractYouTubeVideoId(from urlString: String) -> String? {
+        guard let url = URL(string: urlString) else { return nil }
+        if url.host?.contains("youtu.be") == true {
+            return String(url.path.dropFirst())
+        } else if url.host?.contains("youtube.com") == true {
+            if let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+               let queryItems = components.queryItems,
+               let videoId = queryItems.first(where: { $0.name == "v" })?.value {
+                return videoId
+            }
+        }
+        return nil
+    }
+    
     var body: some View {
         Button(action: onTap) {
             VStack(alignment: .leading, spacing: 0) {
-                // Image (if available)
+                // Thumbnail/Image at top (WhatsApp style)
                 if let imageURLString = previewData.imageURL,
                    let imageURL = URL(string: imageURLString) {
-                    AsyncImage(url: imageURL) { phase in
-                        switch phase {
-                        case .empty:
-                            Rectangle()
-                                .fill(Color.gray.opacity(0.2))
-                                .frame(height: 160)
-                                .overlay(ProgressView())
-                        case .success(let image):
-                            image
-                                .resizable()
-                                .aspectRatio(contentMode: .fill)
-                                .frame(height: 160)
-                                .clipped()
-                        case .failure:
-                            Rectangle()
-                                .fill(Color.gray.opacity(0.2))
-                                .frame(height: 160)
-                                .overlay(
-                                    Image(systemName: "photo")
-                                        .foregroundColor(.gray)
-                                )
-                        @unknown default:
-                            EmptyView()
+                    GeometryReader { geometry in
+                        ZStack(alignment: .center) {
+                            AsyncImage(url: imageURL) { phase in
+                                switch phase {
+                                case .empty:
+                                    Rectangle()
+                                        .fill(Color.gray.opacity(0.2))
+                                        .overlay(ProgressView())
+                                case .success(let image):
+                                    image
+                                        .resizable()
+                                        .scaledToFill()
+                                        .frame(width: geometry.size.width, height: 200)
+                                        .clipped()
+                                case .failure:
+                                    Rectangle()
+                                        .fill(Color.gray.opacity(0.2))
+                                        .overlay(
+                                            Image(systemName: "photo")
+                                                .foregroundColor(.gray)
+                                        )
+                                @unknown default:
+                                    EmptyView()
+                                }
+                            }
+                            
+                            // Play button overlay for video links (like YouTube)
+                            if let host = URL(string: previewData.url)?.host,
+                               host.contains("youtube.com") || host.contains("youtu.be") {
+                                Circle()
+                                    .fill(Color.white.opacity(0.9))
+                                    .frame(width: 60, height: 60)
+                                    .overlay(
+                                        Image(systemName: "play.fill")
+                                            .foregroundColor(.black)
+                                            .font(.system(size: 24))
+                                    )
+                            }
                         }
                     }
+                    .frame(height: 200)
+                    .clipShape(CustomRoundedCornersShape(radius: 8, roundedCorners: [.topLeft, .topRight]))
                 }
                 
-                // Content
-                VStack(alignment: .leading, spacing: 6) {
-                    // Site name or domain
-                    if let siteName = previewData.siteName {
-                        Text(siteName.uppercased())
-                            .font(.caption2)
-                            .foregroundColor(.gray)
-                    } else if let host = URL(string: previewData.url)?.host {
-                        Text(host.uppercased())
-                            .font(.caption2)
-                            .foregroundColor(.gray)
-                    }
-                    
-                    // Title
+                // Content section below thumbnail
+                VStack(alignment: .leading, spacing: 8) {
+                    // Title (below thumbnail, WhatsApp style)
                     if let title = previewData.title {
                         Text(title)
-                            .font(.system(size: 14, weight: .semibold))
+                            .font(.system(size: 15, weight: .medium))
                             .foregroundColor(.primary)
                             .lineLimit(2)
+                            .multilineTextAlignment(.leading)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                     
-                    // Description
-                    if let description = previewData.description {
-                        Text(description)
-                            .font(.caption)
+                    // URL with chain icon and platform icon (WhatsApp style)
+                    HStack(spacing: 6) {
+                        // Chain link icon
+                        Image(systemName: "link")
+                            .font(.system(size: 12))
                             .foregroundColor(.secondary)
-                            .lineLimit(3)
-                    }
-                    
-                    // URL
-                    HStack(spacing: 4) {
-                        if let favicon = previewData.favicon,
-                           let faviconURL = URL(string: favicon) {
-                            AsyncImage(url: faviconURL) { image in
-                                image
-                                    .resizable()
-                                    .frame(width: 12, height: 12)
-                            } placeholder: {
-                                Image(systemName: "globe")
-                                    .font(.system(size: 10))
-                                    .foregroundColor(.gray)
-                            }
-                        } else {
-                            Image(systemName: "globe")
-                                .font(.system(size: 10))
-                                .foregroundColor(.gray)
-                        }
                         
-                        Text(previewData.url)
-                            .font(.caption2)
-                            .foregroundColor(.blue)
+                        // URL text
+                        Text(displayURL)
+                            .font(.system(size: 13))
+                            .foregroundColor(.secondary)
                             .lineLimit(1)
+                            .fixedSize(horizontal: false, vertical: true)
+                        
+                        Spacer(minLength: 4)
+                        
+                        // Platform icon (YouTube, Twitter, etc.)
+                        if let platformIcon = platformIcon {
+                            Image(systemName: platformIcon)
+                                .font(.system(size: 14))
+                                .foregroundColor(.red) // YouTube red, can be customized per platform
+                        }
                     }
                 }
-                .padding(12)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
             }
             .background(Color(.systemGray6))
-            .cornerRadius(12)
+            .clipShape(RoundedRectangle(cornerRadius: 8))
             .overlay(
-                RoundedRectangle(cornerRadius: 12)
-                    .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(Color.gray.opacity(0.15), lineWidth: 0.5)
             )
         }
         .buttonStyle(PlainButtonStyle())
@@ -256,6 +298,17 @@ extension ChatMessageModel {
     
     var firstURL: String? {
         URLDetector.extractURLs(from: content).first
+    }
+    
+    // Get message content without URLs (for display when URL preview is shown)
+    var contentWithoutURLs: String {
+        var text = content
+        let urls = URLDetector.extractURLs(from: content)
+        for url in urls {
+            text = text.replacingOccurrences(of: url, with: "")
+        }
+        // Clean up extra whitespace
+        return text.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }
 
