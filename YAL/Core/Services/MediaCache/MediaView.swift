@@ -102,49 +102,26 @@ struct MediaView<Placeholder: View, ErrorView: View>: View {
     @State private var thumbnail: UIImage?
     
     var body: some View {
-        ZStack {
+        Group {
             switch mediaType {
             case .image:
-                if let img = loader.image {
-                    Image(uiImage: img)
-                        .resizable()
-                        .scaledToFit()
-                        .onTapGesture { showFullScreen = true }
-                        .fullScreenCover(isPresented: $showFullScreen) {
-                            FullScreenImageView(
-                                source: .uiImage(img),
-                                userName: userName ?? "",
-                                timeText: timeText ?? "",
-                                isPresented: $showFullScreen
-                            )
-                        }
-                } else if loader.progress > 0 && loader.progress < 1 {
-                    placeholder
-                } else if loader.error != nil {
-                    errorView
-                } else {
-                    placeholder
-                }
-            
+                imageContentView
             case .gif:
-                if let localURL = loader.localURL?.absoluteString, let fileURL = URL(string: localURL) {
-                    let gifURL = URL(fileURLWithPath: fileURL.path)
-                    WebImage(url: gifURL)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(maxWidth: 220)
-                        .clipped()
-                } else {
-                    placeholder
-                }
-
+                gifContentView
             case .video:
                 if let url = loader.localURL {
                     ZStack {
                         if let thumb = thumbnail {
-                            Image(uiImage: thumb).resizable().scaledToFit()
+                            let aspectRatio = thumb.size.width / thumb.size.height
+                            let displayWidth = calculateDisplayWidth(aspectRatio: aspectRatio)
+                            
+                            Image(uiImage: thumb)
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: displayWidth, height: displayWidth / aspectRatio)
                         } else {
-                            Rectangle().fill(Color.black.opacity(0.1)).frame(height: 200)
+                            Rectangle().fill(Color.black.opacity(0.1))
+                                .frame(width: 220, height: 240)
                         }
                         Image(systemName: "play.circle.fill")
                             .font(.system(size: 50)).foregroundColor(.white)
@@ -214,6 +191,58 @@ struct MediaView<Placeholder: View, ErrorView: View>: View {
                     loader.load(remoteURL: mediaURL, type: mediaType, localURL: nil)
                 }
             }
+        }
+    }
+    
+    // MARK: - Helper: Calculate Display Width
+    private func calculateDisplayWidth(aspectRatio: CGFloat) -> CGFloat {
+        let targetHeight: CGFloat = 240
+        let maxWidth: CGFloat = 320
+        let minWidth: CGFloat = 150
+        let calculatedWidth = targetHeight * aspectRatio
+        return min(maxWidth, max(minWidth, calculatedWidth))
+    }
+    
+    // MARK: - Dynamic Image Content View
+    @ViewBuilder
+    private var imageContentView: some View {
+        if let img = loader.image {
+            let aspectRatio = img.size.width / img.size.height
+            let displayWidth = calculateDisplayWidth(aspectRatio: aspectRatio)
+            
+            Image(uiImage: img)
+                .resizable()
+                .scaledToFit()
+                .frame(width: displayWidth, height: displayWidth / aspectRatio)
+                .onTapGesture { showFullScreen = true }
+                .fullScreenCover(isPresented: $showFullScreen) {
+                    FullScreenImageView(
+                        source: .uiImage(img),
+                        userName: userName ?? "",
+                        timeText: timeText ?? "",
+                        isPresented: $showFullScreen
+                    )
+                }
+        } else if loader.progress > 0 && loader.progress < 1 {
+            placeholder
+        } else if loader.error != nil {
+            errorView
+        } else {
+            placeholder
+        }
+    }
+    
+    // MARK: - Dynamic GIF Content View
+    @ViewBuilder
+    private var gifContentView: some View {
+        if let localURL = loader.localURL?.absoluteString, let fileURL = URL(string: localURL) {
+            let gifURL = URL(fileURLWithPath: fileURL.path)
+            WebImage(url: gifURL)
+                .resizable()
+                .scaledToFit()
+                .clipped()
+        } else {
+            placeholder
         }
     }
     
@@ -324,12 +353,12 @@ struct VoiceMessageBubble: View {
                                 switch phase {
                                 case .empty:
                                     ProgressView()
-                                        .frame(width: 48, height: 48)
+                                        .frame(width: 40, height: 40)
                                 case .success(let image):
                                     image
                                         .resizable()
                                         .scaledToFill()
-                                        .frame(width: 48, height: 48)
+                                        .frame(width: 40, height: 40)
                                         .clipShape(Circle())
                                 case .failure(_):
                                     initialsView
@@ -403,7 +432,7 @@ struct VoiceMessageBubble: View {
                             receiverAvatar
                                 .resizable()
                                 .scaledToFill()
-                                .frame(width: 48, height: 48)
+                                .frame(width: 40, height: 40)
                                 .clipShape(Circle())
                         } else {
                             initialsView
@@ -427,14 +456,14 @@ struct VoiceMessageBubble: View {
         }
         .frame(maxWidth: .infinity, alignment: isSender ? .trailing : .leading)
         .padding(.horizontal)
-        .padding(.vertical, 8)
+        .padding(.vertical, 4)
     }
     
     @ViewBuilder
     private var initialsView: some View {
         Text(senderInitial)
-            .font(Design.Font.bold(16))
-            .frame(width: 48, height: 48)
+            .font(Design.Font.bold(14))
+            .frame(width: 40, height: 40)
             .background(backgroundColor)
             .foregroundColor(Design.Color.primaryText.opacity(0.7))
             .clipShape(Circle())

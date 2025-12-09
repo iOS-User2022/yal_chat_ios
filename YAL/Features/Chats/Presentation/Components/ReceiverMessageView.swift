@@ -7,7 +7,6 @@
 
 import SwiftUI
 import SDWebImageSwiftUI
-import AVKit
 
 struct ReceiverMessageView: View {
     @EnvironmentObject var chatViewModel: ChatViewModel
@@ -148,8 +147,8 @@ struct ReceiverMessageView: View {
             localURLOverride: nil
         )
         .id(message.mediaUrl ?? UUID().uuidString)
-        .frame(width: mediaType == .audio ? 260 : 220,
-               height: (mediaType == .image || mediaType == .video || mediaType == .gif) ? 215: 56)
+        .frame(width: mediaType == .audio ? 260 : nil)
+        .fixedSize(horizontal: mediaType != .audio, vertical: false)
         .padding(.horizontal, 4)
         .padding(.top, 4)
         .clipShape(CustomRoundedCornersShape(radius: 8, roundedCorners: [.topRight, .bottomLeft, .bottomRight]))
@@ -169,51 +168,6 @@ struct ReceiverMessageView: View {
         .cornerRadius(8)
     }
 
-    // MARK: - Media Content
-    @ViewBuilder
-    private func mediaContent(from url: URL) -> some View {
-        let cornerShape = CustomRoundedCornersShape(radius: 8, roundedCorners: [.topRight, .bottomLeft, .bottomRight])
-        
-        if message.isImageMessage {
-            if let image = UIImage(contentsOfFile: url.path) {
-                Image(uiImage: image)
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-                    .frame(width: 220, height: 215)
-                    .clipShape(cornerShape)
-            } else {
-                Text("Image failed to load")
-                    .foregroundColor(.red)
-                    .frame(width: 220, height: 215)
-                    .clipShape(cornerShape)
-            }
-        } else if message.isVideoMessage {
-            ZStack {
-                Rectangle().fill(Color.black.opacity(0.1))
-                Image(systemName: "play.circle.fill")
-                    .resizable()
-                    .frame(width: 40, height: 40)
-                    .foregroundColor(.white)
-            }
-            .frame(width: 220, height: 215)
-            .clipShape(cornerShape)
-            .onTapGesture { isVideoPlayerPresented = true }
-            .sheet(isPresented: $isVideoPlayerPresented) {
-                AVPlayerView(player: AVPlayer(url: url))
-            }
-        } else if message.isFileMessage {
-            HStack {
-                Image(systemName: "doc.fill").foregroundColor(.gray)
-                Button("Open File") {
-                    UIApplication.shared.open(url)
-                }
-            }
-            .padding()
-            .background(Color.gray.opacity(0.1))
-            .cornerRadius(8)
-        }
-    }
-
     private var placeholderWithProgress: some View {
         ZStack(alignment: .bottom) {
             let mediaType = MediaType(rawValue: message.msgType) ?? .image
@@ -221,6 +175,7 @@ struct ReceiverMessageView: View {
             if mediaType == .image || mediaType == .gif {
                 Image(message.isImageMessage ? "image-placeholder" : "image-placeholder")
                     .resizable()
+                    .scaledToFit()
                     .clipShape(CustomRoundedCornersShape(radius: 8, roundedCorners: [.topRight, .bottomLeft, .bottomRight]))
                
             } else if mediaType == .video {
