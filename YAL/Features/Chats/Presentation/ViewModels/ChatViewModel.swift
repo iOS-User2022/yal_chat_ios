@@ -31,7 +31,8 @@ final class ChatViewModel: ObservableObject {
     @Published private(set) var isPagingTop = false
     var didLoadMessages: Bool = false
     private var canLoadMoreTop = true
-
+    let visibleMessageIDs = CurrentValueSubject<Set<String>, Never>([])
+    
     var currentRoomId: String?
     var selectedRoom: RoomModel?
 
@@ -44,17 +45,19 @@ final class ChatViewModel: ObservableObject {
         @inline(__always) func startOfDay(_ d: Date) -> Date {
             Calendar.current.startOfDay(for: d)
         }
+        // Group by day
         let dict = Dictionary(grouping: messages) { msg in
             startOfDay(Date(timeIntervalSince1970: TimeInterval(msg.timestamp) / 1000))
         }
-        let keys = dict.keys.sorted()
+        // NEW: sort day keys **descending** (newest day first)
+        let keys = dict.keys.sorted(by: >)
         return keys.map { day in
-            let items = (dict[day] ?? []).sorted { $0.timestamp < $1.timestamp }
+            // NEW: items **descending** (newest first)
+            let items = (dict[day] ?? []).sorted { $0.timestamp > $1.timestamp }
             let title: String = {
                 if Calendar.current.isDateInToday(day) { return "Today" }
                 if Calendar.current.isDateInYesterday(day) { return "Yesterday" }
-                let fmt = DateFormatter()
-                fmt.dateStyle = .medium
+                let fmt = DateFormatter(); fmt.dateStyle = .medium
                 return fmt.string(from: day)
             }()
             return MessageSection(date: day, title: title, messages: items)
@@ -195,6 +198,16 @@ final class ChatViewModel: ObservableObject {
         cancellables.removeAll()
     }
     
+    func rowAppeared(_ id: String) {
+        var s = visibleMessageIDs.value
+        if s.insert(id).inserted { visibleMessageIDs.send(s) }
+    }
+
+    func rowDisappeared(_ id: String) {
+        var s = visibleMessageIDs.value
+        if s.remove(id) != nil { visibleMessageIDs.send(s) }
+    }
+    
     // MARK: - Active room lifecycle
     // Set or clear the active room. Handles enabling/disabling observation + light UI reset.
     func setActiveRoom(_ roomId: String?) {
@@ -302,7 +315,7 @@ final class ChatViewModel: ObservableObject {
             }
         }
         let merged = Array(map.values)
-        return merged.sorted { $0.timestamp < $1.timestamp }
+        return merged.sorted { $0.timestamp > $1.timestamp }
     }
 
     private func applyRedaction(eventId: String) {
@@ -430,7 +443,7 @@ final class ChatViewModel: ObservableObject {
             .store(in: &cancellables)
         
         DispatchQueue.main.async {
-            self.messages.append(message)
+            self.mutateMessages { $0.insert(message, at: 0) }
             self.isLoading = true
             self.newMessage = ""
         }
@@ -596,13 +609,13 @@ final class ChatViewModel: ObservableObject {
         mimeType: String,
         duration: Double? = nil,
         size: Int64? = nil,
-        localPreview: UIImage? = nil,
+        localPreview: UIImage? = nil
     ) {
         guard let roomId = selectedRoom?.id, let userId = currentUser?.userId else { return }
-        
+
         let tempId = UUID().uuidString
         let ts = Int64(Date().timeIntervalSince1970 * 1000)
-        
+
         let temp = ChatMessageModel(
             eventId: tempId,
             sender: userId,
@@ -619,11 +632,12 @@ final class ChatViewModel: ObservableObject {
             messageStatus: .sending
         )
         temp.localPreviewImage = localPreview
-        
+
+        // Fill local media info
         do {
             let mt = messageType(for: mimeType).rawValue
             let (w, h) = getMediaDimensions(mediaType: mt, localURL: fileURL.absoluteString)
-            let localInfo = MediaInfo(
+            var info = MediaInfo(
                 thumbnailUrl: nil,
                 thumbnailInfo: nil,
                 w: w, h: h,
@@ -631,71 +645,62 @@ final class ChatViewModel: ObservableObject {
                 size: Int(size ?? 0),
                 mimetype: mimeType
             )
-            var infoWithLocal = localInfo
-            infoWithLocal.localURL = fileURL
-            temp.mediaInfo = infoWithLocal
+            info.localURL = fileURL
+            temp.mediaInfo = info
         }
-        var messageIndex = 0
+
         DispatchQueue.main.async {
-            self.messages.append(temp)
-            messageIndex = self.messages.firstIndex(where: { $0.eventId == tempId }) ?? 0
+            self.mutateMessages { $0.insert(temp, at: 0) }
         }
-        
-        roomService.uploadMedia(fileURL: fileURL, fileName: fileName, mimeType: mimeType, onProgress: { [weak self] p in
-            guard let self else { return }
-            // Coalesce on a serial queue
-            self.processQ.async { [weak self] in
-                DispatchQueue.main.async {
-                    if let self = self, !self.messages.isEmpty, messageIndex < self.messages.count {
-                        self.messages[messageIndex].downloadProgress = p
+
+        roomService
+            .uploadMedia(fileURL: fileURL, fileName: fileName, mimeType: mimeType, onProgress: { [weak self] p in
+                guard let self = self else { return }
+                DispatchQueue.main.async { [weak self] in
+                    self?.applyToMessage(id: tempId) { $0.downloadProgress = p }
+                }
+            })
+            .subscribe(on: processQ)
+            .receive(on: processQ)
+            .sink(receiveCompletion: { [weak self] completion in
+                guard let self = self else { return }
+                if case .failure(let e) = completion {
+                    print("[upload] failed: \(e.localizedDescription)")
+                    DispatchQueue.main.async { [weak self] in
+                        self?.applyToMessage(id: tempId) { $0.downloadState = .failed }
                     }
                 }
-            }
-        })
-        .subscribe(on: processQ)
-        .receive(on: processQ)
-        .sink(receiveCompletion: { [weak self] completion in
-            guard let self else { return }
-            if case .failure(let e) = completion {
-                print("[upload] failed: \(e.localizedDescription)")
-                DispatchQueue.main.async {
-                    if !self.messages.isEmpty, messageIndex < self.messages.count {
-                        self.messages[messageIndex].downloadState = .failed
-                    }
-                }
-            }
-        }, receiveValue: { [weak self] result in
-            guard let self else { return }
-            switch result {
-            case .success(let mediaURL):
-                self.sendMediaMessage(
-                    message: temp,
-                    roomId: roomId,
-                    messageType: messageType(for: mimeType).rawValue,
-                    localURL: fileURL,
-                    mediaURL: mediaURL.absoluteString,
-                    fileName: fileName,
-                    mimeType: mimeType
-                ) { resp in
-                    DispatchQueue.main.async {
-                        if !self.messages.isEmpty, messageIndex < self.messages.count {
-                            self.messages[messageIndex].eventId = resp.eventId
-                            self.messages[messageIndex].mediaUrl = mediaURL.absoluteString
-                            self.messages[messageIndex].downloadState = .downloaded
-                            self.messages[messageIndex].messageStatus = .sent
+            }, receiveValue: { [weak self] result in
+                guard let self = self else { return }
+                switch result {
+                case .success(let mediaURL):
+                    self.sendMediaMessage(
+                        message: temp,
+                        roomId: roomId,
+                        messageType: messageType(for: mimeType).rawValue,
+                        localURL: fileURL,
+                        mediaURL: mediaURL.absoluteString,
+                        fileName: fileName,
+                        mimeType: mimeType
+                    ) { resp in
+                        DispatchQueue.main.async { [weak self] in
+                            self?.applyToMessage(id: tempId) { msg in
+                                msg.eventId = resp.eventId
+                                msg.mediaUrl = mediaURL.absoluteString
+                                msg.downloadState = .downloaded
+                                msg.messageStatus = .sent
+                            }
                         }
                     }
-                }
-            case .unsuccess(let e):
-                print("[upload] API error: \(e.localizedDescription)")
-                DispatchQueue.main.async {
-                    if !self.messages.isEmpty, messageIndex < self.messages.count {
-                        self.messages[messageIndex].downloadState = .failed
+
+                case .unsuccess(let e):
+                    print("[upload] API error: \(e.localizedDescription)")
+                    DispatchQueue.main.async { [weak self] in
+                        self?.applyToMessage(id: tempId) { $0.downloadState = .failed }
                     }
                 }
-            }
-        })
-        .store(in: &cancellables)
+            })
+            .store(in: &cancellables)
     }
 
     func uploadUserProfile(
@@ -857,5 +862,21 @@ extension ChatViewModel {
                 self?.messages.remove(at: i)
             }
         }
+    }
+    
+    private func applyToMessage(id: String, _ change: (inout ChatMessageModel) -> Void) {
+        assert(Thread.isMainThread)
+        guard let i = messages.firstIndex(where: { $0.eventId == id }) else { return }
+        var copy = messages
+        change(&copy[i])
+        messages = copy
+    }
+    
+    private func mutateMessages(_ edit: (inout [ChatMessageModel]) -> Void) {
+        assert(Thread.isMainThread)
+        var copy = messages
+        edit(&copy)
+        messages = copy
+        sections = buildSections(from: copy)
     }
 }

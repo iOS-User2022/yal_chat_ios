@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct GroupMessageInfoView: View {
     let message: ChatMessageModel
@@ -90,7 +91,7 @@ struct GroupMessageInfoView: View {
         .background(Design.Color.white)
     }
     private func safeAreaTop() -> CGFloat {
-        UIApplication.shared.windows.first?.safeAreaInsets.top ?? 0
+        UIApplication.shared.topSafeAreaInset
     }
     private var memberList: some View {
         VStack(spacing: 16) {
@@ -191,31 +192,66 @@ struct MemberRow: View {
                     completion: { result in
                         switch result {
                         case .success(let imagePath):
-                            var fileURL: URL
+                            // Build a safe file URL from "file://..." or raw path
+                            let fileURL: URL = {
+                                if let u = URL(string: imagePath), u.scheme == "file" { return u }
+                                return URL(fileURLWithPath: imagePath)
+                            }()
                             
-                            if imagePath.hasPrefix("file://") {
-                                if let url = URL(string: imagePath) {
-                                    fileURL = url
-                                } else {
-                                    print("Invalid URL path: \(imagePath)")
-                                    return
+                            DispatchQueue.global(qos: .userInitiated).async {
+                                autoreleasepool {
+                                    do {
+                                        // 1) Exists & not directory
+                                        var isDir: ObjCBool = false
+                                        guard FileManager.default.fileExists(atPath: fileURL.path, isDirectory: &isDir),
+                                              !isDir.boolValue else {
+                                            throw NSError(domain: "Media", code: 9001,
+                                                          userInfo: [NSLocalizedDescriptionKey: "File missing or is a directory"])
+                                        }
+                                        
+                                        // 2) Type-gate to images only
+                                        if let ut = UTType(filenameExtension: fileURL.pathExtension),
+                                           !ut.conforms(to: .image) {
+                                            throw NSError(domain: "Media", code: 9002,
+                                                          userInfo: [NSLocalizedDescriptionKey: "Not an image: \(ut.identifier)"])
+                                        }
+                                        
+                                        // 3) Downsample (low memory)
+                                        let srcOpts: [CFString: Any] = [kCGImageSourceShouldCache: false]
+                                        var ui: UIImage? = nil
+                                        if let src = CGImageSourceCreateWithURL(fileURL as CFURL, srcOpts as CFDictionary) {
+                                            let opts: [CFString: Any] = [
+                                                kCGImageSourceCreateThumbnailFromImageAlways: true,
+                                                kCGImageSourceShouldCacheImmediately: true,
+                                                kCGImageSourceCreateThumbnailWithTransform: true,
+                                                kCGImageSourceThumbnailMaxPixelSize: 1536
+                                            ]
+                                            if let cg = CGImageSourceCreateThumbnailAtIndex(src, 0, opts as CFDictionary) {
+                                                ui = UIImage(cgImage: cg)
+                                            }
+                                        }
+                                        
+                                        // 4) Fallbacks
+                                        if ui == nil { ui = UIImage(contentsOfFile: fileURL.path) }
+                                        if ui == nil {
+                                            let data = try Data(contentsOf: fileURL, options: [.mappedIfSafe])
+                                            ui = UIImage(data: data)
+                                        }
+                                        guard var img = ui else {
+                                            throw NSError(domain: "Media", code: 9003,
+                                                          userInfo: [NSLocalizedDescriptionKey: "Decode failed"])
+                                        }
+                                        
+                                        if #available(iOS 15.0, *), let prepped = img.preparingForDisplay() { img = prepped }
+                                        
+                                        DispatchQueue.main.async { downloadedImage = img }
+                                        
+                                    } catch {
+                                        print("❌ Media decode error — \(error.localizedDescription) | \(fileURL.path)")
+                                    }
                                 }
-                            } else {
-                                fileURL = URL(fileURLWithPath: imagePath)
                             }
-                            // More efficient than loading Data first
-                            if let uiImage = UIImage(contentsOfFile: fileURL.path) ?? {
-                                // fallback if the path form fails for some reason
-                                guard let data = try? Data(contentsOf: fileURL) else { return nil }
-                                return UIImage(data: data)
-                            }() {
-                                // Optional: pre-decompress for smoother UI on iOS 15+
-                                let finalImage = uiImage.preparingForDisplay() ?? uiImage
-                                DispatchQueue.main.async {
-                                    downloadedImage = finalImage
-                                }
-                            }
-
+                            
                         case .failure(let error):
                             print("❌ Failed to download media: \(error)")
                         }

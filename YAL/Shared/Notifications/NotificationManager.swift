@@ -16,7 +16,7 @@ enum NotificationManager {
             switch settings.authorizationStatus {
             case .authorized, .provisional:
                 print("✅ Notification already authorized.")
-            case .denied:
+            case .denied, .ephemeral:
                 print("⚠️ Notification permission denied.")
             case .notDetermined:
                 requestAuthorization()

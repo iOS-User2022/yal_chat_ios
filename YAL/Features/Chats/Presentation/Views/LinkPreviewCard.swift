@@ -143,7 +143,7 @@ class URLPreviewFetcher: ObservableObject {
     }
 }
 
-// MARK: - URL Preview Card View (WhatsApp Style)
+// MARK: - URL Preview Card View
 struct URLPreviewCard: View {
     let previewData: URLPreviewData
     let onTap: () -> Void
@@ -152,7 +152,7 @@ struct URLPreviewCard: View {
     private var platformIcon: String? {
         guard let host = URL(string: previewData.url)?.host?.lowercased() else { return nil }
         if host.contains("youtube.com") || host.contains("youtu.be") {
-            return "play.rectangle.fill" // YouTube icon
+            return "play.rectangle.fill"
         } else if host.contains("twitter.com") || host.contains("x.com") {
             return "at"
         } else if host.contains("instagram.com") {
@@ -163,16 +163,13 @@ struct URLPreviewCard: View {
         return nil
     }
     
-    // Helper to get shortened URL display
     private var displayURL: String {
         guard let url = URL(string: previewData.url) else { return previewData.url }
-        // For YouTube, show youtu.be format
         if let host = url.host, host.contains("youtube.com") {
             if let videoId = extractYouTubeVideoId(from: previewData.url) {
                 return "youtu.be/\(videoId)"
             }
         }
-        // Otherwise show host
         return url.host ?? previewData.url
     }
     
@@ -193,7 +190,6 @@ struct URLPreviewCard: View {
     var body: some View {
         Button(action: onTap) {
             VStack(alignment: .leading, spacing: 0) {
-                // Thumbnail/Image at top (WhatsApp style)
                 if let imageURLString = previewData.imageURL,
                    let imageURL = URL(string: imageURLString) {
                     GeometryReader { geometry in
@@ -207,8 +203,8 @@ struct URLPreviewCard: View {
                                 case .success(let image):
                                     image
                                         .resizable()
-                                        .scaledToFill()
-                                        .frame(width: geometry.size.width, height: 200)
+                                        .scaledToFit()
+                                        .frame(width: geometry.size.width, height: 141)
                                         .clipped()
                                 case .failure:
                                     Rectangle()
@@ -222,7 +218,6 @@ struct URLPreviewCard: View {
                                 }
                             }
                             
-                            // Play button overlay for video links (like YouTube)
                             if let host = URL(string: previewData.url)?.host,
                                host.contains("youtube.com") || host.contains("youtu.be") {
                                 Circle()
@@ -236,13 +231,11 @@ struct URLPreviewCard: View {
                             }
                         }
                     }
-                    .frame(height: 200)
+                    .frame(height: 140)
                     .clipShape(CustomRoundedCornersShape(radius: 8, roundedCorners: [.topLeft, .topRight]))
                 }
                 
-                // Content section below thumbnail
                 VStack(alignment: .leading, spacing: 8) {
-                    // Title (below thumbnail, WhatsApp style)
                     if let title = previewData.title {
                         Text(title)
                             .font(.system(size: 15, weight: .medium))
@@ -252,14 +245,10 @@ struct URLPreviewCard: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     
-                    // URL with chain icon and platform icon (WhatsApp style)
                     HStack(spacing: 6) {
-                        // Chain link icon
                         Image(systemName: "link")
                             .font(.system(size: 12))
                             .foregroundColor(.secondary)
-                        
-                        // URL text
                         Text(displayURL)
                             .font(.system(size: 13))
                             .foregroundColor(.secondary)
@@ -267,12 +256,10 @@ struct URLPreviewCard: View {
                             .fixedSize(horizontal: false, vertical: true)
                         
                         Spacer(minLength: 4)
-                        
-                        // Platform icon (YouTube, Twitter, etc.)
                         if let platformIcon = platformIcon {
                             Image(systemName: platformIcon)
                                 .font(.system(size: 14))
-                                .foregroundColor(.red) // YouTube red, can be customized per platform
+                                .foregroundColor(.red)
                         }
                     }
                 }
@@ -300,14 +287,12 @@ extension ChatMessageModel {
         URLDetector.extractURLs(from: content).first
     }
     
-    // Get message content without URLs (for display when URL preview is shown)
     var contentWithoutURLs: String {
         var text = content
         let urls = URLDetector.extractURLs(from: content)
         for url in urls {
             text = text.replacingOccurrences(of: url, with: "")
         }
-        // Clean up extra whitespace
         return text.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }

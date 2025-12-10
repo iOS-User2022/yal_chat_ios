@@ -13,6 +13,7 @@ import PDFKit
 import Combine
 import UniformTypeIdentifiers
 import QuickLookThumbnailing
+import ImageIO
 
 func mimeTypeForFileExtension(_ ext: String) -> String {
     switch ext.lowercased() {
@@ -66,6 +67,41 @@ func messageType(for mimeType: String) -> MessageType {
 func mxcToHttp(_ mxc: String) -> String {
     let base = "https://"
     return mxc.replacingOccurrences(of: "mxc://", with: base)
+}
+
+func mxcDownloadURL(_ mxc: String, homeserverBase: URL) -> URL? {
+    guard let (server, mediaId) = parseMXC(mxc: mxc) else { return nil }
+    var u = homeserverBase
+    u.appendPathComponent("_matrix")
+    u.appendPathComponent("media")
+    u.appendPathComponent("v3")
+    u.appendPathComponent("download")
+    u.appendPathComponent(server)
+    u.appendPathComponent(mediaId)
+    return u
+}
+
+func mxcThumbnailURL(_ mxc: String,
+                     homeserverBase: URL,
+                     width: Int,
+                     height: Int,
+                     method: String = "scale") -> URL? {
+    guard let (server, mediaId) = parseMXC(mxc: mxc) else { return nil }
+    var u = homeserverBase
+    u.appendPathComponent("_matrix")
+    u.appendPathComponent("media")
+    u.appendPathComponent("v3")
+    u.appendPathComponent("thumbnail")
+    u.appendPathComponent(server)
+    u.appendPathComponent(mediaId)
+
+    var comps = URLComponents(url: u, resolvingAgainstBaseURL: false)
+    comps?.queryItems = [
+        .init(name: "width", value: "\(width)"),
+        .init(name: "height", value: "\(height)"),
+        .init(name: "method", value: method)
+    ]
+    return comps?.url
 }
 
 func writeDataToTempFile(data: Data, fileExtension: String) -> URL? {
@@ -417,11 +453,55 @@ func makeVideoThumbnail(url: URL) -> UIImage? {
     return nil
 }
 
-func loadImagePreview(from url: URL) -> UIImage? {
-    // Avoid loading huge data into memory if possible
-    if let img = UIImage(contentsOfFile: url.path) { return img }
-    if let data = try? Data(contentsOf: url) { return UIImage(data: data) }
-    return nil
+func loadImagePreview(from url: URL, maxPixelSize: CGFloat = 2048) -> UIImage? {
+    do {
+        // 1) Basic sanity
+        var isDir: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir), !isDir.boolValue else {
+            throw NSError(domain: "Media", code: 3001,
+                          userInfo: [NSLocalizedDescriptionKey: "File missing or is a directory (\(url.path))"])
+        }
+
+        // 2) Gate by type so PDFs/MP4/MP3 never hit ImageIO as images
+        if let ut = UTType(filenameExtension: url.pathExtension), !ut.conforms(to: .image) {
+            throw NSError(domain: "Media", code: 3002,
+                          userInfo: [NSLocalizedDescriptionKey: "Not an image type: \(ut.identifier)"])
+        }
+
+        // 3) Streamed, downsampled decode (fast + low memory)
+        let srcOpts: [CFString: Any] = [kCGImageSourceShouldCache: false]
+        if let src = CGImageSourceCreateWithURL(url as CFURL, srcOpts as CFDictionary) {
+            let thumbOpts: [CFString: Any] = [
+                kCGImageSourceCreateThumbnailFromImageAlways: true,
+                kCGImageSourceShouldCacheImmediately: true,
+                kCGImageSourceCreateThumbnailWithTransform: true,
+                kCGImageSourceThumbnailMaxPixelSize: Int(max(1, maxPixelSize))
+            ]
+            if let cg = CGImageSourceCreateThumbnailAtIndex(src, 0, thumbOpts as CFDictionary) {
+                let ui = UIImage(cgImage: cg)
+                if #available(iOS 15.0, *) { return ui.preparingForDisplay() ?? ui }
+                return ui
+            }
+        }
+
+        // 4) Fallbacks
+        if let img = UIImage(contentsOfFile: url.path) {
+            if #available(iOS 15.0, *) { return img.preparingForDisplay() ?? img }
+            return img
+        }
+
+        let data = try Data(contentsOf: url, options: [.mappedIfSafe])
+        guard let img2 = UIImage(data: data) else {
+            throw NSError(domain: "Media", code: 3003,
+                          userInfo: [NSLocalizedDescriptionKey: "Failed to decode image bytes"])
+        }
+        if #available(iOS 15.0, *) { return img2.preparingForDisplay() ?? img2 }
+        return img2
+
+    } catch {
+        print("❌ loadImagePreview error: \(error.localizedDescription) — \(url.path)")
+        return nil
+    }
 }
 
 // MARK: - Cross-module preview helpers (Images, Video, Documents)
@@ -451,16 +531,62 @@ func previewImage(
 // MARK: Images (incl. GIF first frame)
 func decodeImageAsync(
     from url: URL,
+    maxPixelSize: CGFloat = 2048,
     completion: @escaping (Result<UIImage, Error>) -> Void
 ) {
     DispatchQueue.global(qos: .userInitiated).async {
         autoreleasepool {
-            if let img = UIImage(contentsOfFile: url.path) ?? (try? Data(contentsOf: url)).flatMap(UIImage.init) {
-                let final = img.preparingForDisplay() ?? img
-                DispatchQueue.main.async { completion(.success(final)) }
-            } else {
-                let err = NSError(domain: "Preview", code: 2, userInfo: [NSLocalizedDescriptionKey: "Failed to decode image"])
-                DispatchQueue.main.async { completion(.failure(err)) }
+            do {
+                // 1) Exists & not a directory
+                var isDir: ObjCBool = false
+                guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir),
+                      !isDir.boolValue else {
+                    throw NSError(domain: "Preview", code: 2101,
+                                  userInfo: [NSLocalizedDescriptionKey: "File missing or is a directory (\(url.path))"])
+                }
+
+                // 2) Type gate to avoid decoding PDFs/MP4/MP3 as images
+                if let ut = UTType(filenameExtension: url.pathExtension),
+                   !ut.conforms(to: .image) {
+                    throw NSError(domain: "Preview", code: 2102,
+                                  userInfo: [NSLocalizedDescriptionKey: "Not an image type: \(ut.identifier)"])
+                }
+
+                // 3) Downsample via ImageIO (fast + low memory)
+                let srcOpts: [CFString: Any] = [kCGImageSourceShouldCache: false]
+                if let src = CGImageSourceCreateWithURL(url as CFURL, srcOpts as CFDictionary) {
+                    let thumbOpts: [CFString: Any] = [
+                        kCGImageSourceCreateThumbnailFromImageAlways: true,
+                        kCGImageSourceShouldCacheImmediately: true,
+                        kCGImageSourceCreateThumbnailWithTransform: true,
+                        kCGImageSourceThumbnailMaxPixelSize: Int(max(1, maxPixelSize))
+                    ]
+                    if let cg = CGImageSourceCreateThumbnailAtIndex(src, 0, thumbOpts as CFDictionary) {
+                        var ui = UIImage(cgImage: cg)
+                        if #available(iOS 15.0, *), let prepped = ui.preparingForDisplay() { ui = prepped }
+                        DispatchQueue.main.async { completion(.success(ui)) }
+                        return
+                    }
+                }
+
+                // 4) Fallbacks
+                if var ui = UIImage(contentsOfFile: url.path) {
+                    if #available(iOS 15.0, *), let prepped = ui.preparingForDisplay() { ui = prepped }
+                    DispatchQueue.main.async { completion(.success(ui)) }
+                    return
+                }
+
+                let data = try Data(contentsOf: url, options: [.mappedIfSafe])
+                guard var ui2 = UIImage(data: data) else {
+                    throw NSError(domain: "Preview", code: 2103,
+                                  userInfo: [NSLocalizedDescriptionKey: "Failed to decode image bytes"])
+                }
+                if #available(iOS 15.0, *), let prepped = ui2.preparingForDisplay() { ui2 = prepped }
+                DispatchQueue.main.async { completion(.success(ui2)) }
+
+            } catch {
+                print("❌ decodeImageAsync error: \(error.localizedDescription) — \(url.path)")
+                DispatchQueue.main.async { completion(.failure(error)) }
             }
         }
     }

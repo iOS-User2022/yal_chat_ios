@@ -733,7 +733,7 @@ final class RoomService: RoomServiceProtocol {
     
     func deleteRoom(room: RoomModel, reason: String) -> AnyPublisher<APIResult<EmptyResponse>, APIError> {
         let currentUserId = room.currentUser?.userId
-        let otherMembers = room.participants.filter { $0.userId != currentUserId }
+        let otherMembers = room.activeParticipants.filter { $0.userId != currentUserId }
         
         let kickPublishers = otherMembers.map { member in
             kickUserFromRoom(room: room, user: member, reason: reason)

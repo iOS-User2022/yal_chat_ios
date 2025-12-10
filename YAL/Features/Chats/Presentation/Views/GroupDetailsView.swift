@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct GroupDetailsView: View {
     @Environment(\.dismiss) private var dismiss
@@ -404,7 +405,7 @@ struct GroupDetailsView: View {
                                             userName: "",
                                             timeText: "",
                                             isPresented: $showFullScreen)
-                            .zIndex(1)
+                        .zIndex(1)
                     }
                 
                 // Show edit button only if user is admin
@@ -440,30 +441,69 @@ struct GroupDetailsView: View {
                                 completion: { result in
                                     switch result {
                                     case .success(let imagePath):
-                                        var fileURL: URL
-                                        
-                                        if imagePath.hasPrefix("file://") {
-                                            if let url = URL(string: imagePath) {
-                                                fileURL = url
+                                        // Build a proper file URL from either a "file://" string or raw path
+                                        let fileURL: URL = {
+                                            if let u = URL(string: imagePath), u.scheme == "file" {
+                                                return u
                                             } else {
-                                                print("Invalid URL path: \(imagePath)")
-                                                return
+                                                return URL(fileURLWithPath: imagePath)
                                             }
-                                        } else {
-                                            fileURL = URL(fileURLWithPath: imagePath)
-                                        }
-                                        // More efficient than loading Data first
-                                        if let uiImage = UIImage(contentsOfFile: fileURL.path) ?? {
-                                            // fallback if the path form fails for some reason
-                                            guard let data = try? Data(contentsOf: fileURL) else { return nil }
-                                            return UIImage(data: data)
-                                        }() {
-                                            // Optional: pre-decompress for smoother UI on iOS 15+
-                                            let finalImage = uiImage.preparingForDisplay() ?? uiImage
-                                            DispatchQueue.main.async {
-                                                downloadedImage = finalImage
+                                        }()
+                                        
+                                        DispatchQueue.global(qos: .userInitiated).async {
+                                            autoreleasepool {
+                                                do {
+                                                    // 1) Exists & not a directory
+                                                    var isDir: ObjCBool = false
+                                                    guard FileManager.default.fileExists(atPath: fileURL.path, isDirectory: &isDir),
+                                                          !isDir.boolValue else {
+                                                        throw NSError(domain: "AvatarImage", code: 6001,
+                                                                      userInfo: [NSLocalizedDescriptionKey: "File missing or is a directory"])
+                                                    }
+                                                    
+                                                    // 2) Type-gate: only decode images (prevents PDF/MP4/MP3 hitting ImageIO)
+                                                    if let ut = UTType(filenameExtension: fileURL.pathExtension),
+                                                       !ut.conforms(to: .image) {
+                                                        throw NSError(domain: "AvatarImage", code: 6002,
+                                                                      userInfo: [NSLocalizedDescriptionKey: "Not an image: \(ut.identifier)"])
+                                                    }
+                                                    
+                                                    // 3) Downsample via ImageIO (low memory)
+                                                    let srcOpts: [CFString: Any] = [kCGImageSourceShouldCache: false]
+                                                    var ui: UIImage? = nil
+                                                    if let src = CGImageSourceCreateWithURL(fileURL as CFURL, srcOpts as CFDictionary) {
+                                                        let opts: [CFString: Any] = [
+                                                            kCGImageSourceCreateThumbnailFromImageAlways: true,
+                                                            kCGImageSourceShouldCacheImmediately: true,
+                                                            kCGImageSourceCreateThumbnailWithTransform: true,
+                                                            kCGImageSourceThumbnailMaxPixelSize: 1024 // adjust as needed
+                                                        ]
+                                                        if let cg = CGImageSourceCreateThumbnailAtIndex(src, 0, opts as CFDictionary) {
+                                                            ui = UIImage(cgImage: cg)
+                                                        }
+                                                    }
+                                                    
+                                                    // 4) Fallbacks
+                                                    if ui == nil { ui = UIImage(contentsOfFile: fileURL.path) }
+                                                    if ui == nil {
+                                                        let data = try Data(contentsOf: fileURL, options: [.mappedIfSafe])
+                                                        ui = UIImage(data: data)
+                                                    }
+                                                    guard var img = ui else {
+                                                        throw NSError(domain: "AvatarImage", code: 6003,
+                                                                      userInfo: [NSLocalizedDescriptionKey: "Decode failed"])
+                                                    }
+                                                    
+                                                    if #available(iOS 15.0, *), let prepped = img.preparingForDisplay() { img = prepped }
+                                                    
+                                                    DispatchQueue.main.async { downloadedImage = img }
+                                                    
+                                                } catch {
+                                                    print("❌ Failed to load avatar image: \(error.localizedDescription) — \(fileURL.path)")
+                                                }
                                             }
                                         }
+                                        
                                     case .failure(let error):
                                         print("❌ Failed to load avatar: \(error)")
                                     }
@@ -605,21 +645,71 @@ struct GroupDetailsView: View {
                 }) { result in
                     switch result {
                     case .success(let imagePath):
-                        let fileURL: URL = imagePath.hasPrefix("file://")
-                        ? URL(string: imagePath)!
-                        : URL(fileURLWithPath: imagePath)
+                        // Build a safe file URL from either "file://…" or raw path
+                        let fileURL: URL = {
+                            if let u = URL(string: imagePath), u.scheme == "file" {
+                                return u
+                            } else {
+                                return URL(fileURLWithPath: imagePath)
+                            }
+                        }()
                         
-                        if let uiImage = UIImage(contentsOfFile: fileURL.path) ?? {
-                            // Fallback to loading Data if path fails
-                            guard let data = try? Data(contentsOf: fileURL) else { return nil }
-                            return UIImage(data: data)
-                        }() {
-                            DispatchQueue.main.async {
-                                downloadedImage = uiImage
+                        DispatchQueue.global(qos: .userInitiated).async {
+                            autoreleasepool {
+                                do {
+                                    // 1) Exists & not a directory
+                                    var isDir: ObjCBool = false
+                                    guard FileManager.default.fileExists(atPath: fileURL.path, isDirectory: &isDir),
+                                          !isDir.boolValue else {
+                                        throw NSError(domain: "ImageOverlayView", code: 7001,
+                                                      userInfo: [NSLocalizedDescriptionKey: "File missing or is a directory"])
+                                    }
+                                    
+                                    // 2) Type-gate: only decode images
+                                    if let ut = UTType(filenameExtension: fileURL.pathExtension),
+                                       !ut.conforms(to: .image) {
+                                        throw NSError(domain: "ImageOverlayView", code: 7002,
+                                                      userInfo: [NSLocalizedDescriptionKey: "Not an image: \(ut.identifier)"])
+                                    }
+                                    
+                                    // 3) Downsample via ImageIO (low memory)
+                                    let srcOpts: [CFString: Any] = [kCGImageSourceShouldCache: false]
+                                    var ui: UIImage? = nil
+                                    if let src = CGImageSourceCreateWithURL(fileURL as CFURL, srcOpts as CFDictionary) {
+                                        let opts: [CFString: Any] = [
+                                            kCGImageSourceCreateThumbnailFromImageAlways: true,
+                                            kCGImageSourceShouldCacheImmediately: true,
+                                            kCGImageSourceCreateThumbnailWithTransform: true,
+                                            kCGImageSourceThumbnailMaxPixelSize: 2048
+                                        ]
+                                        if let cg = CGImageSourceCreateThumbnailAtIndex(src, 0, opts as CFDictionary) {
+                                            ui = UIImage(cgImage: cg)
+                                        }
+                                    }
+                                    
+                                    // 4) Fallbacks
+                                    if ui == nil { ui = UIImage(contentsOfFile: fileURL.path) }
+                                    if ui == nil {
+                                        let data = try Data(contentsOf: fileURL, options: [.mappedIfSafe])
+                                        ui = UIImage(data: data)
+                                    }
+                                    guard var img = ui else {
+                                        throw NSError(domain: "ImageOverlayView", code: 7003,
+                                                      userInfo: [NSLocalizedDescriptionKey: "Decode failed"])
+                                    }
+                                    
+                                    if #available(iOS 15.0, *), let prepped = img.preparingForDisplay() { img = prepped }
+                                    
+                                    DispatchQueue.main.async { downloadedImage = img }
+                                    
+                                } catch {
+                                    print("ImageOverlayView: image decode error — \(error.localizedDescription) | \(fileURL.path)")
+                                }
                             }
                         }
+                        
                     case .failure(let error):
-                        print("ImageOverlayView: Failed to load image: \(error)")
+                        print("ImageOverlayView: Failed to load image — \(error)")
                     }
                 }
         }
@@ -692,8 +782,8 @@ struct GroupDetailsView: View {
                         isCurrentUser: userId == currentUserId
                     ) {
                         present(roomDetailsViewModel.makeConfirmKickAlert(for: member))
-                    } onTap: {
-                        self.redirectToUserDetail(member: member)
+                    } onTap: { tappedMember in
+                        self.redirectToUserDetail(member: tappedMember)
                     }
                 }
             }
@@ -716,10 +806,14 @@ struct GroupDetailsView: View {
                 currentUserId: roomListViewModel.currentUser?.userId ?? ""
             ) { newRoom in
                 roomListViewModel.selectedRoom = newRoom
-                newRoom?.opponent?.avatarURL = member.avatarURL
-                navPath.append(NavigationTarget.userDetails(room: newRoom!,
-                                                            user: member,
-                                                            sharedMedia: []))
+                //newRoom?.opponent?.avatarURL = member.avatarURL
+                navPath.append(
+                    NavigationTarget.userDetails(
+                        room: newRoom!,
+                        user: member,
+                        sharedMedia: []
+                    )
+                )
             }
         }
     }
@@ -756,8 +850,9 @@ struct GroupDetailsView: View {
                         isAdmin: false,
                         showActions: false,
                         isCurrentUser: userId == currentUserId,
-                        onRemove: nil, onTap: {
-                            self.redirectToUserDetail(member: member)
+                        onRemove: nil,
+                        onTap: { tappedMember in
+                            self.redirectToUserDetail(member: tappedMember)
                         }
                     )
                 }
@@ -916,7 +1011,7 @@ struct GroupMemberRow: View {
     let showActions: Bool
     let isCurrentUser: Bool
     let onRemove: (() -> Void)?
-    let onTap: (() -> Void)?
+    let onTap: ((ContactModel) -> Void)?
     @State private var downloadedImage: UIImage?
     @State private var downloadProgress: Double = 0.0
 
@@ -971,7 +1066,9 @@ struct GroupMemberRow: View {
         }
         .padding(.vertical, 8)
         .onTapGesture {
-            onTap?()
+            if !isCurrentUser {
+                onTap?(member)
+            }
         }
     }
     
@@ -998,31 +1095,69 @@ struct GroupMemberRow: View {
                     completion: { result in
                         switch result {
                         case .success(let imagePath):
-                            var fileURL: URL
-                            
-                            if imagePath.hasPrefix("file://") {
-                                if let url = URL(string: imagePath) {
-                                    fileURL = url
+                            // Build a safe file URL from either "file://…" or raw path
+                            let fileURL: URL = {
+                                if let u = URL(string: imagePath), u.scheme == "file" {
+                                    return u
                                 } else {
-                                    print("Invalid URL path: \(imagePath)")
-                                    return
+                                    return URL(fileURLWithPath: imagePath)
                                 }
-                            } else {
-                                fileURL = URL(fileURLWithPath: imagePath)
-                            }
-                            // More efficient than loading Data first
-                            if let uiImage = UIImage(contentsOfFile: fileURL.path) ?? {
-                                // fallback if the path form fails for some reason
-                                guard let data = try? Data(contentsOf: fileURL) else { return nil }
-                                return UIImage(data: data)
-                            }() {
-                                // Optional: pre-decompress for smoother UI on iOS 15+
-                                let finalImage = uiImage.preparingForDisplay() ?? uiImage
-                                DispatchQueue.main.async {
-                                    downloadedImage = finalImage
+                            }()
+                            
+                            DispatchQueue.global(qos: .userInitiated).async {
+                                autoreleasepool {
+                                    do {
+                                        // 1) Exists & not a directory
+                                        var isDir: ObjCBool = false
+                                        guard FileManager.default.fileExists(atPath: fileURL.path, isDirectory: &isDir),
+                                              !isDir.boolValue else {
+                                            throw NSError(domain: "Media", code: 8001,
+                                                          userInfo: [NSLocalizedDescriptionKey: "File missing or is a directory"])
+                                        }
+                                        
+                                        // 2) Type-gate: only decode images (prevents PDF/MP4/MP3 from hitting ImageIO)
+                                        if let ut = UTType(filenameExtension: fileURL.pathExtension),
+                                           !ut.conforms(to: .image) {
+                                            throw NSError(domain: "Media", code: 8002,
+                                                          userInfo: [NSLocalizedDescriptionKey: "Not an image: \(ut.identifier)"])
+                                        }
+                                        
+                                        // 3) Downsample via ImageIO (low memory)
+                                        let srcOpts: [CFString: Any] = [kCGImageSourceShouldCache: false]
+                                        var ui: UIImage? = nil
+                                        if let src = CGImageSourceCreateWithURL(fileURL as CFURL, srcOpts as CFDictionary) {
+                                            let opts: [CFString: Any] = [
+                                                kCGImageSourceCreateThumbnailFromImageAlways: true,
+                                                kCGImageSourceShouldCacheImmediately: true,
+                                                kCGImageSourceCreateThumbnailWithTransform: true,
+                                                kCGImageSourceThumbnailMaxPixelSize: 1536 // tweak as needed
+                                            ]
+                                            if let cg = CGImageSourceCreateThumbnailAtIndex(src, 0, opts as CFDictionary) {
+                                                ui = UIImage(cgImage: cg)
+                                            }
+                                        }
+                                        
+                                        // 4) Fallbacks (still off-main)
+                                        if ui == nil { ui = UIImage(contentsOfFile: fileURL.path) }
+                                        if ui == nil {
+                                            let data = try Data(contentsOf: fileURL, options: [.mappedIfSafe])
+                                            ui = UIImage(data: data)
+                                        }
+                                        guard var img = ui else {
+                                            throw NSError(domain: "Media", code: 8003,
+                                                          userInfo: [NSLocalizedDescriptionKey: "Decode failed"])
+                                        }
+                                        
+                                        if #available(iOS 15.0, *), let prepped = img.preparingForDisplay() { img = prepped }
+                                        
+                                        DispatchQueue.main.async { downloadedImage = img }
+                                        
+                                    } catch {
+                                        print("❌ Media decode error — \(error.localizedDescription) | \(fileURL.path)")
+                                    }
                                 }
                             }
-
+                            
                         case .failure(let error):
                             print("❌ Failed to download media: \(error)")
                         }

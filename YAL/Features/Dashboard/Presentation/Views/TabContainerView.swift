@@ -25,7 +25,7 @@ struct TabContainerView: View {
     @EnvironmentObject var appSettings: AppSettings
     
     private func safeAreaTop() -> CGFloat {
-        UIApplication.shared.windows.first?.safeAreaInsets.top ?? 0
+        UIApplication.shared.topSafeAreaInset
     }
 
     init() {

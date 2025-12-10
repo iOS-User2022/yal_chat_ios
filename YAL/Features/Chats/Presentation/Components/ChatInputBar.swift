@@ -11,6 +11,7 @@ struct ChatInputBar: View {
     @Binding var message: String
     @Binding var senderName: String?
     @Binding var inReplyTo: ChatMessageModel?
+    @Binding var pendingAttachments: [PendingAttachment]
     var typingUsers: [ContactModel]
     var onSend: () -> Void
     var onSendAudio: (URL) -> Void
@@ -98,31 +99,31 @@ struct ChatInputBar: View {
                         .background(Color.white)
                         .clipShape(RoundedRectangle(cornerRadius: 8))
                         .shadow(color: .black.opacity(0.08), radius: 10, x: 0, y: 0)
-                        .onChange(of: message) { newValue in
-                            handleMessageChange(newValue)
-                        }
-
-                    if message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                        Button(action: {
-                            startRecording()
-                        }) {
-                            Image("fill_mic")
-                                .frame(width: 40, height: 40)
-                                .clipShape(RoundedRectangle(cornerRadius: 12))
-                        }
-                    } else {
-                        Button(action: {
-                            onSend()
-                            // Reset preview after sending
-                            showURLPreview = false
-                            currentPreviewURL = nil
-                        }) {
+                    
+                    if (!pendingAttachments.isEmpty) {
+                        Button(action: onSend) {
                             Image("send")
                                 .frame(width: 40, height: 40)
                                 .clipShape(RoundedRectangle(cornerRadius: 12))
                         }
-                        .disabled(message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                        .opacity(message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.4 : 1.0)
+                    } else {
+                        if message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                            Button(action: {
+                                startRecording()
+                            }) {
+                                Image("fill_mic")
+                                    .frame(width: 40, height: 40)
+                                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                            }
+                        } else {
+                            Button(action: onSend) {
+                                Image("send")
+                                    .frame(width: 40, height: 40)
+                                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                            }
+                            .disabled(message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                            .opacity(message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.4 : 1.0)
+                        }
                     }
                 }
             }

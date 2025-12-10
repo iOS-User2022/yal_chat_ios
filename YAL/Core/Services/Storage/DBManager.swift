@@ -39,7 +39,7 @@ final class RoomCardProjection: Projection<RoomObject> {
     @Projected(\RoomObject.lastSenderName) var lastSenderName: String?
     @Projected(\RoomObject.unreadCount) var unreadCount: Int
     @Projected(\RoomObject.numberOfParticipants) var numberOfParticipants: Int
-    @Projected(\RoomObject.lastServerTimestamp) var lastServerTimestamp: Int64?
+    @Projected(\RoomObject.serverTimestamp) var serverTimestamp: Int64?
 }
 
 // MARK: — Realm Models
@@ -645,6 +645,7 @@ final class DBManager: DBManageable {
                             existing.currentUser = try? JSONEncoder().encode(summary.currentUserId)
                             existing.avatarUrl = summary.avatarUrl
                             existing.lastMessage = summary.lastMessage
+                            existing.lastMessageType = summary.lastMessageType
                             existing.lastSender  = summary.lastSender
                             existing.unreadCount = summary.unreadCount
                             existing.numberOfParticipants = summary.participantsCount
@@ -669,6 +670,7 @@ final class DBManager: DBManageable {
                             new.createdAt = summary.createdAt
                             new.avatarUrl = summary.avatarUrl
                             new.lastMessage = summary.lastMessage
+                            new.lastMessageType = summary.lastMessageType
                             new.lastSender  = summary.lastSender
                             new.unreadCount = summary.unreadCount
                             new.numberOfParticipants = summary.participantsCount
@@ -765,8 +767,8 @@ final class DBManager: DBManageable {
                     lastSenderName: c.lastSenderName,
                     unreadCount: c.unreadCount,
                     participantsCount: c.numberOfParticipants,
-                    serverTimestamp: c.lastServerTimestamp,
-                    lastServerTimestamp: c.lastServerTimestamp,
+                    serverTimestamp: c.serverTimestamp,
+                    lastServerTimestamp: c.serverTimestamp,
                     creator: "",
                     createdAt: nil,
                     isLeft: false,
@@ -805,7 +807,7 @@ final class DBManager: DBManageable {
                     lastSenderName: s.lastSenderName,
                     unreadCount: s.unreadCount,
                     participantsCount: s.numberOfParticipants,
-                    serverTimestamp: s.lastServerTimestamp,
+                    serverTimestamp: s.serverTimestamp,
                     lastServerTimestamp: s.lastServerTimestamp,
                     creator: "",
                     createdAt: nil,
@@ -841,7 +843,7 @@ final class DBManager: DBManageable {
     // Caller chooses threads with .subscribe(on:) / .receive(on:)
 
     func streamRoomHydrations(
-        sortKey: String = "lastServerTimestamp",
+        sortKey: String = "serverTimestamp",
         ascending: Bool = false,
         limit: Int? = nil,
         batchSize: Int = 25,
@@ -1518,7 +1520,7 @@ extension DBManager {
 
     func fetchRecentFullRoomSummaries(
         limit: Int? = 50,
-        sortKey: String = "lastServerTimestamp",
+        sortKey: String = "serverTimestamp",
         ascending: Bool = false,
         includeContacts: Bool = false,
         resolveContact: ((String) -> ContactLite?)? = nil
@@ -1537,14 +1539,14 @@ extension DBManager {
     /// - Parameters:
     ///   - ids: restrict to a specific set of roomIds (optional)
     ///   - limit: cap number of results (optional)
-    ///   - sortKey: Realm key (on RoomObject) to sort by, default "lastServerTimestamp"
+    ///   - sortKey: Realm key (on RoomObject) to sort by, default "serverTimestamp"
     ///   - ascending: sort order
     ///   - includeContacts: when true, uses `resolveContact` to materialize ContactModel arrays
     ///   - resolveContact: closure to convert userId → ContactModel (e.g. via ContactManager/DB)
     func fetchFullRoomSummaries(
         ids: [String]? = nil,
         limit: Int? = nil,
-        sortKey: String = "lastServerTimestamp",
+        sortKey: String = "serverTimestamp",
         ascending: Bool = false,
         includeContacts: Bool = false,
         resolveContact: ((String) -> ContactLite?)? = nil

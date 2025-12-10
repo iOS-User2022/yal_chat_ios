@@ -387,9 +387,11 @@ final class ChatRepository: ChatRepositoryProtocol {
                 updated.reserveCapacity(values.count)
 
                 for var s in values {
-                    s.applyUpdatedContacts(for: changedIds)
-                    self.hydratedSummariesById[s.id] = s
-                    updated.append(s)
+                    self.summaryWrite {
+                        s.applyUpdatedContacts(for: changedIds)
+                        self.hydratedSummariesById[s.id] = s
+                        updated.append(s)
+                    }
                 }
 
                 // Patch live RoomModel immediately on MAIN (no heavy rehydrate)
@@ -426,7 +428,7 @@ final class ChatRepository: ChatRepositoryProtocol {
 
         let realm = DBManager.shared.realm
         let results = realm.objects(RoomSummaryObject.self)
-            .sorted(byKeyPath: "lastServerTimestamp", ascending: false)
+            .sorted(byKeyPath: "serverTimestamp", ascending: false)
 
         let mapQueue = DispatchQueue(label: "rooms.observe.map", qos: .userInitiated)
 
@@ -643,8 +645,8 @@ final class ChatRepository: ChatRepositoryProtocol {
             
             // sort once off-main so drain order == UI order
             self.pendingSummaries.sort {
-                let lt = $0.lastServerTimestamp ?? $0.serverTimestamp ?? 0
-                let rt = $1.lastServerTimestamp ?? $1.serverTimestamp ?? 0
+                let lt = $0.serverTimestamp ?? $0.lastServerTimestamp ?? 0
+                let rt = $1.serverTimestamp ?? $1.lastServerTimestamp ?? 0
                 return lt > rt
             }
 
@@ -739,7 +741,7 @@ final class ChatRepository: ChatRepositoryProtocol {
             let l = activityTimestamp(for: lhs)
             let r = activityTimestamp(for: rhs)
             if l != r { return l > r }
-            return lhs.id < rhs.id
+            return lhs.id > rhs.id
         }
 
         rooms = updatedRooms
@@ -1076,6 +1078,8 @@ final class ChatRepository: ChatRepositoryProtocol {
         }
         
         let roomsDict = syncResponse.rooms?.join ?? [:]
+        let roomLeftDict = syncResponse.rooms?.leave ?? [:]
+        
         if let currentUserData = Storage.get(for: .authSession, type: .keychain, as: AuthSession.self) {
             
             for (roomId, roomSummary) in roomsDict {
@@ -1151,12 +1155,13 @@ final class ChatRepository: ChatRepositoryProtocol {
                 inviteResponseSubject.send(inviteList)
             }
             
-            if let leftRooms = syncResponse.rooms?.leave?.keys.map({ $0 }) {
-                for leftRoomId in leftRooms {
-                    if var roomSummary = getSummary(id: leftRoomId) {
-                        roomSummary.isLeft = true
-                        updateRoom(room: roomSummary, isExisting: true)
-                    }
+            for (roomId, roomSummary) in roomLeftDict {
+                if var existingRoom: RoomSummaryModel = summaryGet(roomId) {
+                    existingRoom.update(
+                        stateEvents: roomSummary.state?.events,
+                        timelineEvents: roomSummary.timeline?.events
+                    )
+                    updateRoom(room: existingRoom, isExisting: true)
                 }
             }
         }
@@ -1257,6 +1262,9 @@ final class ChatRepository: ChatRepositoryProtocol {
                             }
 
                             if mode == .realtime, let ts = event.originServerTs, ts >= lastTs {
+                                if roomId == "!ObDVuMDJuBVGxrNwsj:yal.chat" {
+                                    print("Message: \(body)")
+                                }
                                 lastTs = ts
                                 lastBody = body
                                 lastSender = event.sender
@@ -1293,7 +1301,7 @@ final class ChatRepository: ChatRepositoryProtocol {
                 var updated: RoomSummaryModel?
                 self.summaryWrite { [weak self] in
                     guard let self = self, var s = self.hydratedSummariesById[roomId] else { return }
-                    if (s.lastServerTimestamp ?? 0) <= ts { // guard against regressions
+                    if (s.serverTimestamp ?? 0) < ts { // guard against regressions
                         s.lastMessage         = body
                         s.lastMessageType     = lastMsgType
                         s.lastSender          = lastSender
@@ -1311,7 +1319,9 @@ final class ChatRepository: ChatRepositoryProtocol {
                             let live: RoomModel? = self.hydrationState.sync { self.hydrationRoomsById[roomId] }
                                 ?? self.rooms.first(where: { $0.id == roomId })
                             guard let room = live else { return }
-
+                            if roomId == "!ObDVuMDJuBVGxrNwsj:yal.chat" {
+                                print("Room Message: \(body)")
+                            }
                             room.lastMessage     = body
                             room.lastMessageType = lastMsgType
                             room.lastSenderName  = resolvedSenderName ?? lastSender
@@ -1539,7 +1549,7 @@ final class ChatRepository: ChatRepositoryProtocol {
             Future<[RoomSummaryModel], Never> { promise in
                 DispatchQueue.global(qos: .userInitiated).async {
                     let snaps: [RoomSummaryModel] = DBManager.shared.fetchRooms() ?? []
-                    let sorted = snaps.sorted { ($0.lastServerTimestamp ?? 0) > ($1.lastServerTimestamp ?? 0) }
+                    let sorted = snaps.sorted { ($0.serverTimestamp ?? 0) > ($1.serverTimestamp ?? 0) }
                     DispatchQueue.main.async { [weak self] in
                         guard let self else { return }
                         let roomModels = sorted.map { $0.materializeRoomModel() }
@@ -1568,7 +1578,7 @@ final class ChatRepository: ChatRepositoryProtocol {
         let full = DBManager.shared.fetchFullRoomSummaries(
             ids: ids,
             limit: ids.count,
-            sortKey: "lastServerTimestamp",
+            sortKey: "serverTimestamp",
             ascending: false,
             includeContacts: includeContacts,
             resolveContact: resolver
@@ -1587,85 +1597,6 @@ final class ChatRepository: ChatRepositoryProtocol {
 
         return full
     }
-    
-
-//    func loadCachedRooms() -> AnyPublisher<[RoomSummaryModel], Never> {
-//        Deferred {
-//            Future<[RoomSummaryModel], Never> { promise in
-//                DispatchQueue.global(qos: .userInitiated).async {
-//                    let snaps: [RoomSummaryModel] = DBManager.shared.fetchRooms() ?? []
-//                    
-//                    let allIds = Array(Set(snaps.flatMap { $0.joinedUserIds + $0.invitedUserIds + $0.leftUserIds + $0.bannedUserIds }))
-//                    let resolvedMap: [String: ContactLite] = {
-//                        var out: [String: ContactLite] = [:]
-//                        out.reserveCapacity(allIds.count)
-//                        for raw in allIds {
-//                            let uid = raw.formattedMatrixUserId
-//                            out[uid] = ContactManager.shared.contact(for: uid)
-//                            ?? ContactLite(userId: uid, fullName: "", phoneNumber: "")
-//                        }
-//                        return out
-//                    }()
-//                    
-//                    var hydrated = snaps
-//                    for i in hydrated.indices {
-//                        hydrated[i].hydrateContacts { ids in
-//                            var m: [String: ContactLite] = [:]
-//                            m.reserveCapacity(ids.count)
-//                            for id in ids { m[id.formattedMatrixUserId] = resolvedMap[id.formattedMatrixUserId] }
-//                            return m
-//                        }
-//                    }
-//                    
-//                    DispatchQueue.main.async {
-//                        // Materialize heavy models on main
-//                        let roomModels = hydrated.map { $0.materializeRoomModel() }
-//                        // Push to your in-memory list (RoomService/VM)
-//                        self.rooms = roomModels
-//                        self.resortRoomsStable()
-//                        promise(.success(hydrated))
-//                    }
-//                }
-//            }
-//        }
-//        .eraseToAnyPublisher()
-//    }
-    
-//    func hydrateRooms(snaps: [RoomModel]) {
-//        let roomById = Dictionary(uniqueKeysWithValues: snaps.map { ($0.id, $0) })
-//        let hydrationQueue = DispatchQueue(label: "hydrations.consumer", qos: .userInitiated)
-//        
-//        DBManager.shared.streamRoomHydrations(sortKey: "lastServerTimestamp", ascending: false, limit: nil, batchSize: 1, batchDelay: 1.1)
-//            .receive(on: hydrationQueue)       // sink on bg
-//            .sink { [weak self] batch in
-//                guard self != nil else { return }
-//                for payload in batch {
-//                    guard let room = roomById[payload.id] else { continue }
-//                    
-//                    DispatchQueue.main.async {
-//                        room.hydrate(
-//                            currentUser: payload.currentUser,
-//                            creator: payload.creator,
-//                            createdAt: payload.createdAt,
-//                            avatarUrl: payload.avatarUrl,
-//                            lastMessage: payload.lastMessage,
-//                            lastSender: payload.lastSender,
-//                            lastSenderName: payload.lastSenderName,
-//                            unreadCount: payload.unreadCount,
-//                            joinedMembers: payload.joinedMembers,
-//                            invitedMembers: payload.invitedMembers,
-//                            leftMembers: payload.leftMembers,
-//                            bannedMembers: payload.bannedMembers,
-//                            admins: payload.admins,
-//                            stateEvents: payload.stateEvents,
-//                            serverTimestamp: payload.serverTimestamp,
-//                            lastServerTimestamp: payload.lastServerTimestamp
-//                        )
-//                    }
-//                }
-//            }
-//            .store(in: &cancellables)
-//    }
     
     func getRoomSummaryModel(roomId: String, events: [Event]) -> (RoomSummaryModel, Bool)? {
         if let roomSummaryModel = getExistingRoomSummaryModel(roomId: roomId) {
@@ -1749,7 +1680,11 @@ final class ChatRepository: ChatRepositoryProtocol {
                 let presenceChanged = zip(existingRoom.participants, updatedRoom.participants)
                     .contains { $0.isOnline != $1.isOnline || $0.lastSeen != $1.lastSeen }
                 if presenceChanged { existingRoom.participants = updatedRoom.participants }
-                if existingRoom.lastMessage != updatedRoom.lastMessage { existingRoom.lastMessage = updatedRoom.lastMessage }
+                if existingRoom.lastMessage != updatedRoom.lastMessage {
+                    existingRoom.lastMessage = updatedRoom.lastMessage
+                    existingRoom.lastMessageType = updatedRoom.lastMessageType
+                    existingRoom.serverTimestamp = updatedRoom.serverTimestamp
+                }
                 if existingRoom.unreadCount != updatedRoom.unreadCount { existingRoom.unreadCount = updatedRoom.unreadCount }
                 if existingRoom.avatarUrl != updatedRoom.avatarUrl { existingRoom.avatarUrl = updatedRoom.avatarUrl }
 
@@ -2041,7 +1976,7 @@ final class ChatRepository: ChatRepositoryProtocol {
             let l = activityTimestamp(for: lhs)
             let r = activityTimestamp(for: rhs)
             if l != r { return l > r }
-            return lhs.id < rhs.id
+            return lhs.id > rhs.id
         }
     }
     

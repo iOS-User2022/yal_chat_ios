@@ -31,6 +31,6 @@ struct HeaderView: View {
 
     /// Detects safe area inset (status bar height)
     private func safeAreaTop() -> CGFloat {
-        UIApplication.shared.windows.first?.safeAreaInsets.top ?? 0
+        UIApplication.shared.topSafeAreaInset
     }
 }

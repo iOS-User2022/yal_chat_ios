@@ -561,7 +561,7 @@ struct RoomListView: View {
                         navPath.removeLast()
                     }
                 },navPath: $navPath)
-            case .lockedRoom(rooms: let rooms):
+            case .lockedRoom(rooms: _):
                 LockedChatView(rooms: $viewModel.lockedRooms, navPath: $navPath)
             case .manageLockedChats:
                 ManageLockedChatsView(navPath: $navPath)

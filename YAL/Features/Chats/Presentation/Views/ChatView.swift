@@ -25,31 +25,47 @@ extension Notification.Name {
     static let deepLinkScrollToMessageProxy = Notification.Name("deepLinkScrollToMessageProxy")
 }
 
-private struct TopEdgeKey: PreferenceKey {
-    static var defaultValue: Bool = false
-    static func reduce(value: inout Bool, nextValue: () -> Bool) { value = nextValue() }
+private struct ViewportHeightKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
 }
 
-private struct TopEdgeWatcher: View {
-    let threshold: CGFloat
-    let onChange: (Bool) -> Void
+private struct ScrollOffsetKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
+}
 
-    var body: some View {
-        GeometryReader { geo in
-            let minY = geo.frame(in: .named("chatScroll")).minY
-            Color.clear
-                .preference(key: TopEdgeKey.self, value: minY >= threshold)
-//                .onChange(of: minY) { v in
-//                    print("TopEdgeWatcher minY:", v) // remove later
-//                }
-        }
-        .frame(height: 1)
-        .onPreferenceChange(TopEdgeKey.self, perform: onChange)
+private struct ContentHeightKey: PreferenceKey {
+    static var defaultValue: CGFloat = 1
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
+}
+
+private struct RowYKey: PreferenceKey {
+    static var defaultValue: [String: CGFloat] = [:] // eventId -> minY in "chatScroll"
+    static func reduce(value: inout [String: CGFloat], nextValue: () -> [String: CGFloat]) {
+        value.merge(nextValue(), uniquingKeysWith: { $1 })
     }
+}
+
+private struct RowHeightKey: PreferenceKey {
+    static var defaultValue: [String: CGFloat] = [:]  // eventId -> height
+    static func reduce(value: inout [String: CGFloat], nextValue: () -> [String: CGFloat]) {
+        value.merge(nextValue(), uniquingKeysWith: { $1 })
+    }
+}
+
+struct PendingAttachment: Identifiable, Equatable {
+    let id = UUID()
+    let fileURL: URL
+    let fileName: String
+    let mimeType: String
+    let size: Int64?
+    let localPreview: UIImage?
 }
 
 // MARK: - Main ChatView
 struct ChatView: View {
+    @State private var pendingAttachments: [PendingAttachment] = []
     @Environment(\.dismiss) private var dismiss
     @StateObject private var chatViewModel: ChatViewModel
     @StateObject private var keyboard = KeyboardResponder()
@@ -270,13 +286,22 @@ struct ChatView: View {
                                             showUnBlock = true
                                         }
                                     } else {
+                                        if !pendingAttachments.isEmpty {
+                                                AttachmentPreviewBar(pendingAttachments: $pendingAttachments)
+                                            }
                                         inputBar
                                     }
                                 } else {
+                                    if !pendingAttachments.isEmpty {
+                                            AttachmentPreviewBar(pendingAttachments: $pendingAttachments)
+                                        }
                                     inputBar
                                 }
                                 
                             } else {
+                                if !pendingAttachments.isEmpty {
+                                        AttachmentPreviewBar(pendingAttachments: $pendingAttachments)
+                                    }
                                 inputBar
                             }
                         }
@@ -337,20 +362,29 @@ struct ChatView: View {
                         
                         if mimeType.hasPrefix("image/") {
                             let preview: UIImage? = (try? Data(contentsOf: url)).flatMap(UIImage.init(data:))
-                            chatViewModel.uploadAndSendMediaMessage(
-                                fileURL: url,
-                                fileName: fileName,
-                                mimeType: mimeType,
-                                localPreview: preview
-                            )
+                            
+                            
+                            let attachment = PendingAttachment(fileURL: url,
+                                                         fileName: fileName,
+                                                               mimeType: mimeType,
+                                                               size: 0,
+                                                         localPreview: preview)
+                            DispatchQueue.main.async {
+                                pendingAttachments.append(attachment)
+                            }
+
                         } else if mimeType.hasPrefix("video/") {
-                            let thumb = videoThumbnail(url: url) // (func provided below)
-                            chatViewModel.uploadAndSendMediaMessage(
-                                fileURL: url,
-                                fileName: fileName,
-                                mimeType: mimeType,
-                                localPreview: thumb,
-                            )
+                            let thumb = videoThumbnail(url: url)
+
+                            let attachment = PendingAttachment(fileURL: url,
+                                                         fileName: fileName,
+                                                               mimeType: mimeType,
+                                                               size: 0,
+                                                         localPreview: thumb)
+                            DispatchQueue.main.async {
+                                pendingAttachments.append(attachment)
+                            }
+                            
                         }
                     }
                 }
@@ -399,25 +433,29 @@ struct ChatView: View {
                                 // Video/Audio: get duration using the non-deprecated API
                                 loadDurationSeconds(at: tempURL) { duration in
                                     let preview = contentType.conforms(to: .movie) ? makeVideoThumbnail(url: tempURL) : nil
-                                    chatViewModel.uploadAndSendMediaMessage(
-                                        fileURL: tempURL,
-                                        fileName: tempURL.lastPathComponent,
-                                        mimeType: mime,
-                                        duration: duration,
-                                        size: size,
-                                        localPreview: preview
-                                    )
+                                    
+                                    
+                                    let attachment = PendingAttachment(fileURL: tempURL,
+                                                                       fileName: tempURL.lastPathComponent,
+                                                                       mimeType: mime,
+                                                                       size: size,
+                                                                       localPreview: preview)
+                                    DispatchQueue.main.async {
+                                        pendingAttachments.append(attachment)
+                                    }
+
                                 }
                             } else {
                                 // Images / Documents (no duration needed)
-                                chatViewModel.uploadAndSendMediaMessage(
-                                    fileURL: tempURL,
-                                    fileName: tempURL.lastPathComponent,
-                                    mimeType: mime,
-                                    duration: nil,
-                                    size: size,
-                                    localPreview: contentType.conforms(to: .image) ? loadImagePreview(from: tempURL) : nil
-                                )
+                                
+                                let attachment = PendingAttachment(fileURL: tempURL,
+                                                                   fileName: tempURL.lastPathComponent,
+                                                                   mimeType: mime,
+                                                                   size: size,
+                                                                   localPreview: contentType.conforms(to: .image) ? loadImagePreview(from: tempURL) : nil)
+                                DispatchQueue.main.async {
+                                    pendingAttachments.append(attachment)
+                                }
                             }
                         }
 
@@ -540,6 +578,82 @@ struct ChatView: View {
         }
         .hideKeyboardOnTap()
     }
+
+    struct AttachmentPreviewBar: View {
+        @Binding var pendingAttachments: [PendingAttachment]
+
+        var body: some View {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 12) {
+
+                    ForEach(pendingAttachments) { file in
+                        HStack(spacing: 6) {
+
+                            // MARK: - Preview Thumbnail
+                            thumbnail(for: file)
+                                .scaledToFill()
+                                .frame(width: 45, height: 45)
+                                .clipped()
+                                .cornerRadius(8)
+
+                            // MARK: - File Name
+                            Text(file.fileName)
+                                .font(.system(size: 12))
+                                .lineLimit(1)
+                                .frame(maxWidth: 80, alignment: .leading)
+
+                            // MARK: - Remove Button
+                            Button {
+                                if let index = pendingAttachments.firstIndex(where: { $0.id == file.id }) {
+                                    pendingAttachments.remove(at: index)
+                                }
+                            } label: {
+                                Image(systemName: "xmark.circle.fill")
+                                    .foregroundColor(.gray)
+                            }
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(Color(.systemGray6))
+                        .cornerRadius(12)
+                    }
+
+                }
+                .padding(.horizontal)
+                .padding(.vertical, 8)
+            }
+            .background(Color.white)
+        }
+
+        // MARK: - Thumbnail Builder
+        @ViewBuilder
+        func thumbnail(for file: PendingAttachment) -> some View {
+
+            // Show local preview image if available (images/photos)
+            if let preview = file.localPreview {
+                Image(uiImage: preview)
+                    .resizable()
+            }
+
+            // Video preview placeholder
+            else if file.mimeType.contains("video") {
+                Image(systemName: "video.fill")
+                    .foregroundColor(.blue)
+            }
+
+            // PDF preview placeholder
+            else if file.mimeType.contains("pdf") {
+                Image(systemName: "doc.richtext.fill")
+                    .foregroundColor(.red)
+            }
+
+            // Generic file fallback
+            else {
+                Image(systemName: "doc.fill")
+                    .foregroundColor(.gray)
+            }
+        }
+    }
     
     private func handleMediaPickerSelection(type: MediaPickerType) {
         switch type {
@@ -596,8 +710,22 @@ struct ChatView: View {
             message: $chatViewModel.newMessage,
             senderName: .constant(senderName),
             inReplyTo: $inReplyTo,
+            pendingAttachments: $pendingAttachments,
             typingUsers: chatViewModel.typingUsers,
             onSend: {
+                
+                if !pendingAttachments.isEmpty {
+                    for file in pendingAttachments {
+                        chatViewModel.uploadAndSendMediaMessage(
+                            fileURL: file.fileURL,
+                            fileName: file.fileName,
+                            mimeType: file.mimeType,
+                            localPreview: file.localPreview
+                        )
+                    }
+                    pendingAttachments.removeAll()
+                }
+
                 chatViewModel.sendMessage(toRoom: selectedRoom.id, inReplyTo: inReplyTo)
                 inReplyTo = nil
             },
@@ -674,266 +802,411 @@ struct MessagesSection: View {
     @Binding var selectedMessage: ChatMessageModel?
     @Binding var previousMessage: ChatMessageModel?
     @Binding var bubbleFrame: CGRect?
+    
     @State private var screenWidth: CGFloat = UIScreen.main.bounds.width
     @Namespace var bottomID
     var nsPopover: Namespace.ID
+    
     @Binding var searchString: String
     @Binding var isForwarding: Bool
     @State private var scrollProxy: ScrollViewProxy? = nil
+    
     @State private var searchResultEventIDs: [String] = []
     @State private var currentSearchIndex: Int = 0
     @Binding var resultCount: Int
     @State private var highlightedEventID: String? = nil
     @Binding var showNoResultsAlert: Bool
     @Binding var showScrollToBottomButton: Bool
+    
     var onURLTapped: ((String) -> Void)? = nil
 
     @State private var didAddObservers = false
     @State private var nextObserver: NSObjectProtocol?
     @State private var prevObserver: NSObjectProtocol?
     @State private var bottomObserver: NSObjectProtocol?
-    @State private var pendingAutoscroll = false
-    @State private var didInitialScroll = false
-    @State private var userIsDragging = false
-    @State private var lastTopTrigger: CFAbsoluteTime = 0
-    private let topTriggerCooldown: CFTimeInterval = 0.8
+    
+    @State private var viewportHeight: CGFloat = 1
+    
+    @State private var contentHeight: CGFloat = 1
+    @State private var offsetFromTop: CGFloat = 0
+    
+    @State private var rowYs: [String: CGFloat] = [:]
+    @State private var barProgressState: CGFloat = 0   // 0 bottom → 1 top
+    @State private var barThumbState: CGFloat = 0.15   // default thumb size
+    
+    @State private var measuredHeights: [String: CGFloat] = [:]
+    @State private var smoothedProgress: CGFloat = 0
+    @State private var smoothedThumb: CGFloat = 0
+    @State private var isAtBottom: Bool = true
+    @State private var userDragging = false
+    @State private var overscrollFromBottom: CGFloat = 0 // > 0 only when pulled past visual bottom
+    
+    private let smoothT: CGFloat = 0.25  // 0..1 (higher = snappier)
+    private func lerp(_ a: CGFloat, _ b: CGFloat, t: CGFloat) -> CGFloat { a + (b - a) * t }
     
     var body: some View {
         ScrollViewReader { proxy in
-            ScrollView(showsIndicators: true) {
-                LazyVStack(spacing: 20) {
-                    TopEdgeWatcher(threshold: 12) { isAtTop in
-                        guard isAtTop,
-                              userIsDragging,
-                              chatViewModel.didLoadMessages,
-                              didInitialScroll,
-                              !chatViewModel.isPagingTop
-                        else { return }
-
-                        let now = CFAbsoluteTimeGetCurrent()
-                        guard now - lastTopTrigger > topTriggerCooldown else { return }
-                        lastTopTrigger = now
-                        chatViewModel.loadOlderIfNeeded()
-                    }
-                    
-                    if chatViewModel.isPagingTop {
-                        ProgressView().padding(.vertical, 8)
-                    }
-
-                    ForEach(groupedMessages, id: \.date) { section in
-                        Text(section.title)
-                            .font(.caption)
-                            .foregroundColor(.gray)
-                            .padding(.vertical, 4)
-                        
-                        ForEach(section.messages.indices, id: \.self) { index in
-                            let message = section.messages[index]
-                            let previous = index > 0 ? section.messages[index - 1] : nil
-                            let isHighlighted = message.eventId == highlightedEventID
-                            Group {
-                                MessageView(
-                                    message: message,
-                                    previousMessage: previous,
-                                    isGroupChat: selectedRoom.isGroup,
-                                    members: selectedRoom.participants,
-                                    screenWidth: screenWidth,
-                                    onDownloadNeeded: { chatViewModel.fetchMedia(for: $0) },
-                                    onMessageRead: {
-                                        chatViewModel.markMessageAsRead(roomId: selectedRoom.id, eventId: $0.eventId)
-                                    },
-                                    onLongPress: {
-                                        if selectedRoom.isLeft {
-                                            withAnimation {
-                                                chatViewModel.showNotAMemberBar = true
-                                            }
-                                        } else {
-                                            if (message.content != thisMessageWasDeleted) {
-                                                hideKeyboard()
-                                                selectedMessage = $0
-                                                previousMessage = previous
-                                                UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
-                                                withAnimation(.easeInOut) {
-                                                    proxy.scrollTo(message.eventId, anchor: .center)
-                                                }
-                                            }
-                                        }
-                                    },
-                                    onScrollToMessage: { eventId in
-                                        DispatchQueue.main.async {
-                                            withAnimation(.easeInOut(duration: 0.2)) {
-                                                proxy.scrollTo(eventId, anchor: .bottom)
-                                            }
-                                        }
-                                    },
-                                    selectedEventId: selectedMessage?.eventId,
-                                    isForwarding: isForwarding,
-                                    onToggleChange: {
-                                        chatViewModel.toggleMessageSelection()
-                                    },
-                                    onURLTapped: onURLTapped
-                                )
-                                .matchedGeometryIf(
-                                    selectedMessage != nil,
-                                    id: message.eventId,
-                                    in: nsPopover,
-                                    properties: .frame,
-                                    anchor: .topLeading,
-                                    isSource: true
-                                )
-                                .background(isHighlighted ? AnyView(Design.Color.blueGradient.opacity(0.8)) : AnyView(Color.clear))
-                                .animation(.easeInOut(duration: 0.3), value: highlightedEventID)
-                            }
-                            .padding(.bottom, 8)
-                            .transition(.opacity)
-                            .animation(.easeInOut(duration: 0.3), value: chatViewModel.typingUsers)
-                            .id(message.eventId)
-                        }
-                    }
-                    Color.clear.frame(height: 1).id(bottomID)
-                        .onAppear {
-                            showScrollToBottomButton = false
-                        }
-                        .onDisappear {
-                            showScrollToBottomButton = true
-                        }
-                }
-                .onReceive(chatViewModel.$sections) { _ in
-                    if !didInitialScroll {
-                        didInitialScroll = true
-                        scrollToBottomEnsuringLayout(proxy)
-                    }
-//                    else if chatViewModel.isPagingTop {
-//                        // pin back to the same first id when paging up
-//                        var tx = Transaction(); tx.disablesAnimations = true
-//                        withTransaction(tx) { proxy.scrollTo(eventId, anchor: .top) }
+            ZStack(alignment: .trailing) {
+                ScrollView(showsIndicators: false) {
+//                    GeometryReader { g in
+//                        let f = g.frame(in: .named("chatScroll"))
+//                        Color.clear
+//                            .preference(key: ScrollOffsetKey.self, value: f.maxY) // use maxY for inverted lists
 //                    }
-                }
-                .onReceive(chatViewModel.$messages.map { $0.last?.eventId }.removeDuplicates()) { _ in
-                    if didInitialScroll && !showScrollToBottomButton {
-                        scrollToBottomEnsuringLayout(proxy)
-                    }
-                }
-                // when existing messages mutate height (image replaces placeholder), pin if at bottom
-                .onReceive(chatViewModel.$messages) { _ in
-                    if didInitialScroll && !showScrollToBottomButton {
-                        scrollToBottomEnsuringLayout(proxy)
-                    }
-                }
-                .onChange(of: chatViewModel.typingUsers) { newUsers in
-                    guard !newUsers.isEmpty else {
-                        // When indicator disappears, scroll to last message normally
-                        withAnimation {
-                            proxy.scrollTo(bottomID, anchor: .bottom)
+//                    .frame(height: 1)
+                    
+                    LazyVStack(spacing: 20) {
+                        // Anchor that represents the *visual* bottom of the chat
+                        Color.clear
+                            .frame(height: 1)
+                            .id(bottomID)
+                            .background(
+                                GeometryReader { gp in
+                                    let bottomMaxY = gp.frame(in: .named("chatScroll")).maxY
+                                    Color.clear.preference(key: ScrollOffsetKey.self, value: bottomMaxY)
+                                }
+                            )
+                            .onAppear   { isAtBottom = true;  showScrollToBottomButton = false }
+                            .onDisappear{ isAtBottom = false; showScrollToBottomButton = true }
+                        
+                        // We render sections in *reverse* order and messages in *reverse* order.
+                        // After the 180° rotation of the stack, the on-screen order becomes:
+                        //   - Days ascending
+                        //   - Headers above their messages
+                        //   - Messages within a day from oldest → newest.
+                        ForEach(chatViewModel.sections, id: \.date) { section in
+                            sectionView(section, proxy: proxy)
                         }
-                        return
-                    }
-                }
-                .onChange(of: searchString) { newValue in
-                    updateSearchResults(for: newValue)
-                }
-                // Only show spacer if a message is selected
-                if selectedMessage != nil {
-                    Spacer()
-                        .frame(height: 250)
-                        .transition(.opacity) // optional: smooth fade
-                }
-            }
-            .onReceive(NotificationCenter.default.publisher(for: .deepLinkScrollToMessageProxy)) { note in
-                if let messageId = note.userInfo?["messageId"] as? String {
-                    withAnimation(.easeInOut(duration: 0.25)) {
-                        proxy.scrollTo(messageId, anchor: .center)
-                    }
-                    highlightMessage(messageId)
-                }
-            }
-            .background(Design.Color.appGradient.opacity(0.2))
-            .onAppear {
-                scrollProxy = proxy
-                addObserversIfNeeded()
-                //scrollToBottom(proxy: proxy)
-            }
-            .onDisappear {
-                removeObservers()
-            }
-            .overlay(
-                GeometryReader { geo in
-                    Color.clear
-                        .onAppear {
-                            screenWidth = geo.size.width
+                        
+                        if chatViewModel.isPagingTop {
+                            ProgressView()
+                                .padding(.vertical, 8)
+                                .rotationEffect(.degrees(180))
                         }
-                }
-                    .frame(height: 0)
-            )
-            .overlay(
-                Group {
-                    if chatViewModel.showNotAMemberBar {
-                        ZStack {
-                            // Dimmed background
-                            Color.black.opacity(0.4)
-                                .ignoresSafeArea()
-                                .onTapGesture { } // disable taps on background
-
-                            // Centered alert
-                            VStack(spacing: 20) {
-                                NotAMemberBar(
-                                    title: "You can't react to messages,",
-                                    description: "you are no longer a member."
-                                )
-
-                                Button(action: {
-                                    withAnimation {
-                                        chatViewModel.showNotAMemberBar = false
+                        
+                        // Extra spacer when a message is selected (for context menu)
+                        if selectedMessage != nil {
+                            Spacer()
+                                .frame(height: 250)
+                                .transition(.opacity)
+                                .rotationEffect(.degrees(180))
+                        }
+                    }
+//                    .background(
+//                        GeometryReader { g in
+//                            let rect = g.frame(in: .named("chatScroll"))
+//                            Color.clear
+//                                .preference(key: ContentHeightKey.self, value: rect.height) // full scrollable content height:
+//                                .preference(key: ScrollOffsetKey.self, value: rect.maxY) // where the bottom of the content is, relative to the viewport:
+//                        }
+//                    )
+                    // Invert the entire list so newest logically ends up at the visual bottom
+                    .onChange(of: searchString) { newValue in
+                        updateSearchResults(for: newValue)
+                    }
+                    .onReceive(
+                        NotificationCenter.default.publisher(
+                            for: .deepLinkScrollToMessageProxy
+                        )
+                    ) { note in
+                        if let messageId = note.userInfo?["messageId"] as? String {
+                            withAnimation(.easeInOut(duration: 0.25)) {
+                                proxy.scrollTo(messageId, anchor: .center)
+                            }
+                            highlightMessage(messageId)
+                        }
+                    }
+                    // When the newest message changes (first in descending array),
+                    // keep pinned to bottom if the user is already there.
+                    .onReceive(chatViewModel.$messages.map(\.count).removeDuplicates()) { _ in
+                        guard isAtBottom && !userDragging else {
+                            showScrollToBottomButton = true
+                            return
+                        }
+                        DispatchQueue.main.async {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                proxy.scrollTo(bottomID, anchor: .bottom)
+                            }
+                        }
+                    }
+                    .onAppear {
+                        scrollProxy = proxy
+                        addObserversIfNeeded()
+                    }
+                    .onDisappear {
+                        removeObservers()
+                    }
+                    .overlay(
+                        GeometryReader { geo in
+                            Color.clear
+                                .onAppear {
+                                    screenWidth = geo.size.width
+                                }
+                        }
+                            .frame(height: 0)
+                    )
+                    .overlay(
+                        Group {
+                            if chatViewModel.showNotAMemberBar {
+                                ZStack {
+                                    Color.black.opacity(0.4)
+                                        .ignoresSafeArea()
+                                        .onTapGesture { }
+                                    
+                                    VStack(spacing: 20) {
+                                        NotAMemberBar(
+                                            title: "You can't react to messages,",
+                                            description: "you are no longer a member."
+                                        )
+                                        
+                                        Button(action: {
+                                            withAnimation {
+                                                chatViewModel.showNotAMemberBar = false
+                                            }
+                                        }) {
+                                            Text("Dismiss")
+                                                .font(.headline)
+                                                .foregroundColor(.white)
+                                                .padding()
+                                                .frame(maxWidth: .infinity)
+                                                .background(Color.red)
+                                                .cornerRadius(12)
+                                        }
                                     }
-                                }) {
-                                    Text("Dismiss")
-                                        .font(.headline)
-                                        .foregroundColor(.white)
-                                        .padding()
-                                        .frame(maxWidth: .infinity)
-                                        .background(Color.red)
-                                        .cornerRadius(12)
+                                    .padding(.horizontal, 40)
+                                }
+                                .transition(.opacity.combined(with: .scale))
+                            }
+                        }
+                    )
+                }
+                .simultaneousGesture(
+                    DragGesture(minimumDistance: 1)
+                        .onChanged { _ in userDragging = true }
+                        .onEnded { _ in
+                            userDragging = false
+                            if overscrollFromBottom > 0 {
+                                withAnimation(.interactiveSpring(response: 0.2, dampingFraction: 0.9)) {
+                                    scrollProxy?.scrollTo(bottomID, anchor: .bottom)
                                 }
                             }
-                            .padding(.horizontal, 40)
                         }
-                        .transition(.opacity.combined(with: .scale))
+                )
+                .coordinateSpace(name: "chatScroll")
+                .overlay(
+                    GeometryReader { g in
+                        Color.clear.preference(key: ViewportHeightKey.self, value: g.size.height)
                     }
+                )
+                .rotationEffect(.degrees(180))
+                .background(
+                    GeometryReader { g in
+                        Color.clear.preference(key: ViewportHeightKey.self, value: g.size.height)
+                    }
+                )
+                .compositingGroup()
+
+                CustomScrollBar(
+                    progress: barProgressState,
+                    thumbRatio: barThumbState,
+                    onDrag: { pTop in
+                        let msgs = messagesAscending
+                        guard !msgs.isEmpty else { return }
+                        let idx = Int(pTop * CGFloat(msgs.count - 1))
+                        let id  = msgs[idx].eventId
+                        withAnimation(.easeInOut(duration: 0.15)) {
+                            scrollProxy?.scrollTo(id, anchor: .center)
+                        }
+                    }
+                )
+                .animation(.interactiveSpring(response: 0.18, dampingFraction: 0.88), value: barProgressState)
+                .animation(.interactiveSpring(response: 0.18, dampingFraction: 0.88), value: barThumbState)
+                .padding(.trailing, 2)
+                .padding(.vertical, 4)
+                .zIndex(1000)
+            }
+            .background(Design.Color.appGradient.opacity(0.2))
+            .onPreferenceChange(ContentHeightKey.self) { contentHeight = $0 }
+            .onPreferenceChange(ViewportHeightKey.self) { viewportHeight = $0 }
+            .onPreferenceChange(ScrollOffsetKey.self) { maxY in
+                overscrollFromBottom = max(viewportHeight - maxY, 0)
+            }
+            .onPreferenceChange(RowYKey.self) { positions in
+                rowYs = positions
+
+                let visibleSorted = rowYs.sorted(by: { $0.value < $1.value }).map(\.key)
+                guard let topId = visibleSorted.first, let botId = visibleSorted.last else { return }
+
+                let total = messagesAscending.count
+                guard total > 1 else {
+                    smoothedProgress = 1; smoothedThumb = 1
+                    barProgressState = smoothedProgress
+                    barThumbState    = smoothedThumb
+                    return
                 }
-            )
+
+                // Indices in ascending (oldest→newest)
+                guard let topIdx = messagesAscending.firstIndex(where: { $0.eventId == topId }),
+                      let botIdx = messagesAscending.firstIndex(where: { $0.eventId == botId }) else { return }
+
+                // Center-of-window progress (less jitter than “first visible only”)
+                let centerIdx = (topIdx + botIdx) / 2
+                let computedProgress = CGFloat(centerIdx) / CGFloat(total - 1)
+
+                // Estimate total content height:
+                let seenHeights = measuredHeights.values
+                let avgH = (seenHeights.isEmpty ? 56 : seenHeights.reduce(0,+)/CGFloat(seenHeights.count)) // sensible default
+                let totalMeasured = messagesAscending.reduce(0) { $0 + (measuredHeights[$1.eventId] ?? 0) }
+                let remainingCount = total - measuredHeights.count
+                let estimatedTotalH = totalMeasured + CGFloat(remainingCount) * avgH
+
+                // Visible span height (top..bottom visible ids)
+                let visibleSet = Set(visibleSorted)
+                let visibleH = messagesAscending.reduce(0) { acc, msg in
+                    acc + (visibleSet.contains(msg.eventId) ? (measuredHeights[msg.eventId] ?? avgH) : 0)
+                }
+
+                // Thumb ratio = visible height / total height (clamped)
+                let computedThumb = min(max(estimatedTotalH > 0 ? (visibleH / estimatedTotalH) : 0.15, 0.05), 1.0)
+
+                // Optional: flip direction so thumb moves opposite to content motion
+                let displayProgress = 1 - computedProgress
+
+                // Low-pass smooth to kill jitter
+                smoothedProgress = lerp(smoothedProgress, displayProgress, t: smoothT)
+                smoothedThumb    = lerp(smoothedThumb, computedThumb,    t: smoothT)
+
+                barProgressState = smoothedProgress
+                barThumbState    = smoothedThumb
+
+                // Debug (remove later)
+                // print("prog:", barProgressState, "thumb:", barThumbState, "avgH:", avgH, "estTotalH:", estimatedTotalH)
+            }
+
         }
         .onPreferenceChange(MessageBubbleAnchorKey.self) { value in
             bubbleFrame = value
         }
-        .coordinateSpace(name: "chatScroll")
-        .simultaneousGesture(
-            DragGesture()
-                .onChanged { _ in userIsDragging = true }
-                .onEnded { _ in
-                    // settle a moment after finger lifts
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                        userIsDragging = false
-                    }
-                }
-        )
+        .onPreferenceChange(RowHeightKey.self) { measuredHeights.merge($0, uniquingKeysWith: { $1 }) }
+    }
+}
+
+// MARK: - Helpers / Grouping / Search
+extension MessagesSection {
+    // Oldest message in the entire list (by timestamp)
+    private var oldestMessageId: String? {
+        chatViewModel.messages.min(by: { $0.timestamp < $1.timestamp })?.eventId
     }
     
-    // 1) Put this helper inside MessagesSection
-    private func scrollToBottomEnsuringLayout(_ proxy: ScrollViewProxy) {
-        let jump = {
-            var tx = Transaction()
-            tx.disablesAnimations = true
-            withTransaction(tx) {
-                proxy.scrollTo(bottomID, anchor: .bottom)
+    // Break large inner expression into a smaller section builder
+    @ViewBuilder
+    private func sectionView(_ section: MessageSection, proxy: ScrollViewProxy) -> some View {
+        ForEach(section.messages, id: \.eventId) { message in
+            messageRow(message, section: section, proxy: proxy)
+        }
+        
+        // Date header (will appear ABOVE its messages on screen after inversion)
+        Text(section.title)
+            .font(.caption)
+            .foregroundColor(.gray)
+            .padding(.vertical, 4)
+            .rotationEffect(.degrees(180))
+    }
+    
+    // And each message row into its own builder
+    @ViewBuilder
+    private func messageRow(
+        _ message: ChatMessageModel,
+        section: MessageSection,
+        proxy: ScrollViewProxy
+    ) -> some View {
+        let previous = previousMessage(in: section, for: message)
+        let isHighlighted = message.eventId == highlightedEventID
+        
+        Group {
+            MessageView(
+                message: message,
+                previousMessage: previous,
+                isGroupChat: selectedRoom.isGroup,
+                members: selectedRoom.participants,
+                screenWidth: screenWidth,
+                onDownloadNeeded: { chatViewModel.fetchMedia(for: $0) },
+                onMessageRead: {
+                    chatViewModel.markMessageAsRead(
+                        roomId: selectedRoom.id,
+                        eventId: $0.eventId
+                    )
+                },
+                onLongPress: {
+                    if selectedRoom.isLeft {
+                        withAnimation {
+                            chatViewModel.showNotAMemberBar = true
+                        }
+                    } else if message.content != thisMessageWasDeleted {
+                        hideKeyboard()
+                        selectedMessage = $0
+                        previousMessage = previous
+                        UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
+                        
+                        withAnimation(.easeInOut) {
+                            proxy.scrollTo(message.eventId, anchor: .center)
+                        }
+                    }
+                },
+                onScrollToMessage: { eventId in
+                    DispatchQueue.main.async {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            proxy.scrollTo(eventId, anchor: .bottom)
+                        }
+                    }
+                },
+                selectedEventId: selectedMessage?.eventId,
+                isForwarding: isForwarding,
+                onToggleChange: {
+                    chatViewModel.toggleMessageSelection()
+                },
+                onURLTapped: onURLTapped
+            )
+            .matchedGeometryIf(
+                selectedMessage != nil,
+                id: message.eventId,
+                in: nsPopover,
+                properties: .frame,
+                anchor: .topLeading,
+                isSource: true
+            )
+            .background(
+                Group {
+                    if isHighlighted {
+                        Design.Color.blueGradient.opacity(0.8)
+                    } else {
+                        Color.clear
+                    }
+                }
+            )
+            .background(
+                GeometryReader { geo in
+                    let frame = geo.frame(in: .named("chatScroll"))
+                    Color.clear
+                        .preference(key: RowYKey.self, value: [message.eventId: frame.minY])
+                        .preference(key: RowHeightKey.self, value: [message.eventId: frame.height])
+                }
+            )
+        }
+        .padding(.bottom, 8)
+        .transition(.opacity)
+        .animation(.easeInOut(duration: 0.3),
+                   value: chatViewModel.typingUsers)
+        .id(message.eventId)
+        .onAppear {
+            chatViewModel.rowAppeared(message.eventId)
+            if showScrollToBottomButton,
+               message.eventId == oldestMessageId {
+                chatViewModel.loadOlderIfNeeded()
             }
         }
-        // multiple passes to catch late layout (image decode, async heights)
-        DispatchQueue.main.async {
-            jump()
-            DispatchQueue.main.async {
-                jump()
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.03) { jump() }
-            }
-        }
+        .onDisappear { chatViewModel.rowDisappeared(message.eventId) }
+        .rotationEffect(.degrees(180))
     }
     
     func highlightMessage(_ id: String) {
@@ -951,13 +1224,6 @@ struct MessagesSection: View {
                 }
             } else {
                 scrollProxy?.scrollTo(eventID, anchor: .bottom)
-            }
-        }
-    }
-    private func scrollToBottom(proxy: ScrollViewProxy) {
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-            withAnimation(.easeInOut(duration: 0.2)) {
-                proxy.scrollTo(bottomID, anchor: .bottom)
             }
         }
     }
@@ -987,7 +1253,9 @@ struct MessagesSection: View {
             queue: .main
         ) { _ in
             if let scrollProxy = scrollProxy {
-                scrollToBottom(proxy: scrollProxy)
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    scrollProxy.scrollTo(bottomID, anchor: .bottom)
+                }
             }
         }
 
@@ -1013,7 +1281,6 @@ struct MessagesSection: View {
         didAddObservers = false
     }
 
-    
     private func updateSearchResults(for text: String) {
         guard !text.isEmpty else {
             searchResultEventIDs = []
@@ -1024,19 +1291,16 @@ struct MessagesSection: View {
             return
         }
 
-        // Filter matching messages
-        let filtered = chatViewModel.messages.filter { $0.isSelectedFromSearch(searchString: text) }
+        let filtered = chatViewModel.messages.filter {
+            $0.isSelectedFromSearch(searchString: text)
+        }
         searchResultEventIDs = filtered.map { $0.eventId }
         currentSearchIndex = 0
         resultCount = searchResultEventIDs.count
         highlightedEventID = searchResultEventIDs.first
         
-        if resultCount <= 0 {
-            showNoResultsAlert = true
-        } else {
-            showNoResultsAlert = false
-        }
-        // Scroll to first match
+        showNoResultsAlert = (resultCount == 0)
+        
         if let firstID = searchResultEventIDs.first {
             scrollToMessage(eventID: firstID)
         }
@@ -1045,39 +1309,77 @@ struct MessagesSection: View {
     private func scrollToPreviousSearchResult() {
         guard !searchResultEventIDs.isEmpty else { return }
         currentSearchIndex = max(currentSearchIndex - 1, 0)
-        highlightedEventID = searchResultEventIDs[currentSearchIndex]
-        scrollToMessage(eventID: searchResultEventIDs[currentSearchIndex])
+        let id = searchResultEventIDs[currentSearchIndex]
+        highlightedEventID = id
+        scrollToMessage(eventID: id)
     }
 
     private func scrollToNextSearchResult() {
         guard !searchResultEventIDs.isEmpty else { return }
         currentSearchIndex = min(currentSearchIndex + 1, searchResultEventIDs.count - 1)
-        highlightedEventID = searchResultEventIDs[currentSearchIndex]
-        scrollToMessage(eventID: searchResultEventIDs[currentSearchIndex])
+        let id = searchResultEventIDs[currentSearchIndex]
+        highlightedEventID = id
+        scrollToMessage(eventID: id)
     }
     
     func shouldShowSenderInfo(current: ChatMessageModel, previous: ChatMessageModel?) -> Bool {
-        guard let previous = previous else { return true } // Always show for first message
+        guard let previous = previous else { return true }
         return previous.sender != current.sender
     }
     
-    // MARK: - Group Messages by Day
+    // MARK: - Group Messages by Day (logical order: oldest → newest)
     var groupedMessages: [MessageSection] {
+        guard !chatViewModel.messages.isEmpty else { return [] }
+        
         func startOfDay(_ d: Date) -> Date {
             Calendar.current.startOfDay(for: d)
         }
+
+        var sections: [MessageSection] = []
         
-        let dict = Dictionary(grouping: chatViewModel.messages) { msg in
-            startOfDay(Date(timeIntervalSince1970: TimeInterval(msg.timestamp) / 1000))
+        // We build sections in ascending time (oldest to newest).
+        // `messages` in the VM are descending (newest first), so we sort ascending.
+        let sorted = chatViewModel.messages.sorted { $0.timestamp < $1.timestamp }
+        
+        var currentDate: Date?
+        var currentMessages: [ChatMessageModel] = []
+        
+        for msg in sorted {
+            let date = Date(timeIntervalSince1970: TimeInterval(msg.timestamp) / 1000)
+            let day = startOfDay(date)
+            
+            if currentDate == nil {
+                currentDate = day
+            }
+            
+            if day != currentDate {
+                if let d = currentDate {
+                    sections.append(
+                        MessageSection(
+                            date: d,
+                            title: headerTitle(for: d),
+                            messages: currentMessages
+                        )
+                    )
+                }
+                currentDate = day
+                currentMessages = [msg]
+            } else {
+                currentMessages.append(msg)
+            }
         }
         
-        return dict.keys.sorted().map { day in
-            MessageSection(
-                date: day,
-                title: headerTitle(for: day),
-                messages: dict[day]!.sorted(by: { $0.timestamp < $1.timestamp })
+        if let d = currentDate {
+            sections.append(
+                MessageSection(
+                    date: d,
+                    title: headerTitle(for: d),
+                    messages: currentMessages
+                )
             )
         }
+        
+        return sections
     }
     
     func headerTitle(for day: Date) -> String {
@@ -1088,6 +1390,17 @@ struct MessagesSection: View {
         return fmt.string(from: day)
     }
     
+    // Previous message in *logical* (oldest→newest) order for this section.
+    // This is used for grouping bubbles & deciding whether to show sender info.
+    private func previousMessage(in section: MessageSection, for message: ChatMessageModel) -> ChatMessageModel? {
+        guard let idx = section.messages.firstIndex(where: { $0.eventId == message.eventId }),
+              idx > 0 else {
+            return nil
+        }
+        return section.messages[idx - 1]
+    }
+    
+    // MARK: - Wrapper around Sender / Receiver views
     @ViewBuilder
     private func MessageView(
         message: ChatMessageModel,
@@ -1116,9 +1429,7 @@ struct MessagesSection: View {
                 senderName: senderName ?? "",
                 senderAvatarURL: senderAvatarURL,
                 showSenderInfo: showSenderInfo,
-                onAvatarTap: {
-                    // Show user profile
-                },
+                onAvatarTap: {},
                 onDownloadNeeded: onDownloadNeeded,
                 onTap: {},
                 onLongPress: { onLongPress(message) },
@@ -1126,10 +1437,11 @@ struct MessagesSection: View {
                 onScrollToMessage: { eventId in
                     onScrollToMessage?(eventId)
                 },
-                onURLTapped: onURLTapped, onToggleChange: {
+                onURLTapped: onURLTapped,
+                onToggleChange: {
                     onToggleChange()
                 },
-                selectedEventId: selectedMessage?.eventId,
+                selectedEventId: selectedEventId,
                 searchText: searchString,
                 isForwarding: isForwarding
             )
@@ -1149,7 +1461,7 @@ struct MessagesSection: View {
                 onScrollToMessage: { eventId in
                     onScrollToMessage?(eventId)
                 },
-                selectedEventId: selectedMessage?.eventId,
+                selectedEventId: selectedEventId,
                 searchText: searchString,
                 isForwarding: isForwarding,
                 onToggleChange: {
@@ -1164,11 +1476,19 @@ struct MessagesSection: View {
     }
     
     private func loadProfileImage() -> String {
-        if let profile = Storage.get(for: .cachedProfile, type: .userDefaults, as: EditableProfile.self),
+        if let profile = Storage.get(
+            for: .cachedProfile,
+            type: .userDefaults,
+            as: EditableProfile.self
+        ),
            let imageUrlString = profile.profileImageUrl {
             return imageUrlString
         }
         return ""
+    }
+    
+    private var messagesAscending: [ChatMessageModel] {
+        chatViewModel.messages.sorted { $0.timestamp < $1.timestamp }
     }
 }
 
@@ -1452,4 +1772,39 @@ enum MediaPickerType {
 private struct URLWrapper: Identifiable {
     let id = UUID()
     let urlString: String
+}
+
+struct CustomScrollBar: View {
+    var progress: CGFloat      // 0 (bottom) … 1 (top)
+    var thumbRatio: CGFloat    // viewportHeight / contentHeight
+    var onDrag: (CGFloat) -> Void
+
+    var body: some View {
+        GeometryReader { geo in
+            let trackH = geo.size.height
+            let thumbH = max(32, trackH * thumbRatio)
+            let clampedP = min(max(progress, 0), 1)
+            let y = (trackH - thumbH) * (1 - clampedP)
+            
+            ZStack(alignment: .top) {
+                Capsule().fill(Color.clear)
+                Capsule()
+                    .fill(.ultraThickMaterial)
+                    //.opacity(0.10)
+                    .frame(height: thumbH)
+                    .offset(y: y)
+                    .gesture(
+                        DragGesture(minimumDistance: 0)
+                            .onChanged { v in
+                                let y = min(max(v.location.y - thumbH / 2, 0), trackH - thumbH)
+                                let p = y / max(trackH - thumbH, 1) // 0…1 (top progress)
+                                onDrag(p)
+                            }
+                    )
+            }
+        }
+        .frame(width: 4)
+        .cornerRadius(2)
+        .shadow(radius: 1, y: 1)
+    }
 }

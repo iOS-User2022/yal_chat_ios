@@ -7,6 +7,7 @@
 
 import SwiftUI
 import SDWebImageSwiftUI
+import AVKit
 
 struct SenderMessageView: View {
     @EnvironmentObject var chatViewModel: ChatViewModel
@@ -14,6 +15,7 @@ struct SenderMessageView: View {
     let senderName: String?
     @State private var downloadRequested = false
     @State private var isVideoPlayerPresented = false
+    @State private var progressQ: Double = 0
 
     var onDownloadNeeded: ((ChatMessageModel) -> Void)?
     var onTap: (() -> Void)?
@@ -80,14 +82,14 @@ struct SenderMessageView: View {
                             textSection
                         }
                         
-                        // URL Preview for sent messages (WhatsApp style - shows preview only)
+                        // URL Preview for sent messages
                         if message.containsURL, let urlString = message.firstURL {
                             URLPreviewForMessage(
                                 urlString: urlString,
                                 message: message,
                                 onURLTapped: onURLTapped
                             )
-                            .frame(maxWidth: .infinity, alignment: .trailing)
+                            .frame(maxWidth: 250, alignment: .trailing)
                             .padding(.horizontal, 8)
                             .padding(.top, message.containsURL && !message.contentWithoutURLs.isEmpty ? 0 : 8)
                         }
@@ -96,6 +98,11 @@ struct SenderMessageView: View {
                     timestampSection
                 }
             }
+            .onReceive(
+                message.$downloadProgress
+                    .map { MediaDecodeHelper.quantizeProgress($0, steps: 20) }
+                    .removeDuplicates()
+            ) { progressQ = $0 }
             .background(
                 ZStack {
                     bubbleBackground
@@ -174,17 +181,20 @@ struct SenderMessageView: View {
             mediaURL: message.mediaUrl ?? "",
             userName: "You",
             timeText: formattedTime(message.timestamp),
-            mediaType: mediaType,
+            mediaType: MediaType(rawValue: message.msgType) ?? .image,
             placeholder: placeholderWithProgress,
             errorView: errorView,
             isSender: true,
             downloadedImage: UIImage(),
             senderImage: senderImage,
             localURLOverride: localOverride,
-            externalProgress: message.downloadProgress,
+            externalProgress: progressQ,
             isUploading: (message.messageStatus == .sending) || (message.downloadState == .downloading)
         )
-        .frame(width: mediaType == .audio ? 260 : nil)
+        .frame(
+            width: mediaType == .audio ? 260 : 220,
+            height: (mediaType == .image || mediaType == .video || mediaType == .gif) ? 215: 56
+        )
         .fixedSize(horizontal: mediaType != .audio, vertical: false)
         .padding(.horizontal, 4)
         .padding(.top, 4)
@@ -203,6 +213,38 @@ struct SenderMessageView: View {
         .frame(width: 220, height: 215)
         .background(Color(.systemGray6))
         .cornerRadius(8)
+    }
+    
+    // MARK: - Media Content
+    @ViewBuilder
+    private func mediaContent(from url: URL) -> some View {
+        let cornerShape = CustomRoundedCornersShape(radius: 8, roundedCorners: [.topLeft, .topRight])
+        
+        if message.isImageMessage {
+            DownsampledLocalImage(url: url, maxPixel: 500)
+                .frame(width: 220, height: 215)
+                .scaledToFit()
+                .clipShape(cornerShape)
+                .clipped()
+        } else if message.isVideoMessage {
+            DownsampledVideoPoster(url: url, maxPixel: 500)
+                .frame(width: 220, height: 215)
+                .clipShape(cornerShape)
+                .onTapGesture { isVideoPlayerPresented = true }
+                .sheet(isPresented: $isVideoPlayerPresented) {
+                    AVPlayerView(player: AVPlayer(url: url))
+                }
+        } else if message.isFileMessage {
+            HStack {
+                Image(systemName: "doc.fill").foregroundColor(.gray)
+                Button("Open File") {
+                    UIApplication.shared.open(url)
+                }
+            }
+            .padding()
+            .background(Color.gray.opacity(0.1))
+            .cornerRadius(8)
+        }
     }
 
     // MARK: - Placeholder View
@@ -268,9 +310,10 @@ struct SenderMessageView: View {
                 .contentShape(Rectangle())
             }
 
-            ProgressView(value: message.downloadProgress)
+            ProgressView(value: progressQ)
                 .progressViewStyle(LinearProgressViewStyle())
                 .frame(height: 4)
+                .animation(.none, value: progressQ)
                 .frame(maxWidth: .infinity)
                 .background(Design.Color.white)
                 .zIndex(1)

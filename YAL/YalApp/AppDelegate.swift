@@ -212,7 +212,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         .sink(
             receiveCompletion: { _ in },
             receiveValue: { [weak self] _ in
-                guard let self = self else { return }
+                guard self != nil else { return }
                 UNUserNotificationCenter.current().removeDeliveredNotifications(
                     withIdentifiers: [userInfo["notification_id"] as? String ?? ""]
                 )

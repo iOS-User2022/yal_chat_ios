@@ -220,7 +220,7 @@ final class RoomListViewModel: ObservableObject {
         
         if !snap.isEmpty {
             // Fast paint from in-memory
-            var fast = applyFlags(on: snap)
+            let fast = applyFlags(on: snap)
             DispatchQueue.main.async {
                 self.unFilteredRooms = fast
                 self.lockedRooms     = fast.filter { $0.isLocked }
@@ -323,7 +323,7 @@ final class RoomListViewModel: ObservableObject {
             let fulls = DBManager.shared.fetchFullRoomSummaries(
                 ids: toWarm,
                 limit: toWarm.count,
-                sortKey: "lastServerTimestamp",
+                sortKey: "serverTimestamp",
                 ascending: false,
                 includeContacts: true,          // pull contacts during warm
                 resolveContact: nil             // use DBManager fallback resolver
@@ -354,7 +354,7 @@ final class RoomListViewModel: ObservableObject {
                     } else if existing == nil {
                         // (rare) if not present yet, insert sorted
                         self.insertSorted(&self.unFilteredRooms, hydrated) {
-                            (($0.lastServerTimestamp ?? 0) > ($1.lastServerTimestamp ?? 0))
+                            (($0.serverTimestamp ?? 0) > ($1.serverTimestamp ?? 0))
                         }
                     }
 

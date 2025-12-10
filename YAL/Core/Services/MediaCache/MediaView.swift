@@ -50,16 +50,46 @@ final class MediaLoader: ObservableObject {
                     let url = pathString.hasPrefix("file://")
                         ? URL(string: pathString)!
                         : URL(fileURLWithPath: pathString)
+
                     DispatchQueue.main.async {
                         self.localURL = url
+                        self.progress = 1.0
                     }
-
-                    // For images, decode off-main and publish on main
+                    // Only decode images as UIImage. Never attempt for video/audio/pdf.
                     DispatchQueue.global(qos: .userInitiated).async {
-                        let uiImage = UIImage(contentsOfFile: url.path) ?? (try? Data(contentsOf: url)).flatMap(UIImage.init)
-                        let final = uiImage?.preparingForDisplay() ?? uiImage
-                        DispatchQueue.main.async {
-                            self.image = final
+                        switch type {
+                        case .image, .gif:
+                            // If it's truly an image or gif, try to decode a bitmap
+                            // Only attempt bitmap decode for real images (or gifs)
+                            DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+                                guard let self = self else { return }
+                                let target: CGFloat = 640
+                                if let img = MediaDecodeHelper.downsampleCached(url: url, maxPixel: target) {
+                                    MediaDecodeHelper.setWithoutAnimation { self.image = img }
+                                } else {
+                                    MediaDecodeHelper.setWithoutAnimation { self.image = nil }
+                                }
+                            }
+
+                        case .video:
+                            // Generate a thumbnail (or rely on server /thumbnail)
+                            generateVideoThumbnailAsync(from: url) { result in
+                                switch result {
+                                case .success(let image):
+                                    self.image = image
+                                case .failure: break
+                                }
+                            }
+
+                        case .document, .audio:
+                            // Prepare a generic preview thumbnail (QuickLook)
+                            generateDocumentThumbnailAsync(from: url) { result in
+                                switch result {
+                                case .success(let image):
+                                    self.image = image
+                                case .failure: break
+                                }
+                            }
                         }
                     }
 
@@ -100,28 +130,83 @@ struct MediaView<Placeholder: View, ErrorView: View>: View {
     @StateObject private var loader = MediaLoader()
     @State private var showFullScreen = false
     @State private var thumbnail: UIImage?
+    @State private var stickyProgress: Double = 0
+    @State private var finishedOnce = false
+    @State private var isVisible = false
+    @State private var lastProgress: Double = 0
+    @State private var playGIF = false
+    
+    private var displayedProgress: Double {
+        let live = clamp((externalProgress ?? loader.progress), min: 0, max: 1)
+        // when off-screen, freeze to the last known value to avoid churn
+        return max(stickyProgress, isVisible ? live : lastProgress)
+    }
     
     var body: some View {
-        Group {
+        ZStack {
             switch mediaType {
             case .image:
-                imageContentView
+                if let img = loader.image {
+                    let aspectRatio = img.size.width / img.size.height
+                    let displayWidth = calculateDisplayWidth(aspectRatio: aspectRatio)
+                    
+                    Image(uiImage: img)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: displayWidth, height: displayWidth / aspectRatio)
+                        .onTapGesture { showFullScreen = true }
+                        .fullScreenCover(isPresented: $showFullScreen) {
+                            FullScreenImageView(
+                                source: .uiImage(img),
+                                userName: userName ?? "",
+                                timeText: timeText ?? "",
+                                isPresented: $showFullScreen
+                            )
+                        }
+                } else if loader.progress > 0 && loader.progress < 1 {
+                    placeholder
+                } else if loader.error != nil {
+                    errorView
+                } else {
+                    placeholder
+                }
+            
             case .gif:
-                gifContentView
+                if let localURL = loader.localURL?.absoluteString, let fileURL = URL(string: localURL) {
+                    let gifURL = URL(fileURLWithPath: fileURL.path)
+                    Group {
+                        if playGIF {
+                            // Animate only when the user taps
+                            AnimatedImage(url: gifURL)
+                                .resizable()
+                                .scaledToFit()
+                                .frame(maxWidth: 220)
+                                .clipped()
+                        } else {
+                            // Static first frame while scrolling (cheap to render)
+                            WebImage(
+                                url: gifURL,
+                                options: [.decodeFirstFrameOnly, .scaleDownLargeImages],
+                                context: [.imageThumbnailPixelSize : CGSize(width: 440, height: 430)] // ~2x of display
+                            )
+                            .resizable()
+                            .scaledToFit()
+                            .frame(maxWidth: 220)
+                            .clipped()
+                            .onTapGesture { playGIF = true }
+                        }
+                    }
+                } else {
+                    placeholder
+                }
+
             case .video:
                 if let url = loader.localURL {
                     ZStack {
                         if let thumb = thumbnail {
-                            let aspectRatio = thumb.size.width / thumb.size.height
-                            let displayWidth = calculateDisplayWidth(aspectRatio: aspectRatio)
-                            
-                            Image(uiImage: thumb)
-                                .resizable()
-                                .scaledToFit()
-                                .frame(width: displayWidth, height: displayWidth / aspectRatio)
+                            Image(uiImage: thumb).resizable().scaledToFit()
                         } else {
-                            Rectangle().fill(Color.black.opacity(0.1))
-                                .frame(width: 220, height: 240)
+                            Rectangle().fill(Color.black.opacity(0.1)).frame(height: 200)
                         }
                         Image(systemName: "play.circle.fill")
                             .font(.system(size: 50)).foregroundColor(.white)
@@ -184,12 +269,40 @@ struct MediaView<Placeholder: View, ErrorView: View>: View {
         }
         .overlay(progressOverlay, alignment: .bottom)
         .onAppear {
+            isVisible = true
+            // show latest known value immediately when appearing
+            stickyProgress = max(stickyProgress, lastProgress)
+            
             if loader.localURL == nil && loader.image == nil {
                 if let local = localURLOverride {
                     loader.load(remoteURL: mediaURL, type: mediaType, localURL: local)
                 } else if !mediaURL.isEmpty {
                     loader.load(remoteURL: mediaURL, type: mediaType, localURL: nil)
                 }
+            }
+        }
+        .onDisappear {
+            isVisible = false
+        }
+        .onReceive(
+            loader.$progress
+                .map { MediaDecodeHelper.quantizeProgress($0, steps: 20) } // 5% steps
+                .removeDuplicates()
+                .throttle(for: .milliseconds(250), scheduler: RunLoop.main, latest: true)
+        ) { p in
+            lastProgress = p
+            if isVisible {
+                stickyProgress = max(stickyProgress, p)
+                if p >= 0.999 { finishedOnce = true }
+            }
+        }
+        .animation(nil, value: displayedProgress)
+        .onChange(of: externalProgress) { v in
+            let p = clamp(v ?? 0, min: 0, max: 1)
+            lastProgress = p
+            if isVisible {
+                stickyProgress = max(stickyProgress, p)
+                if p >= 0.999 { finishedOnce = true }
             }
         }
     }
@@ -202,53 +315,10 @@ struct MediaView<Placeholder: View, ErrorView: View>: View {
         let calculatedWidth = targetHeight * aspectRatio
         return min(maxWidth, max(minWidth, calculatedWidth))
     }
-    
-    // MARK: - Dynamic Image Content View
-    @ViewBuilder
-    private var imageContentView: some View {
-        if let img = loader.image {
-            let aspectRatio = img.size.width / img.size.height
-            let displayWidth = calculateDisplayWidth(aspectRatio: aspectRatio)
-            
-            Image(uiImage: img)
-                .resizable()
-                .scaledToFit()
-                .frame(width: displayWidth, height: displayWidth / aspectRatio)
-                .onTapGesture { showFullScreen = true }
-                .fullScreenCover(isPresented: $showFullScreen) {
-                    FullScreenImageView(
-                        source: .uiImage(img),
-                        userName: userName ?? "",
-                        timeText: timeText ?? "",
-                        isPresented: $showFullScreen
-                    )
-                }
-        } else if loader.progress > 0 && loader.progress < 1 {
-            placeholder
-        } else if loader.error != nil {
-            errorView
-        } else {
-            placeholder
-        }
-    }
-    
-    // MARK: - Dynamic GIF Content View
-    @ViewBuilder
-    private var gifContentView: some View {
-        if let localURL = loader.localURL?.absoluteString, let fileURL = URL(string: localURL) {
-            let gifURL = URL(fileURLWithPath: fileURL.path)
-            WebImage(url: gifURL)
-                .resizable()
-                .scaledToFit()
-                .clipped()
-        } else {
-            placeholder
-        }
-    }
-    
     private var progressOverlay: some View {
-        let p = clamp((externalProgress ?? loader.progress), min: 0, max: 1)
-        let shouldShow = (isUploading && p < 1) || (p > 0 && p < 1)
+        let p = displayedProgress
+        // show only while actively moving between (0,1)
+        let shouldShow = !finishedOnce && p > 0 && p < 1
         return Group {
             if shouldShow {
                 VStack(spacing: 0) {
@@ -257,6 +327,7 @@ struct MediaView<Placeholder: View, ErrorView: View>: View {
                         .frame(height: 4)
                         .frame(maxWidth: .infinity)
                         .background(Color.white.opacity(0.6))
+                        .transaction { $0.animation = nil }
                 }
                 .transition(.opacity)
             }
@@ -353,12 +424,12 @@ struct VoiceMessageBubble: View {
                                 switch phase {
                                 case .empty:
                                     ProgressView()
-                                        .frame(width: 40, height: 40)
+                                        .frame(width: 48, height: 48)
                                 case .success(let image):
                                     image
                                         .resizable()
                                         .scaledToFill()
-                                        .frame(width: 40, height: 40)
+                                        .frame(width: 48, height: 48)
                                         .clipShape(Circle())
                                 case .failure(_):
                                     initialsView
@@ -432,7 +503,7 @@ struct VoiceMessageBubble: View {
                             receiverAvatar
                                 .resizable()
                                 .scaledToFill()
-                                .frame(width: 40, height: 40)
+                                .frame(width: 48, height: 48)
                                 .clipShape(Circle())
                         } else {
                             initialsView
@@ -456,14 +527,14 @@ struct VoiceMessageBubble: View {
         }
         .frame(maxWidth: .infinity, alignment: isSender ? .trailing : .leading)
         .padding(.horizontal)
-        .padding(.vertical, 4)
+        .padding(.vertical, 8)
     }
     
     @ViewBuilder
     private var initialsView: some View {
         Text(senderInitial)
-            .font(Design.Font.bold(14))
-            .frame(width: 40, height: 40)
+            .font(Design.Font.bold(16))
+            .frame(width: 48, height: 48)
             .background(backgroundColor)
             .foregroundColor(Design.Color.primaryText.opacity(0.7))
             .clipShape(Circle())

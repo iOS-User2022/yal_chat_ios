@@ -25,13 +25,17 @@ struct RoomSummaryAdapter {
     ) -> RoomSummaryModel {
 
         // ---- timestamps & last message
-        let timeline = (timelineEvents ?? [])
-        let newestTs = (timeline.map { $0.originServerTs ?? 0 }.max())
-            ?? (stateEvents.map { $0.originServerTs ?? 0 }.max())
-        let oldestTs = (timeline.map { $0.originServerTs ?? 0 }.min())
-            ?? (stateEvents.map { $0.originServerTs ?? 0 }.min())
+        let sortedTimeline = (timelineEvents ?? []).sorted {
+            ($0.originServerTs ?? 0) < ($1.originServerTs ?? 0)
+        }
 
-        let lastMsg = timeline.last(where: { $0.type == "m.room.message" })
+        let newestTs = sortedTimeline.last?.originServerTs ??
+            (stateEvents.map { $0.originServerTs ?? 0 }.max() ?? 0)
+
+        let oldestTs = sortedTimeline.first?.originServerTs ??
+            (stateEvents.map { $0.originServerTs ?? 0 }.min() ?? 0)
+
+        let lastMsg = sortedTimeline.last(where: { $0.type == "m.room.message" })
         let lastMessageBody = lastMsg?.content?.body
         let lastSender = lastMsg?.sender
 
@@ -76,8 +80,8 @@ struct RoomSummaryAdapter {
             let ts = e.originServerTs ?? 0
             upsert(uid, st, ts)
         }
-        if !timeline.isEmpty {
-            for e in timeline where e.type == "m.room.member" {
+        if !sortedTimeline.isEmpty {
+            for e in sortedTimeline where e.type == "m.room.member" {
                 guard let uid = e.stateKey,
                       let raw = e.content?.membership,
                       let st = status(from: raw) else { continue }
@@ -177,8 +181,9 @@ struct RoomSummaryAdapter {
         unreadCount: Int? = nil         // allow unread override
     ) -> RoomSummaryModel {
         let state = stateEvents ?? []
-        let timeline = timelineEvents ?? []
-        
+        let timeline = (timelineEvents ?? []).sorted {
+            ($0.originServerTs ?? 0) < ($1.originServerTs ?? 0)
+        }
         // --- Start from previous summary
         var name               = prev.name
         var avatarUrl          = prev.avatarUrl

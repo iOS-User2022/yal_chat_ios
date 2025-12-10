@@ -7,6 +7,7 @@
 
 
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct UserProfileView: View {
     var onBack: () -> Void
@@ -24,6 +25,7 @@ struct UserProfileView: View {
     @State private var showBlock = false
     @State private var showUnBlock = false
     @State private var showDelete = false
+    @State private var showCopiedToast = false
 
     init(user: ContactModel,
          room: RoomModel,
@@ -137,7 +139,20 @@ struct UserProfileView: View {
                 UserImageView(url: roomModel.opponent?.avatarURL, size: 100, roomModel: roomModel)
                 Spacer().frame(height: 8)
                 
-                if let displayName = viewModel.userDetails?.fullName {
+                let user = viewModel.userDetails
+                
+                let nameToShow: String? = {
+                    if let fullName = user?.fullName, !fullName.isEmpty {
+                        return fullName
+                    }
+                    if let displayName = user?.displayName, !displayName.isEmpty {
+                        return displayName
+                    }
+                    
+                    return nil
+                }()
+                
+                if let displayName = nameToShow {
                     Text(displayName)
                         .font(.title3.bold())
                         .frame(maxWidth: .infinity, alignment: .center)
@@ -147,8 +162,22 @@ struct UserProfileView: View {
                 if let phoneNumber = viewModel.userDetails?.phoneNumber {
                     Text(phoneNumber)
                         .font(.callout)
-                        .foregroundColor(.gray)
+                        .foregroundColor(showCopiedToast ? .blue : .gray)
                         .frame(maxWidth: .infinity, alignment: .center)
+                        .onLongPressGesture {
+                            UIPasteboard.general.string = phoneNumber
+                            HapticFeedback.success()
+                            
+                            withAnimation {
+                                showCopiedToast = true
+                            }
+                            
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+                                withAnimation {
+                                    showCopiedToast = false
+                                }
+                            }
+                        }
                 }
 
                 if let email = viewModel.userDetails?.emailAddresses.first {
@@ -201,6 +230,12 @@ struct UserProfileView: View {
         .ignoresSafeArea(.all)
         .frame(maxWidth: .infinity, alignment: .topLeading)
         .background(Design.Color.white)
+        .overlay(alignment: .top) {
+            if showCopiedToast {
+                ToastView(message: "Copied!")
+                    .padding(.top, 60)
+            }
+        }
     }
 
     var aboutSection: some View {
@@ -300,21 +335,68 @@ struct UserProfileView: View {
                 }) { result in
                     switch result {
                     case .success(let imagePath):
-                        let fileURL: URL = imagePath.hasPrefix("file://")
-                        ? URL(string: imagePath)!
-                        : URL(fileURLWithPath: imagePath)
+                        // Build a safe file URL from either "file://…" or raw path
+                        let fileURL: URL = {
+                            if let u = URL(string: imagePath), u.scheme == "file" { return u }
+                            return URL(fileURLWithPath: imagePath)
+                        }()
                         
-                        if let uiImage = UIImage(contentsOfFile: fileURL.path) ?? {
-                            // Fallback to loading Data if path fails
-                            guard let data = try? Data(contentsOf: fileURL) else { return nil }
-                            return UIImage(data: data)
-                        }() {
-                            DispatchQueue.main.async {
-                                downloadedImage = uiImage
+                        DispatchQueue.global(qos: .userInitiated).async {
+                            autoreleasepool {
+                                do {
+                                    // 1) Exists & not a directory
+                                    var isDir: ObjCBool = false
+                                    guard FileManager.default.fileExists(atPath: fileURL.path, isDirectory: &isDir),
+                                          !isDir.boolValue else {
+                                        throw NSError(domain: "ImageOverlayView", code: 7101,
+                                                      userInfo: [NSLocalizedDescriptionKey: "File missing or is a directory"])
+                                    }
+                                    
+                                    // 2) Type-gate: only decode images
+                                    if let ut = UTType(filenameExtension: fileURL.pathExtension),
+                                       !ut.conforms(to: .image) {
+                                        throw NSError(domain: "ImageOverlayView", code: 7102,
+                                                      userInfo: [NSLocalizedDescriptionKey: "Not an image: \(ut.identifier)"])
+                                    }
+                                    
+                                    // 3) Downsample with ImageIO (low memory)
+                                    let srcOpts: [CFString: Any] = [kCGImageSourceShouldCache: false]
+                                    var ui: UIImage? = nil
+                                    if let src = CGImageSourceCreateWithURL(fileURL as CFURL, srcOpts as CFDictionary) {
+                                        let opts: [CFString: Any] = [
+                                            kCGImageSourceCreateThumbnailFromImageAlways: true,
+                                            kCGImageSourceShouldCacheImmediately: true,
+                                            kCGImageSourceCreateThumbnailWithTransform: true,
+                                            kCGImageSourceThumbnailMaxPixelSize: 2048
+                                        ]
+                                        if let cg = CGImageSourceCreateThumbnailAtIndex(src, 0, opts as CFDictionary) {
+                                            ui = UIImage(cgImage: cg)
+                                        }
+                                    }
+                                    
+                                    // 4) Fallbacks
+                                    if ui == nil { ui = UIImage(contentsOfFile: fileURL.path) }
+                                    if ui == nil {
+                                        let data = try Data(contentsOf: fileURL, options: [.mappedIfSafe])
+                                        ui = UIImage(data: data)
+                                    }
+                                    guard var img = ui else {
+                                        throw NSError(domain: "ImageOverlayView", code: 7103,
+                                                      userInfo: [NSLocalizedDescriptionKey: "Decode failed"])
+                                    }
+                                    
+                                    if #available(iOS 15.0, *), let prepped = img.preparingForDisplay() { img = prepped }
+                                    
+                                    DispatchQueue.main.async { downloadedImage = img }
+                                    
+                                } catch {
+                                    print("ImageOverlayView: image decode error — \(error.localizedDescription) | \(fileURL.path)")
+                                }
                             }
                         }
+                        
                     case .failure(let error):
-                        print("ImageOverlayView: Failed to load image: \(error)")
+                        print("ImageOverlayView: Failed to load image — \(error)")
                     }
                 }
         }
@@ -517,26 +599,68 @@ private struct UserImageView: View {
                 ) { result in
                     switch result {
                     case .success(let imagePath):
-                        // imagePath can be "/var/.../image.jpg" or "file:///var/.../image.jpg"
-                        let fileURL: URL = imagePath.hasPrefix("file://")
-                            ? URL(string: imagePath)!
-                            : URL(fileURLWithPath: imagePath)
-
-                        // More efficient than loading Data first
-                        if let uiImage = UIImage(contentsOfFile: fileURL.path) ?? {
-                            // fallback if the path form fails for some reason
-                            guard let data = try? Data(contentsOf: fileURL) else { return nil }
-                            return UIImage(data: data)
-                        }() {
-                            // Optional: pre-decompress for smoother UI on iOS 15+
-                            let finalImage = uiImage.preparingForDisplay() ?? uiImage
-                            DispatchQueue.main.async {
-                                downloadedImage = finalImage
+                        // Build a safe file URL from either "file://…" or raw path
+                        let fileURL: URL = {
+                            if let u = URL(string: imagePath), u.scheme == "file" { return u }
+                            return URL(fileURLWithPath: imagePath)
+                        }()
+                        
+                        DispatchQueue.global(qos: .userInitiated).async {
+                            autoreleasepool {
+                                do {
+                                    // 1) Exists & not a directory
+                                    var isDir: ObjCBool = false
+                                    guard FileManager.default.fileExists(atPath: fileURL.path, isDirectory: &isDir),
+                                          !isDir.boolValue else {
+                                        throw NSError(domain: "ChatHeaderView", code: 5201,
+                                                      userInfo: [NSLocalizedDescriptionKey: "File missing or is a directory"])
+                                    }
+                                    
+                                    // 2) Type-gate: only decode images
+                                    if let ut = UTType(filenameExtension: fileURL.pathExtension),
+                                       !ut.conforms(to: .image) {
+                                        throw NSError(domain: "ChatHeaderView", code: 5202,
+                                                      userInfo: [NSLocalizedDescriptionKey: "Not an image: \(ut.identifier)"])
+                                    }
+                                    
+                                    // 3) Downsample with ImageIO (low memory)
+                                    let srcOpts: [CFString: Any] = [kCGImageSourceShouldCache: false]
+                                    var ui: UIImage? = nil
+                                    if let src = CGImageSourceCreateWithURL(fileURL as CFURL, srcOpts as CFDictionary) {
+                                        let opts: [CFString: Any] = [
+                                            kCGImageSourceCreateThumbnailFromImageAlways: true,
+                                            kCGImageSourceShouldCacheImmediately: true,
+                                            kCGImageSourceCreateThumbnailWithTransform: true,
+                                            kCGImageSourceThumbnailMaxPixelSize: 1536 // tweak if needed
+                                        ]
+                                        if let cg = CGImageSourceCreateThumbnailAtIndex(src, 0, opts as CFDictionary) {
+                                            ui = UIImage(cgImage: cg)
+                                        }
+                                    }
+                                    
+                                    // 4) Fallbacks
+                                    if ui == nil { ui = UIImage(contentsOfFile: fileURL.path) }
+                                    if ui == nil {
+                                        let data = try Data(contentsOf: fileURL, options: [.mappedIfSafe])
+                                        ui = UIImage(data: data)
+                                    }
+                                    guard var img = ui else {
+                                        throw NSError(domain: "ChatHeaderView", code: 5203,
+                                                      userInfo: [NSLocalizedDescriptionKey: "Decode failed"])
+                                    }
+                                    
+                                    if #available(iOS 15.0, *), let prepped = img.preparingForDisplay() { img = prepped }
+                                    
+                                    DispatchQueue.main.async { downloadedImage = img }
+                                    
+                                } catch {
+                                    print("ChatHeaderView: image decode error — \(error.localizedDescription) | \(fileURL.path)")
+                                }
                             }
                         }
-
+                        
                     case .failure(let error):
-                        print("ChatHeaderView: failed to load image \(error)")
+                        print("ChatHeaderView: failed to load image — \(error)")
                     }
                 }
             }
@@ -629,7 +753,7 @@ struct NotificationSettingsView: View {
     }
 
     private func safeAreaTop() -> CGFloat {
-        UIApplication.shared.windows.first?.safeAreaInsets.top ?? 0
+        UIApplication.shared.topSafeAreaInset
     }
 
     var muteToggleSection: some View {
@@ -680,5 +804,25 @@ struct NotificationSettingsView: View {
                 }
             }.padding(.bottom, 20)
         }.background(Color.gray.opacity(0.1))
+    }
+}
+struct HapticFeedback {
+    static func success() {
+        let generator = UINotificationFeedbackGenerator()
+        generator.notificationOccurred(.success)
+    }
+}
+struct ToastView: View {
+    var message: String
+    
+    var body: some View {
+        Text(message)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .background(.black.opacity(0.8))
+            .foregroundColor(.white)
+            .cornerRadius(12)
+            .transition(.opacity.combined(with: .move(edge: .top)))
+            .animation(.easeInOut(duration: 0.25), value: message)
     }
 }

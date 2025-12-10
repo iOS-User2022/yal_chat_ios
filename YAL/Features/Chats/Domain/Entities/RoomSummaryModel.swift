@@ -465,7 +465,7 @@ extension RoomSummaryModel {
             if let nm = tl.first(where: { $0.type == "m.room.name" })?.content?.name, !nm.isEmpty {
                 name = nm
             }
-            if let lastMsgEv = tl.last(where: { $0.type == "m.room.message" }) {
+            if let lastMsgEv = tl.first(where: { $0.type == "m.room.message" }) {
                 lastMessage     = lastMsgEv.content?.body
                 lastSender      = lastMsgEv.sender
                 lastMessageType = lastMsgEv.content?.msgType ?? lastMessageType

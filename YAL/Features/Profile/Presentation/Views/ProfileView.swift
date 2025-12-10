@@ -7,6 +7,7 @@
 
 import SwiftUI
 import SDWebImageSwiftUI
+import UniformTypeIdentifiers
 
 struct ProfileView: View {
     @Binding var navPath: NavigationPath
@@ -179,15 +180,70 @@ struct ProfileView: View {
             },
             completion: { result in
                 switch result {
-                case .success(let fileURL):
-                    let fileURL: URL = fileURL.hasPrefix("file://") ? URL(string: fileURL)! : URL(fileURLWithPath: fileURL)
-                    if let uiImage = UIImage(contentsOfFile: fileURL.path) ??
-                        (try? Data(contentsOf: fileURL)).flatMap(UIImage.init(data:)) {
-                        DispatchQueue.main.async {
-                            downloadedImage = uiImage.preparingForDisplay() ?? uiImage
-                            fullScreenUIImage = uiImage.preparingForDisplay() ?? uiImage
+                case .success(let pathString):
+                    // Build a safe file URL from either "file://…" or raw path
+                    let localURL: URL = {
+                        if let u = URL(string: pathString), u.scheme == "file" { return u }
+                        return URL(fileURLWithPath: pathString)
+                    }()
+                    
+                    DispatchQueue.global(qos: .userInitiated).async {
+                        autoreleasepool {
+                            do {
+                                // 1) Exists & not a directory
+                                var isDir: ObjCBool = false
+                                guard FileManager.default.fileExists(atPath: localURL.path, isDirectory: &isDir),
+                                      !isDir.boolValue else {
+                                    throw NSError(domain: "Media", code: 8201,
+                                                  userInfo: [NSLocalizedDescriptionKey: "File missing or is a directory"])
+                                }
+                                
+                                // 2) Type-gate: only decode images
+                                if let ut = UTType(filenameExtension: localURL.pathExtension),
+                                   !ut.conforms(to: .image) {
+                                    throw NSError(domain: "Media", code: 8202,
+                                                  userInfo: [NSLocalizedDescriptionKey: "Not an image: \(ut.identifier)"])
+                                }
+                                
+                                // 3) Downsample via ImageIO (low memory)
+                                let srcOpts: [CFString: Any] = [kCGImageSourceShouldCache: false]
+                                var ui: UIImage? = nil
+                                if let src = CGImageSourceCreateWithURL(localURL as CFURL, srcOpts as CFDictionary) {
+                                    let opts: [CFString: Any] = [
+                                        kCGImageSourceCreateThumbnailFromImageAlways: true,
+                                        kCGImageSourceShouldCacheImmediately: true,
+                                        kCGImageSourceCreateThumbnailWithTransform: true,
+                                        kCGImageSourceThumbnailMaxPixelSize: 2048 // adjust if needed
+                                    ]
+                                    if let cg = CGImageSourceCreateThumbnailAtIndex(src, 0, opts as CFDictionary) {
+                                        ui = UIImage(cgImage: cg)
+                                    }
+                                }
+                                
+                                // 4) Fallbacks
+                                if ui == nil { ui = UIImage(contentsOfFile: localURL.path) }
+                                if ui == nil {
+                                    let data = try Data(contentsOf: localURL, options: [.mappedIfSafe])
+                                    ui = UIImage(data: data)
+                                }
+                                guard var img = ui else {
+                                    throw NSError(domain: "Media", code: 8203,
+                                                  userInfo: [NSLocalizedDescriptionKey: "Decode failed"])
+                                }
+                                
+                                if #available(iOS 15.0, *), let prepped = img.preparingForDisplay() { img = prepped }
+                                
+                                DispatchQueue.main.async {
+                                    downloadedImage = img
+                                    fullScreenUIImage = img
+                                }
+                                
+                            } catch {
+                                print("❌ Media decode error — \(error.localizedDescription) | \(localURL.path)")
+                            }
                         }
                     }
+                    
                 case .failure(let error):
                     print("❌ Failed to download media: \(error)")
                 }
@@ -357,5 +413,5 @@ struct ProfileView: View {
 
 // MARK: - Safe Area Helper
 private func safeAreaTop() -> CGFloat {
-    UIApplication.shared.windows.first?.safeAreaInsets.top ?? 0
+    UIApplication.shared.topSafeAreaInset
 }

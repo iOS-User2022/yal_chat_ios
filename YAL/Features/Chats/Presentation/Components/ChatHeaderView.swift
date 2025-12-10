@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct ChatHeaderView: View {
     let title: String
@@ -53,10 +54,49 @@ struct ChatHeaderView: View {
                         switch result {
                         case .success(let imagePath):
                             processQ.async {
-                                let fileURL = imagePath.hasPrefix("file://") ? URL(string: imagePath)! : URL(fileURLWithPath: imagePath)
-                                let ui = UIImage(contentsOfFile: fileURL.path) ?? (try? Data(contentsOf: fileURL)).flatMap(UIImage.init(data:))
-                                let final = ui?.preparingForDisplay() ?? ui
-                                DispatchQueue.main.async { self.downloadedImage = final }
+                                autoreleasepool {
+                                    do {                                        
+                                        // Build a file URL safely
+                                        let fileURL: URL
+                                        if let u = URL(string: imagePath), u.scheme == "file" {
+                                            fileURL = u
+                                        } else {
+                                            fileURL = URL(fileURLWithPath: imagePath)
+                                        }
+                                        
+                                        // Make sure the file exists and isn't a directory
+                                        var isDir: ObjCBool = false
+                                        guard FileManager.default.fileExists(atPath: fileURL.path, isDirectory: &isDir), !isDir.boolValue else {
+                                            throw NSError(domain: "Media", code: 1001, userInfo: [NSLocalizedDescriptionKey: "File missing or is a directory"])
+                                        }
+                                        
+                                        // Optional: quick type gate (prevents PDF/MP4/MP3 from hitting ImageIO)
+                                        if let ut = UTType(filenameExtension: fileURL.pathExtension),
+                                           !ut.conforms(to: .image) {
+                                            throw NSError(domain: "Media", code: 1002, userInfo: [NSLocalizedDescriptionKey: "Not an image type: \(ut.identifier)"])
+                                        }
+                                        
+                                        // Fast path: decode from file (doesn't allocate entire file in RAM)
+                                        if let img = UIImage(contentsOfFile: fileURL.path)?.preparingForDisplay() {
+                                            DispatchQueue.main.async { self.downloadedImage = img }
+                                            return
+                                        }
+                                        
+                                        // Fallback: load data (use mappedIfSafe to avoid large copies)
+                                        let data = try Data(contentsOf: fileURL, options: [.mappedIfSafe])
+                                        guard let img = UIImage(data: data)?.preparingForDisplay() else {
+                                            throw NSError(domain: "Media", code: 1003, userInfo: [NSLocalizedDescriptionKey: "Failed to decode image bytes"])
+                                        }
+                                        
+                                        DispatchQueue.main.async { self.downloadedImage = img }
+                                        
+                                    } catch {
+                                        print("❌ Image load error: \(error.localizedDescription) — path=\(imagePath)")
+                                        DispatchQueue.main.async {
+                                            self.downloadedImage = nil   // or set a placeholder
+                                        }
+                                    }
+                                }
                             }
                         case .failure(let e):
                             print("image load failed:", e)

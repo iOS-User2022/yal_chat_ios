@@ -93,7 +93,7 @@ struct LockedChatView: View {
     }
     
     private func safeAreaTop() -> CGFloat {
-        UIApplication.shared.windows.first?.safeAreaInsets.top ?? 0
+        UIApplication.shared.topSafeAreaInset
     }
     
     var headerSection: some View {
@@ -242,7 +242,7 @@ private extension ManageLockedChatsView {
     }
 
     private func safeAreaTop() -> CGFloat {
-        UIApplication.shared.windows.first?.safeAreaInsets.top ?? 0
+        UIApplication.shared.topSafeAreaInset
     }
 }
 

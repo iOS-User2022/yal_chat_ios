@@ -24,9 +24,9 @@ final class MediaCacheManager: ObservableObject {
 
     struct Config {
         /// Minimum interval between progress emissions to UI/DB
-        var minProgressInterval: CFTimeInterval = 1.0 / 12.0  // ~12 fps
+        var minProgressInterval: CFTimeInterval = 1.0 / 8.0  // ~12 fps
         /// Minimum delta change in progress to emit
-        var minProgressDelta: Double = 0.02                    // 2%
+        var minProgressDelta: Double = 0.05                    // 2%
         /// Cache folder under Library/Caches/
         var folderName: String = "MediaCache"
     }

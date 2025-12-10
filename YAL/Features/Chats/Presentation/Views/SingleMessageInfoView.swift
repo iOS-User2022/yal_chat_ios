@@ -107,7 +107,7 @@ struct SingleMessageInfoView: View {
         .background(Design.Color.white)
     }
     private func safeAreaTop() -> CGFloat {
-        UIApplication.shared.windows.first?.safeAreaInsets.top ?? 0
+        UIApplication.shared.topSafeAreaInset
     }
 }
 

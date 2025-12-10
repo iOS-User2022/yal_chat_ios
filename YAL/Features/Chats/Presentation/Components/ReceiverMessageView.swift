@@ -7,6 +7,7 @@
 
 import SwiftUI
 import SDWebImageSwiftUI
+import AVKit
 
 struct ReceiverMessageView: View {
     @EnvironmentObject var chatViewModel: ChatViewModel
@@ -91,16 +92,18 @@ struct ReceiverMessageView: View {
                     if let mediaType = MediaType(rawValue: message.msgType), mediaType  == .audio, isFromSelection == false {
                         Spacer(minLength: 35.0)
                     }
-                    avatarView
-                        .opacity(showSenderInfo ? 1.0 : 0.0)
-                        .onTapGesture { onAvatarTap?() }
+
+                    HStack(alignment: .top) {
+                        avatarView
+                            .opacity(showSenderInfo ? 1.0 : 0.0)
+                            .onTapGesture { onAvatarTap?() }
+                        messageBubble
+                    }
+                } else {
                     messageBubble
-            } else {
-                messageBubble
+                }
+              Spacer()
             }
-        }
-        
-        Spacer()
         }
         .padding(.leading, 20)
         .onAppear {
@@ -146,9 +149,11 @@ struct ReceiverMessageView: View {
             senderImage: "",
             localURLOverride: nil
         )
-        .id(message.mediaUrl ?? UUID().uuidString)
-        .frame(width: mediaType == .audio ? 260 : nil)
+        .id(message.eventId)
+        .frame(width: mediaType == .audio ? 260 : 220,
+               height: (mediaType == .image || mediaType == .video || mediaType == .gif) ? 215: 56)
         .fixedSize(horizontal: mediaType != .audio, vertical: false)
+
         .padding(.horizontal, 4)
         .padding(.top, 4)
         .clipShape(CustomRoundedCornersShape(radius: 8, roundedCorners: [.topRight, .bottomLeft, .bottomRight]))
@@ -166,6 +171,51 @@ struct ReceiverMessageView: View {
         .frame(width: 220, height: 215)
         .background(Color(.systemGray6))
         .cornerRadius(8)
+    }
+
+    // MARK: - Media Content
+    @ViewBuilder
+    private func mediaContent(from url: URL) -> some View {
+        let cornerShape = CustomRoundedCornersShape(radius: 8, roundedCorners: [.topRight, .bottomLeft, .bottomRight])
+        
+        if message.isImageMessage {
+            if let image = UIImage(contentsOfFile: url.path) {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFit()
+//                    .frame(width: 220, height: 215)
+                    .clipShape(cornerShape)
+            } else {
+                Text("Image failed to load")
+                    .foregroundColor(.red)
+                    .frame(width: 220, height: 215)
+                    .clipShape(cornerShape)
+            }
+        } else if message.isVideoMessage {
+            ZStack {
+                Rectangle().fill(Color.black.opacity(0.1))
+                Image(systemName: "play.circle.fill")
+                    .resizable()
+                    .frame(width: 40, height: 40)
+                    .foregroundColor(.white)
+            }
+            .frame(width: 220, height: 215)
+            .clipShape(cornerShape)
+            .onTapGesture { isVideoPlayerPresented = true }
+            .sheet(isPresented: $isVideoPlayerPresented) {
+                AVPlayerView(player: AVPlayer(url: url))
+            }
+        } else if message.isFileMessage {
+            HStack {
+                Image(systemName: "doc.fill").foregroundColor(.gray)
+                Button("Open File") {
+                    UIApplication.shared.open(url)
+                }
+            }
+            .padding()
+            .background(Color.gray.opacity(0.1))
+            .cornerRadius(8)
+        }
     }
 
     private var placeholderWithProgress: some View {
@@ -208,12 +258,12 @@ struct ReceiverMessageView: View {
                 .contentShape(Rectangle())
             }
 
-            ProgressView(value: message.downloadProgress)
-                .progressViewStyle(LinearProgressViewStyle())
-                .frame(height: 4)
-                .frame(maxWidth: .infinity)
-                .background(Design.Color.appGradient)
-                .zIndex(1)
+//            ProgressView(value: message.downloadProgress)
+//                .progressViewStyle(LinearProgressViewStyle())
+//                .frame(height: 4)
+//                .frame(maxWidth: .infinity)
+//                .background(Design.Color.appGradient)
+//                .zIndex(1)
         }
     }
 
@@ -418,6 +468,7 @@ struct ReceiverMessageView: View {
     }
     
     private func downLoadAvatarIfNeeded() {
+        guard downloadedImage == nil else { return } 
         if let urlString = senderAvatarURL, !urlString.isEmpty {
             MediaCacheManager.shared.getMedia(
                 url: urlString,
@@ -426,32 +477,27 @@ struct ReceiverMessageView: View {
             ) { result in
                 switch result {
                 case .success(let imagePath):
-                    var fileURL: URL
-                    
-                    if imagePath.hasPrefix("file://") {
-                        if let url = URL(string: imagePath) {
-                            fileURL = url
+                    // Build a proper file URL
+                    let fileURL: URL = {
+                        if imagePath.hasPrefix("file://"), let u = URL(string: imagePath) {
+                            return u
                         } else {
-                            print("Invalid URL path: \(imagePath)")
-                            return
+                            return URL(fileURLWithPath: imagePath)
                         }
-                    } else {
-                        fileURL = URL(fileURLWithPath: imagePath)
-                    }
-                    // More efficient than loading Data first
-                    if let uiImage = UIImage(contentsOfFile: fileURL.path) ?? {
-                        // fallback if the path form fails for some reason
-                        guard let data = try? Data(contentsOf: fileURL) else { return nil }
-                        return UIImage(data: data)
-                    }() {
-                        // Optional: pre-decompress for smoother UI on iOS 15+
-                        let finalImage = uiImage.preparingForDisplay() ?? uiImage
-                        DispatchQueue.main.async {
-                            downloadedImage = finalImage
+                    }()
+
+                    // Decode off the main thread with type-gating + downsampling
+                    decodeImageAsync(from: fileURL, maxPixelSize: 1024) { res in
+                        switch res {
+                        case .success(let ui):
+                            downloadedImage = ui   // already on main from helper
+                        case .failure(let err):
+                            print("ChatHeaderView: image decode failed — \(err.localizedDescription)")
                         }
                     }
+
                 case .failure(let error):
-                    print("ChatHeaderView: failed to load image \(error)")
+                    print("ChatHeaderView: failed to load image — \(error)")
                 }
             }
         }
