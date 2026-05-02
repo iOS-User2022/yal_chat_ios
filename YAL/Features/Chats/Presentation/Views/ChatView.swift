@@ -725,7 +725,10 @@ struct ChatView: View {
                         },
                         onDeleteForMe: {
                             selectedMessage = nil
-                            chatViewModel.deleteLocalMessage(eventId: pending.eventId)
+                            chatViewModel.deleteLocalMessage(
+                                roomId: pending.roomId,
+                                eventId: pending.eventId
+                            )
                             showDeleteDialog = false
                             messagePendingDelete = nil
                         },

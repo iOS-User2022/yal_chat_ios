@@ -1003,14 +1003,13 @@ final class ChatViewModel: ObservableObject {
 
 // MARK: - Local Deletes
 extension ChatViewModel {
-    func deleteLocalMessage(eventId: String) {
-        processQ.async {
+    func deleteLocalMessage(roomId: String, eventId: String) {
+        processQ.async { [weak self] in
             DBManager.shared.deleteMessage(eventId: eventId)
+            self?.roomService.recomputeRoomSummaryAfterMessageDeletion(roomId: roomId)
         }
         DispatchQueue.main.async { [weak self] in
-            if let i = self?.messages.firstIndex(where: { $0.eventId == eventId }) {
-                self?.messages.remove(at: i)
-            }
+            self?.mutateMessages { $0.removeAll { $0.eventId == eventId } }
         }
     }
     

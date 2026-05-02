@@ -78,6 +78,7 @@ protocol ChatRepositoryProtocol {
     func kickFromRoom(roomId: String, userId: String, reason: String) -> AnyPublisher<APIResult<MatrixEmptyResponse>, APIError>
     func leaveRoom(roomId: String, reason: String) -> AnyPublisher<APIResult<MatrixEmptyResponse>, APIError>
     func performRoomCleanup(roomId: String) -> AnyPublisher<Void, APIError>
+    func recomputeRoomSummaryAfterMessageDeletion(roomId: String)
     func inviteToRoom(roomId: String, userId: String, reason: String) -> AnyPublisher<APIResult<MatrixEmptyResponse>, APIError>
     func toggleFavoriteRoom(roomID: String)
     func getFavoriteRooms() -> [String]

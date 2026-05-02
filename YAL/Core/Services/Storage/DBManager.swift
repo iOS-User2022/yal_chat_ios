@@ -1317,6 +1317,21 @@ final class DBManager: DBManageable {
             .filter("eventId == %@", eventId)
         try? r.write { r.delete(toDel) }
     }
+
+    /// Returns a value snapshot of the most recent non-redacted message in the room,
+    /// or nil if the room has no remaining messages. Used to refresh a room's
+    /// `lastMessage*` fields after a local delete.
+    func fetchLatestMessageSummary(inRoom roomId: String)
+        -> (body: String, msgType: String, sender: String, timestamp: Int64)?
+    {
+        let r = realm
+        guard let m = r.objects(MessageObject.self)
+            .filter("roomId == %@ AND isRedacted == false", roomId)
+            .sorted(byKeyPath: "timestamp", ascending: false)
+            .first
+        else { return nil }
+        return (m.content, m.msgType, m.sender, m.timestamp)
+    }
     
     func markMessageRedacted(eventId: String) {
         let r = realm

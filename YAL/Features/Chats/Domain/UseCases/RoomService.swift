@@ -897,6 +897,10 @@ final class RoomService: RoomServiceProtocol {
     func performRoomCleanup(room: RoomModel) -> AnyPublisher<Void, APIError> {
         chatRepository.performRoomCleanup(roomId: room.id)
     }
+
+    func recomputeRoomSummaryAfterMessageDeletion(roomId: String) {
+        chatRepository.recomputeRoomSummaryAfterMessageDeletion(roomId: roomId)
+    }
     
     func inviteUsersToRoom(
         room: RoomModel,

@@ -70,6 +70,7 @@ protocol RoomServiceProtocol {
     func fetchAndUpdateAllRoomsState(rooms: [RoomModel])
     func fetchAndUpdateRoomState(room: RoomModel)
     func deleteRoom(room: RoomModel, reason: String) -> AnyPublisher<APIResult<EmptyResponse>, APIError>
+    func recomputeRoomSummaryAfterMessageDeletion(roomId: String)
     func inviteUserToRoom(room: RoomModel, user: ContactLite, reason: String) -> AnyPublisher<APIResult<MatrixEmptyResponse>, APIError>
     func inviteUsersToRoom(
         room: RoomModel,

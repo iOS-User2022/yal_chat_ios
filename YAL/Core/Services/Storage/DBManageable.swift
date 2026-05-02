@@ -38,6 +38,8 @@ protocol DBManageable {
     func fetchMessages(inRoom roomId: String) -> [ChatMessageModel]
     func deleteMessages(inRoom roomId: String)
     func deleteMessage(eventId: String)
+    func fetchLatestMessageSummary(inRoom roomId: String)
+        -> (body: String, msgType: String, sender: String, timestamp: Int64)?
     func markMessageRedacted(eventId: String)
     func deleteRoomById(roomId: String)
     func deleteAllMessages()

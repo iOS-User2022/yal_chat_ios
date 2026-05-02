@@ -1351,6 +1351,7 @@ final class ChatRepository: ChatRepositoryProtocol {
                 }
 
                 var updated: RoomSummaryModel?
+                var wasLocallyDeleted = false
                 self.summaryWrite { [weak self] in
                     guard let self = self, var s = self.hydratedSummariesById[roomId] else { return }
                     if (s.serverTimestamp ?? 0) < ts { // guard against regressions
@@ -1362,8 +1363,15 @@ final class ChatRepository: ChatRepositoryProtocol {
                         s.lastServerTimestamp = ts
                         self.hydratedSummariesById[roomId] = s
                         updated = s
+
+                        // A genuinely newer message arrived: if the user had previously
+                        // hidden this chat from the list ("Delete chat"), surface it again.
+                        if self.getDeletedRooms().contains(roomId) {
+                            self.toggleDeletedRoom(roomID: roomId)
+                            wasLocallyDeleted = true
+                        }
                     }
-                    
+
                     if let s = updated {
                         DBManager.shared.saveRoomSummary(s)
 
@@ -1371,13 +1379,11 @@ final class ChatRepository: ChatRepositoryProtocol {
                             let live: RoomModel? = self.hydrationState.sync { self.hydrationRoomsById[roomId] }
                                 ?? self.rooms.first(where: { $0.id == roomId })
                             guard let room = live else { return }
-                            if roomId == "!ObDVuMDJuBVGxrNwsj:yal.chat" {
-                                print("Room Message: \(body)")
-                            }
                             room.lastMessage     = body
                             room.lastMessageType = lastMsgType
                             room.lastSenderName  = resolvedSenderName ?? lastSender
                             room.serverTimestamp = ts
+                            if wasLocallyDeleted { room.isDeleted = false }
 
                             let isViewing: Bool = self.hydrationState.sync {
                                 self.messageObservationEnabled && (self.activeRoomId == roomId)
@@ -1851,6 +1857,43 @@ final class ChatRepository: ChatRepositoryProtocol {
             promise(.success(()))
         }
         .eraseToAnyPublisher()
+    }
+
+    /// Refreshes the room summary's `lastMessage*` fields after a local
+    /// message delete, by reading the most recent remaining message in
+    /// `MessageObject` and mirroring it into the in-memory cache, Realm,
+    /// and the live `RoomModel` so the chats list preview updates immediately.
+    func recomputeRoomSummaryAfterMessageDeletion(roomId: String) {
+        let latest = DBManager.shared.fetchLatestMessageSummary(inRoom: roomId)
+        let resolvedSenderName: String? = latest.flatMap { l in
+            ContactManager.shared.contact(for: l.sender)?.fullName ?? l.sender
+        }
+
+        let updated = summaryMutateSync(roomId) { s in
+            if let l = latest {
+                s.lastMessage = l.body
+                s.lastMessageType = l.msgType
+                s.lastSender = l.sender
+                s.lastSenderName = resolvedSenderName
+            } else {
+                s.lastMessage = nil
+                s.lastMessageType = nil
+                s.lastSender = nil
+                s.lastSenderName = nil
+            }
+        }
+
+        guard let snapshot = updated else { return }
+        DBManager.shared.saveRoomSummary(snapshot)
+
+        Task { @MainActor in
+            let live: RoomModel? = self.hydrationState.sync { self.hydrationRoomsById[roomId] }
+                ?? self.rooms.first(where: { $0.id == roomId })
+            guard let room = live else { return }
+            room.lastMessage = snapshot.lastMessage ?? ""
+            room.lastMessageType = snapshot.lastMessageType ?? "m.text"
+            room.lastSenderName = snapshot.lastSenderName
+        }
     }
     
     func inviteToRoom(roomId: String, userId: String, reason: String) -> AnyPublisher<APIResult<MatrixEmptyResponse>, APIError> {
