@@ -122,8 +122,7 @@ struct MoreMenuView: View {
                 .padding(.horizontal, 16)
                 .padding(.vertical, 6)
                 .background(
-                    Color.white
-                        .shadow(color: Color.black.opacity(0.05), radius: 5, x: 0, y: 2)
+                    Design.Color.backgroundColor
                 )
                 .frame(maxWidth: .infinity)
 
@@ -135,11 +134,11 @@ struct MoreMenuView: View {
                         handleAction(action)
                     }
                     if index < actions.count - 1 {
-                        Divider()
+//                        Divider()
                     }
                 }
             }
-            .background(.thinMaterial)
+            .background(Color(Design.Color.darkgrayColor))
             .cornerRadius(cornerRadius)
             .frame(width: menuWidth)
             .padding(.top, 12)
@@ -178,15 +177,17 @@ struct MoreMenuView: View {
             HStack(spacing: 12) {
                 Image(icon)
                     .resizable()
+                    .renderingMode(.template)
+                    .foregroundColor(.white)
                     .aspectRatio(contentMode: .fit)
                     .frame(width: 20, height: 20)
                 Text(label)
-                    .font(Design.Font.regular(14))
+                    .font(Design.Font.medium(14))
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
             .padding(.horizontal, 20)
             .padding(.vertical, 12)
-            .foregroundColor(Design.Color.primaryText.opacity(0.6))
+            .foregroundColor(Design.Color.primaryTextColor.opacity(0.6))
         }
         .buttonStyle(.plain)
     }

@@ -34,7 +34,9 @@ final class ChatViewModel: ObservableObject {
     let visibleMessageIDs = CurrentValueSubject<Set<String>, Never>([])
     
     var currentRoomId: String?
-    var selectedRoom: RoomModel?
+    private(set) var selectedRoom: RoomModel? {
+        didSet { currentRoomId = selectedRoom?.id }
+    }
 
     // Single worker for all heavy work
     private let processQ = DispatchQueue(label: "chat.vm.process", qos: .userInitiated)
@@ -109,6 +111,8 @@ final class ChatViewModel: ObservableObject {
             }
             .sink(receiveValue: { [weak self] merged in
                 print("Merged messsages: \(merged.count)")
+                for msg in merged { print("msg eventID ---\(msg.eventId) --- \(msg.content) -- \(msg.callStatus)-- \(msg.lifetime)")}
+
                 guard let self else { return }
                 let sections = self.buildSections(from: merged) // off-main safe
                 DispatchQueue.main.async { [self] in
@@ -210,35 +214,21 @@ final class ChatViewModel: ObservableObject {
     
     // MARK: - Active room lifecycle
     // Set or clear the active room. Handles enabling/disabling observation + light UI reset.
-    func setActiveRoom(_ roomId: String?) {
-        // no-op if unchanged
-        if currentRoomId == roomId { return }
+    func setActiveRoom(_ room: RoomModel?) {
+        // No-op if unchanged
+        if selectedRoom?.id == room?.id { return }
 
-        // Tear down previous room (if any)
+        // Tear down previous
         if currentRoomId != nil {
             disableMessageObservation()
             stopFetchingMessages()
         }
 
-        currentRoomId = roomId
+        // Setting this sets currentRoomId via didSet
+        selectedRoom = room
 
-        if let id = roomId {
-            // Fresh state for new room
-            DispatchQueue.main.async {
-                self.messages.removeAll()
-                self.sections.removeAll()
-                self.typingUsers.removeAll()
-                self.isPagingTop = false
-                self.didLoadMessages = false
-                self.errorMessage = nil
-                self.isLoading = true
-                self.canLoadMoreTop = true
-            }
-
-            enableMessageObservation()
-            fetchMessages(forRoom: id)
-        } else {
-            // Cleared: not inside any chat
+        // If we're clearing, reset UI and exit
+        guard let id = room?.id else {
             DispatchQueue.main.async {
                 self.messages.removeAll()
                 self.sections.removeAll()
@@ -246,12 +236,28 @@ final class ChatViewModel: ObservableObject {
                 self.isLoading = false
                 self.canLoadMoreTop = false
             }
+            return
         }
+
+        // Fresh state for new room
+        DispatchQueue.main.async {
+            self.messages.removeAll()
+            self.sections.removeAll()
+            self.typingUsers.removeAll()
+            self.isPagingTop = false
+            self.didLoadMessages = false
+            self.errorMessage = nil
+            self.isLoading = true
+            self.canLoadMoreTop = true
+        }
+
+        enableMessageObservation()
+        fetchMessages(forRoom: id)
     }
 
     // Convenience: call when pushing a Chat screen
-    func enterRoom(id: String) {
-        setActiveRoom(id)
+    func enterRoom(room: RoomModel) {
+        setActiveRoom(room)
     }
 
     // Convenience: call when leaving a Chat screen
@@ -262,8 +268,8 @@ final class ChatViewModel: ObservableObject {
     }
 
     // Safer “leave” that won’t nuke observation if another chat replaced it.
-    func leaveIfMatches(_ roomId: String) {
-        guard currentRoomId == roomId else { return }
+    func leaveIfMatches(room: RoomModel) {
+        guard currentRoomId == room.id else { return }
         setActiveRoom(nil)
     }
     
@@ -284,10 +290,18 @@ final class ChatViewModel: ObservableObject {
                                 currentRoomId: String?
     ) -> [ChatMessageModel] {
         guard let currentRoomId else { return current }
-        var map: [String: ChatMessageModel] = Dictionary(uniqueKeysWithValues: current.map { ($0.eventId, $0) })
+//        var map: [String: ChatMessageModel] = Dictionary(uniqueKeysWithValues: current.map { ($0.eventId, $0) })
+        var map: [String: ChatMessageModel] = [:]
+        // Required todo follwoing way so it wont show duplicate msgs in chat and take the latest matrix event - VOIP
+        for message in current {
+            map[message.eventId] = message
+        }
 
         for msg in incoming where msg.roomId == currentRoomId {
+            print("Callmanager ----------- mergedMessages --\(msg.content)")
             if let existing = map[msg.eventId] {
+                print("existing ----------- \(existing.callStatus) -- \(existing.lifetime)")
+
                 if let newUrl = msg.mediaUrl, !newUrl.isEmpty, newUrl != existing.mediaUrl {
                     existing.mediaUrl = newUrl
                 }
@@ -309,6 +323,14 @@ final class ChatViewModel: ObservableObject {
                     } else {
                         existing.reactions.append(r)
                     }
+                }
+                
+                if let lifetime = msg.lifetime, lifetime != existing.lifetime {
+                    existing.lifetime = lifetime
+                }
+                
+                if let callStatus = msg.callStatus, callStatus != existing.callStatus {
+                    existing.callStatus = callStatus
                 }
             } else {
                 map[msg.eventId] = msg
@@ -405,8 +427,10 @@ final class ChatViewModel: ObservableObject {
     }
 
     func sendMessage(toRoom roomId: String, inReplyTo: ChatMessageModel? = nil) {
+        let session = Storage.get(for: .authSession, type: .keychain, as: AuthSession.self)
+
         guard !newMessage.isEmpty,
-              let userId = currentUser?.userId,
+              let userId = currentUser?.userId ?? session?.userId,
               let currentRoomId = currentRoomId else { return }
 
         let tempId = UUID().uuidString
@@ -655,9 +679,9 @@ final class ChatViewModel: ObservableObject {
 
         roomService
             .uploadMedia(fileURL: fileURL, fileName: fileName, mimeType: mimeType, onProgress: { [weak self] p in
-                guard let self = self else { return }
+                guard let self else { return }
                 DispatchQueue.main.async { [weak self] in
-                    self?.applyToMessage(id: tempId) { $0.downloadProgress = p }
+                    self?.updateMessageInPlace(id: tempId) { $0.downloadProgress = p }
                 }
             })
             .subscribe(on: processQ)
@@ -684,7 +708,7 @@ final class ChatViewModel: ObservableObject {
                         mimeType: mimeType
                     ) { resp in
                         DispatchQueue.main.async { [weak self] in
-                            self?.applyToMessage(id: tempId) { msg in
+                            self?.updateMessageInPlace(id: tempId) { msg in
                                 msg.eventId = resp.eventId
                                 msg.mediaUrl = mediaURL.absoluteString
                                 msg.downloadState = .downloaded
@@ -849,6 +873,132 @@ final class ChatViewModel: ObservableObject {
             })
             .store(in: &cancellables)
     }
+    
+    // MARK: - Call Message Methods
+    func sendCallMessage(callState: CallState, isVideo: Bool, eventId: String, callStatusUpdate: Bool = false, content: String? = nil, completion: @escaping (Result<String, Error>) -> Void) {
+        guard let validRoomId = currentRoomId else {
+            return completion(.failure(NSError(domain: "Invalid room ID", code: 0)))
+            
+        }
+        
+        let messageType: MessageType = isVideo ? .videoCall : .voiceCall
+
+        let message = ChatMessageModel(
+            eventId: eventId,
+            sender: currentUser?.userId ?? "",
+            content: content ?? callStateToMessageContent(callState, isVideo: isVideo),
+            timestamp: Int64(Date().timeIntervalSince1970 * 1000),
+            msgType: messageType.rawValue,
+            userId: currentUser?.userId ?? "",
+            roomId: validRoomId,
+            callId: callStatusUpdate ? "changeStatus" : nil,
+            lifetime: "0",
+            invitee: "12345",
+            offer: Offer(sdp: "1", type: "2"),
+            partyId: "123456789",
+            callStatus: CallStatus.ringing.rawValue
+        )
+        
+        messages.append(message)
+        isLoading = true
+        
+        // Send call message directly to server
+        roomService.sendMessage(message: message)
+            .receive(on: DispatchQueue.main)
+            .sink(receiveCompletion: { completion in
+                if case let .failure(error) = completion {
+                    self.errorMessage = "Call message send failed: \(error.localizedDescription)"
+                }
+                self.isLoading = false
+            }, receiveValue: { response in
+                switch response {
+                    case .success(let sendMessageResponse):
+                        print("Call message sent -\(sendMessageResponse.eventId)")
+                        if let index = self.messages.firstIndex(where: { $0.eventId == message.eventId }) {
+                            self.messages[index].eventId = sendMessageResponse.eventId
+                        }
+                        completion(.success(sendMessageResponse.eventId))
+                    case .unsuccess(let error):
+                        print("Call message API error", error)
+                        completion(.failure(error))
+                        break
+                }
+            })
+            .store(in: &cancellables)
+        
+    }
+    
+    func sendCallUpdate(callState: CallState, isVideo: Bool, eventId: String, callStatusUpdate: Bool = false, content: String? = nil, completion: @escaping (Result<String, Error>) -> Void) {
+        guard let validRoomId = currentRoomId else {
+            return completion(.failure(NSError(domain: "Invalid room ID", code: 0)))
+            
+        }
+                
+        let message = ChatMessageModel(
+            eventId: eventId,
+            sender: currentUser?.userId ?? "",
+            content: content ?? callStateToMessageContent(callState, isVideo: isVideo),
+            timestamp: Int64(Date().timeIntervalSince1970 * 1000),
+            msgType: MessageType.text.rawValue,
+            userId: currentUser?.userId ?? "",
+            roomId: validRoomId,
+            callId: callStatusUpdate ? "changeStatus" : nil,
+            lifetime: "0",
+            invitee: "0",
+            offer: Offer(sdp: "1", type: "2"),
+            partyId: "0",
+            callStatus: CallStatus.ended.rawValue
+        )
+        
+//        messages.append(message)
+        isLoading = true
+        
+        // Send call message directly to server
+        roomService.sendMessage(message: message)
+            .receive(on: DispatchQueue.main)
+            .sink(receiveCompletion: { completion in
+                if case let .failure(error) = completion {
+                    self.errorMessage = "Call message send failed: \(error.localizedDescription)"
+                }
+                self.isLoading = false
+            }, receiveValue: { response in
+                switch response {
+                    case .success(let sendMessageResponse):
+                        print("Call message sent -\(sendMessageResponse.eventId)")
+                        if let index = self.messages.firstIndex(where: { $0.eventId == message.eventId }) {
+                            self.messages[index].eventId = sendMessageResponse.eventId
+                        }
+                        completion(.success(sendMessageResponse.eventId))
+                    case .unsuccess(let error):
+                        print("Call message API error", error)
+                        completion(.failure(error))
+                        break
+                }
+            })
+            .store(in: &cancellables)
+        
+    }
+    
+    private func callStateToMessageContent(_ callState: CallState, isVideo: Bool) -> String {
+        let callType = isVideo ? "video" : "voice"
+        
+        switch callState {
+            case .incoming:
+                return "incoming \(callType) call"
+            case .outgoing:
+                return "ringing \(callType) call"
+            case .ongoing:
+                return "\(callType) call in-progress"
+            case .decline:
+                return "\(callType) call declined"
+            case .declineWithMessage:
+                return "\(callType) call declined with message"
+            case .end:
+                return "\(callType) call ended"
+            case .idle:
+                return ""
+        }
+    }
 }
 
 // MARK: - Local Deletes
@@ -878,5 +1028,11 @@ extension ChatViewModel {
         edit(&copy)
         messages = copy
         sections = buildSections(from: copy)
+    }
+    
+    @MainActor
+    func updateMessageInPlace(id: String, _ edit: (ChatMessageModel) -> Void) {
+        guard let i = messages.firstIndex(where: { $0.eventId == id }) else { return }
+        edit(messages[i])                     // mutate the existing ObservedObject
     }
 }

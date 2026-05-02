@@ -213,57 +213,6 @@ class RoomModel: ObservableObject, Identifiable, Equatable, Hashable {
         //setupObserversIfNeeded()
         self.isHydrated = true
     }
-        
-    // MARK: - Central update logic for members
-//    private func updateMembers(joined: [ContactModel], invited: [ContactModel], left: [ContactModel]) {
-//        let participants = joined + invited + left
-//        if participants.isEmpty {
-//            return
-//        }
-//        self.participants = participants
-//        self.participantsCount = self.participants.count
-//        self.isGroup = self.participantsCount > 2
-//        
-//        // opponent logic
-//        if !isGroup, let currentUserId = self.currentUser?.userId {
-//            self.opponent = self.participants.first(where: { $0.userId != currentUserId })
-//        } else {
-//            self.opponent = nil
-//        }
-//        
-//        // room name logic
-//        if isGroup {
-//            let createRoomEvent = self.state?.events?.first(where: { $0.type == "m.room.name" })
-//            if self.name.isEmpty {
-//                self.name = createRoomEvent?.content?.name ?? "Group"
-//            } else if let newName = createRoomEvent?.content?.name {
-//                self.name = newName
-//            }
-//            
-//            if let avatarEvent = self.state?.events?.first(where: { $0.type == "m.room.avatar" }),
-//                let avatarUrlString = avatarEvent.content?.url as? String {
-//                self.avatarUrl = avatarUrlString
-//            }
-//        } else if let opponent = self.opponent {
-//            if let fullName = opponent.fullName, !fullName.isEmpty {
-//                self.name = fullName
-//            } else {
-//                self.name = opponent.phoneNumber
-//            }
-//            self.avatarUrl = opponent.avatarURL
-//        } else {
-//            self.name = "Chat"
-//        }
-//    }
-    
-    // MARK: - Combine observers
-//    func setupObservers() {
-//        Publishers.CombineLatest3($joinedMembers, $invitedMembers, $leftMembers)
-//            .sink { [weak self] joined, invited, left in
-//                self?.updateMembers(joined: joined, invited: invited, left: left)
-//            }
-//            .store(in: &cancellables)
-//    }
     
     func getCurrentUserContact() -> ContactModel? {
         if let currentUserData = Storage.get(for: .authSession, type: .keychain, as: AuthSession.self),

@@ -9,6 +9,7 @@
 import UIKit
 import UserNotifications
 import Combine
+import JitsiMeetSDK
 
 final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
 
@@ -44,9 +45,10 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         // Register notification categories with actions
         registerNotificationCategories()
 
-        // Start the registration orchestration (APNs token + Matrix token)
+        // Start the registration; orchestration (APNs token + Matrix token)
         pushRegistrar.start()
-
+        pushRegistrar.voipStart()
+        PushKitManager.shared.registerForPushKit()
         return true
     }
 
@@ -70,8 +72,15 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
     func userNotificationCenter(_ center: UNUserNotificationCenter,
                                 willPresent notification: UNNotification,
                                 withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
-        // Show banner/list/sound even when app is foreground
-        completionHandler([.banner, .list, .sound, .badge])
+        
+
+        if let type = notification.request.content.userInfo["content_msgtype"], (type as? String) == "m.voiceCall" || (type as? String) == "m.videoCall"{
+            completionHandler([])
+        }else{
+            // Show banner/list/sound even when app is foreground
+            completionHandler([.banner, .list, .sound, .badge])
+        }
+        
     }
 
     // MARK: - User tapped a notification
@@ -80,7 +89,6 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
                                 didReceive response: UNNotificationResponse,
                                 withCompletionHandler completionHandler: @escaping () -> Void) {
         let userInfo = response.notification.request.content.userInfo
-        
         // Handle different action identifiers
         switch response.actionIdentifier {
         case "REPLY_ACTION":

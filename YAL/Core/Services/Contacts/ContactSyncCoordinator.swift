@@ -163,7 +163,8 @@ final class ContactSyncCoordinator {
             switch changes {
             case .initial(let collection),
                  .update(let collection, _, _, _):
-                self.updateSharedCache(from: collection)
+                let frozen = collection.freeze()
+                self.updateSharedCache(from: frozen)
 
             case .error(let error):
                 print("Realm contact observation error: \(error)")
@@ -227,7 +228,7 @@ final class ContactSyncCoordinator {
             isBlocked: false,
             isSynced: (o.userId?.isEmpty == false),
             isOnline: false,
-            lastSeen: nil
+            lastSeen: o.lastSeen
         )
     }
     
@@ -261,6 +262,9 @@ final class ContactSyncCoordinator {
                 }
                 if let dob = object.dob, !dob.isEmpty, existing.dob != dob {
                     existing.dob = dob
+                }
+                if let lastSeen = object.lastSeen, existing.lastSeen != lastSeen {
+                    existing.lastSeen = lastSeen
                 }
                 if let emailData = object.emailData, !emailData.isEmpty {
                     do {
@@ -297,7 +301,7 @@ final class ContactSyncCoordinator {
                     isBlocked: false,
                     isSynced: false,
                     isOnline: false,
-                    lastSeen: nil
+                    lastSeen: object.lastSeen
                 )
                 cache[key] = new
                 return new

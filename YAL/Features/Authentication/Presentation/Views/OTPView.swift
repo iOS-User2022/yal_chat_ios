@@ -32,7 +32,7 @@ struct OTPView: View {
         GeometryReader { geometry in
             ZStack(alignment: .topLeading) {
                 mainContent(geometry: geometry)
-                backButton()
+                //backButton()
             }
             .ignoresSafeArea(.keyboard, edges: .bottom)
             .ignoresSafeArea()
@@ -53,6 +53,8 @@ struct OTPView: View {
     private func mainContent(geometry: GeometryProxy) -> some View {
         VStack(spacing: 0) {
             Spacer().frame(height: geometry.safeAreaInsets.top + 139)
+            Image("YAL Logo 1").frame(width: 40, height: 40)
+            Spacer().frame(height: 24)
             headingSection()
             Spacer().frame(height: 12)
             subHeadingSection()
@@ -61,12 +63,11 @@ struct OTPView: View {
             Spacer().frame(height: 16)
             resendSection()
             Spacer().frame(height: 48)
-            verifyButton()
+            verifyButton().padding(.horizontal, 14)
             Spacer()
-            errorSection()
         }
         .padding(.horizontal, 30)
-        .background(Color.white)
+        .background(Design.Color.backgroundColor.ignoresSafeArea())
         .onAppear {
             startTimer()
             observeVerification()
@@ -79,7 +80,7 @@ struct OTPView: View {
     private func headingSection() -> some View {
         Text("Check your Message")
             .font(Design.Font.bold(24))
-            .foregroundColor(Design.Color.headingText)
+            .foregroundColor(Design.Color.primaryTextColor)
             .multilineTextAlignment(.center)
     }
 
@@ -87,11 +88,11 @@ struct OTPView: View {
     private func subHeadingSection() -> some View {
         (
             Text("We’ve sent a 6-digit code to\n\(viewModel.maskedPhone). Make sure you enter correct code. ")
-                .foregroundColor(Design.Color.headingText.opacity(0.7))
+                .foregroundColor(Design.Color.primaryTextColor.opacity(0.8))
                 .font(Design.Font.body)
             +
             Text("Edit No.")
-                .foregroundColor(Design.Color.navy)
+                .foregroundColor(Design.Color.blueHedlineColor)
                 .underline()
                 .font(Design.Font.bold(16))
         )
@@ -119,7 +120,7 @@ struct OTPView: View {
                     .font(Design.Font.body)
                 +
                 Text("Resend")
-                    .foregroundColor(Design.Color.navy.opacity(0.45))
+                    .foregroundColor(Design.Color.blueHedlineColor)
                     .underline()
                     .font(Design.Font.body)
             )
@@ -127,11 +128,11 @@ struct OTPView: View {
         } else {
             (
                 Text("Didn't receive the code ")
-                    .foregroundColor(Design.Color.grayText)
+                    .foregroundColor(Design.Color.secondryTextColor)
                     .font(Design.Font.body)
                 +
                 Text("Resend")
-                    .foregroundColor(Design.Color.navy)
+                    .foregroundColor(Design.Color.blueHedlineColor)
                     .underline()
                     .font(Design.Font.bold(16))
             )
@@ -145,30 +146,22 @@ struct OTPView: View {
     @ViewBuilder
     private func verifyButton() -> some View {
         Button(action: {
-            viewModel.verifyOtp() {
-                hideKeyboard()
-                self.viewModel.showAlertForDeniedPermission()
-                showAlert = true
-            }
+            triggerVerification()
         }) {
             HStack(spacing: 12) {
                 Spacer()
                 Text("Verify")
-                Image("arrow-right-white")
-                    .resizable()
-                    .frame(width: 20, height: 20)
                 Spacer()
             }
             .font(Design.Font.button)
-            .foregroundColor(.white)
+            .foregroundColor(isOTPComplete ? .white : Design.Color.medium_gray)
             .padding()
             .frame(height: 60)
             .frame(maxWidth: .infinity)
             .background(
-                isOTPComplete ? Design.Color.appGradient.opacity(1.0) : Design.Color.appGradient.opacity(0.6)
+                isOTPComplete ? Design.Color.appGradient.opacity(1.0) : Design.Color.disabledGradient.opacity(0.6)
             )
-            .cornerRadius(20)
-            .shadow(color: Color.black.opacity(0.2), radius: 10, x: 0, y: 5)
+            .cornerRadius(12)
         }
         .padding(.horizontal, 12.5)
         .disabled(!isOTPComplete || viewModel.isVerifying)
@@ -190,6 +183,7 @@ struct OTPView: View {
         TextField("", text: Binding(
             get: { viewModel.digits.joined() },
             set: { newValue in
+                let previousCount = viewModel.digits.joined().count
                 let cleaned = String(newValue.prefix(6))
                 for (i, char) in cleaned.enumerated() {
                     if i < viewModel.digits.count {
@@ -198,6 +192,11 @@ struct OTPView: View {
                 }
                 for i in cleaned.count..<viewModel.digits.count {
                     viewModel.digits[i] = ""
+                }
+
+                // Auto-submit when the 6th digit is entered.
+                if previousCount < 6, cleaned.count == 6, !viewModel.isVerifying {
+                    triggerVerification()
                 }
             }
         ))
@@ -228,25 +227,21 @@ struct OTPView: View {
             // Digit at center top
             Text(viewModel.digits[index])
                 .font(Design.Font.regular(16))
-                .foregroundColor(Design.Color.primaryText.opacity(0.7))
+                .foregroundColor(Design.Color.primaryTextColor.opacity(0.7))
             
             // Small underline inside box
             if viewModel.digits[index].isEmpty {
                 Rectangle()
                     .frame(width: 11, height: 1)
-                    .foregroundColor(Design.Color.primaryText.opacity(0.7))
+                    .foregroundColor(Design.Color.primaryTextColor.opacity(0.7))
                     .padding(.horizontal, 8)
                 Spacer().frame(height: 3)
             }
         }
         .padding(.all, 7)
-        .frame(width: 27, height: 38)
-        .overlay(
-            RoundedRectangle(cornerRadius: 4)
-                .inset(by: 0.5)
-                .stroke(Design.Color.navy, lineWidth: 1)
-            
-        )
+        .frame(width: 40, height: 40)
+        .background(Color(hex: "#202D35"))
+        .cornerRadius(4)
     }
 
     @ViewBuilder
@@ -304,6 +299,14 @@ struct OTPView: View {
             if success {
                 startTimer()
             }
+        }
+    }
+
+    private func triggerVerification() {
+        viewModel.verifyOtp {
+            hideKeyboard()
+            viewModel.showAlertForDeniedPermission()
+            showAlert = true
         }
     }
 }

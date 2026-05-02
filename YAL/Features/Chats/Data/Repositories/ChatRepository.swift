@@ -148,6 +148,7 @@ final class ChatRepository: ChatRepositoryProtocol {
     private var messageObservationEnabled = false
     private var activeRoomId: String? = nil
     private var didWarmCache = false
+    private var membershipMap: [String: Set<String>] = [:]
     
     @inline(__always)
     private func equalAsSet(_ a: [String], _ b: [String]) -> Bool { Set(a) == Set(b) }
@@ -161,6 +162,7 @@ final class ChatRepository: ChatRepositoryProtocol {
         self.observeEphemeralEvents()
         self.observeRooms()
         self.observeProfileSyncNotifications()
+        self.wirePresence()
 
         self.matrixAPIManager.syncResponsePublisher
             .receive(on: DispatchQueue.global(qos: .userInitiated))
@@ -217,6 +219,43 @@ final class ChatRepository: ChatRepositoryProtocol {
             print("Room \(roomId) not found in ChatRepository")
             return nil
         }
+    }
+    
+    private func wirePresence() {
+        ContactManager.shared.presencePublisher
+            .receive(on: roomDrainQueue)
+            .sink { [weak self] event in
+                guard let self, let userId = event.sender, let eventContent = event.content else { return }
+                
+                let hasOnline = (eventContent.currentlyActive != nil)
+                let online    = eventContent.currentlyActive ?? false
+                let lastSeen  = eventContent.lastActiveAgo
+                let avatar    = eventContent.avatarURL
+                let status    = eventContent.statusMessage
+
+                let roomIds = membershipMap[userId]
+                for roomId in roomIds ?? [] {
+                    var members: Set<ContactModel> = []
+                    members.reserveCapacity(roomIds?.count ?? 0)
+                    
+                    if let room = roomsAccumulatedById[roomId],
+                       let p = room.participants.first(where: { $0.userId == userId }) {
+                        members.insert(p)
+                    }
+                    
+                    guard !members.isEmpty else { return }
+                    DispatchQueue.main.async {
+                        for p in members {
+                            if hasOnline { p.isOnline = online }
+                            if let v = lastSeen { p.lastSeen = v }
+                            if let v = avatar, !v.isEmpty { p.avatarURL = v }
+                            if let v = status, !v.isEmpty { p.statusMessage = v }
+                        }
+                    }
+                }
+                
+            }
+            .store(in: &cancellables)
     }
     
     func observeMessages() {
@@ -387,7 +426,7 @@ final class ChatRepository: ChatRepositoryProtocol {
                 updated.reserveCapacity(values.count)
 
                 for var s in values {
-                    self.summaryWrite {
+                    self.summarySyncWrite {
                         s.applyUpdatedContacts(for: changedIds)
                         self.hydratedSummariesById[s.id] = s
                         updated.append(s)
@@ -410,12 +449,9 @@ final class ChatRepository: ChatRepositoryProtocol {
     @MainActor
     private func applySummaryToRoom(_ s: RoomSummaryModel) {
         if let existing = hydrationState.sync(execute: { hydrationRoomsById[s.id] }) {
-            // Update in place
             s.applyFull(to: existing)
             upsertRoomInArray(existing)
-            // Optional: persist (you already do this elsewhere; keep if you want DB to mirror UI)
         } else {
-            // Create a room from summary and register it
             let created = s.materializeRoomModel()
             roomsAccumulatedById[s.id] = created
             upsertRoomInArray(created)
@@ -519,7 +555,7 @@ final class ChatRepository: ChatRepositoryProtocol {
                         let o = frozen[idx]
                         let id = o.id
                        
-                        if var existing = self.hydratedSummariesById[id] {
+                        if let existing = self.hydratedSummariesById[id] {
 //                            let (changed, _) = self.patchSummary(&existing, with: o)
                             //guard changed else { continue }               // skip no-ops
 
@@ -743,7 +779,15 @@ final class ChatRepository: ChatRepositoryProtocol {
             if l != r { return l > r }
             return lhs.id > rhs.id
         }
-
+        
+        let roomId = model.id
+        let newMembers = Set(model.participants.compactMap { $0.userId }.filter { !$0.isEmpty })
+        
+        summaryQueue.async(flags: .barrier) {
+            for uid in newMembers {
+                self.membershipMap[uid, default: []].insert(roomId)
+            }
+        }
         rooms = updatedRooms
     }
     
@@ -1061,20 +1105,8 @@ final class ChatRepository: ChatRepositoryProtocol {
         let nextBatch = syncResponse.nextBatch ?? ""
         DBManager.shared.saveRoomSync(nextBatch: nextBatch)
         
-        let presenceMap = Dictionary(
-            uniqueKeysWithValues: (syncResponse.presence?.events ?? [])
-                .map { ($0.sender, $0) }
-        )
-        for (userId, presenceEvent) in presenceMap {
-            if let userId = userId {
-                ContactManager.shared.updatePresence(
-                    for: userId,
-                    isOnline: presenceEvent.content?.currentlyActive ?? false,
-                    lastSeen: presenceEvent.content?.lastActiveAgo,
-                    avatarURL: presenceEvent.content?.avatarURL,
-                    statusMessage: presenceEvent.content?.statusMessage
-                )
-            }
+        for event in syncResponse.presence?.events ?? [] {
+            ContactManager.shared.updatePresence(presenceEvent: event)
         }
         
         let roomsDict = syncResponse.rooms?.join ?? [:]
@@ -1104,15 +1136,6 @@ final class ChatRepository: ChatRepositoryProtocol {
                             unreadCount: roomSummary.unreadNotifications?.notificationCount,
                             rehydrateWith: resolver
                         )
-
-                        for i in s.participants.indices {
-                            if let uid = s.participants[i].userId, let pres = presenceMap[uid] {
-                                s.participants[i].setIsOnline(isOnline: pres.content?.currentlyActive ?? false)
-                                s.participants[i].setLastSeen(lastSeen: pres.content?.lastActiveAgo ?? 0)
-                                s.participants[i].setAvatarURL(avatarURL: pres.content?.avatarURL ?? "")
-                                s.participants[i].setStatusMessage(statusMessage: pres.content?.statusMessage ?? "")
-                            }
-                        }
                     }
 
                     if let s = updated {
@@ -1189,7 +1212,6 @@ final class ChatRepository: ChatRepositoryProtocol {
                 var redactions: [String] = []
                 var reactions: [ReactionRecord] = []
                 var batchMessages: [ChatMessageModel] = []
-
                 var lastBody: String?
                 var lastSender: String?
                 var lastTs: Int64 = 0
@@ -1239,8 +1261,36 @@ final class ChatRepository: ChatRepositoryProtocol {
                                 )
                             }
 
-                        case "m.room.message":
+                        case "m.room.message", "m.call.invite":
                             let isRedacted = event.unsigned?.redactedBy != nil || event.unsigned?.redactedBecause != nil
+//                                if event.type == "m.call.invite" {
+//                                    if let auth = Storage.get(for: .authSession, type: .keychain, as: AuthSession.self) {
+//                                        let model = ChatMessageModel(
+//                                            content: "Ringing",
+//                                            message: event,
+//                                            roomId: roomId,
+//                                            currentUserId: auth.userId,
+//                                            members: members
+//                                        )
+//                                        if mode == .realtime {
+//                                            DBManager.shared.saveMessage(
+//                                                message: model,
+//                                                inRoom: roomId,
+//                                                inReplyTo: event.content?.relatesTo?.inReplyTo?.eventId
+//                                            )
+//                                        } else {
+//                                            batchMessages.append(model)
+//                                        }
+//                                    }
+//                                    
+//                                    if mode == .realtime, let ts = event.originServerTs, ts >= lastTs {
+//                                        lastTs = ts
+//                                        lastBody = "Ringing"
+//                                        lastSender = event.sender
+//                                        lastMsgType = event.content?.msgType ?? MessageType.text.rawValue
+//                                    }
+//                                }else{
+                                    
                             guard !isRedacted, let body = event.content?.body else { break }
 
                             if let auth = Storage.get(for: .authSession, type: .keychain, as: AuthSession.self) {
@@ -1270,6 +1320,8 @@ final class ChatRepository: ChatRepositoryProtocol {
                                 lastSender = event.sender
                                 lastMsgType = event.content?.msgType ?? MessageType.text.rawValue
                             }
+                                
+//                         }
 
                         default:
                             break
@@ -2065,7 +2117,12 @@ final class ChatRepository: ChatRepositoryProtocol {
 
     @inline(__always)
     private func summarySyncWrite<T>(_ block: () -> T) -> T {
-        summaryQueue.sync(flags: .barrier, execute: block)
+        if DispatchQueue.getSpecific(key: summaryQueueKey) != nil {
+            // already on summaryQueue → run inline (acts as a barrier relative to this task)
+            return block()
+        } else {
+            return summaryQueue.sync(flags: .barrier, execute: block)
+        }
     }
 
     @inline(__always)

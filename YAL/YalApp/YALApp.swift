@@ -20,11 +20,13 @@ struct YALApp: App {
     @StateObject private var appSettings = AppSettings()
     private let authVM: AuthViewModel
     private let router: Router
+    @StateObject var callManager = CallManager.shared
     
     init () {
         YALApp.initializeFirebase()
         YALApp.handleFreshInstall()
         MediaCacheManager.shared.warmMemoryCacheFromRealm()
+        YALApp.warmPreviewCacheFromDB()
         #if DEBUG
         NFX.sharedInstance().start()
         #endif
@@ -53,7 +55,9 @@ struct YALApp: App {
                     .environmentObject(router)
                     .environmentObject(container.resolve(AuthViewModel.self)!)
                     .environmentObject(appSettings)
-                    .preferredColorScheme(.light)
+                    .environmentObject(callManager)
+                    .environmentObject(ScrollIdleCenter.shared)
+                    .preferredColorScheme(.dark)
                     .onAppear {
                         router.currentRoute = .splash
                     }
@@ -64,6 +68,15 @@ struct YALApp: App {
                     .onOpenURL { url in
                         DeepLinkManager.shared.handle(url: url)
                     }
+                
+                // MARK: Incoming Call Overlay
+                if callManager.showCallUI,
+                   let roomModel = callManager.currentRoomModel
+                {
+                    CallScreen(roomModel: roomModel, callState: .ongoing)
+                        .transition(.move(edge: .top))
+                        .zIndex(1000)
+                }
             }.ignoresSafeArea(.all)
         }
     }
@@ -137,6 +150,12 @@ struct YALApp: App {
             let contacts = DBManager.shared.fetchContacts() ?? []
             guard !contacts.isEmpty else { return }
             ContactManager.shared.primeCache(with: contacts)
+        }
+    }
+    
+    private static func warmPreviewCacheFromDB() {
+        DispatchQueue.global(qos: .utility).async {
+            URLPreviewCache.shared.warmMemory()
         }
     }
 }

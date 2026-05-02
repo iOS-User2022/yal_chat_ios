@@ -10,49 +10,38 @@ import SwiftUI
 struct NotificationPreferencesView: View {
     @StateObject private var viewModel: NotificationPreferencesViewModel
     @Environment(\.dismiss) var dismiss
-    
-    init() {
+    @Binding var navPath: NavigationPath
+
+    init(navPath: Binding<NavigationPath>) {
         let viewModel = DIContainer.shared.container.resolve(NotificationPreferencesViewModel.self)!
         _viewModel = StateObject(wrappedValue: viewModel)
+        self._navPath = navPath
+
     }
     
     var body: some View {
         ZStack {
-            // Background
-            Color.white
+            // Dark Background
+            Color(hex: "0A171F")
                 .ignoresSafeArea(.all)
             
             VStack(spacing: 0) {
                 // Custom Navigation Bar
                 customNavigationBar()
                 
-                Spacer().frame(height: 20)
-                
                 ScrollView(showsIndicators: false) {
-                    VStack(spacing: 16) {
-                        // Messages Section
-                        messagesSection()
+                    VStack(spacing: 12) {
+                        // Notification for chats section
+                        notificationChatsSection()
                         
-                        // Groups Section
-                        groupsSection()
-                        
-                        // Notification Content Section
-                        notificationContentSection()
-                        
-                        // Reminders Section
-                        remindersSection()
-                        
-                        // Home Screen Notifications Section
-                        homeScreenNotificationsSection()
-                        
-                        // In-app Notifications Section
-                        inAppNotificationsSection()
-                        
-                        // Show Preview Section
-                        showPreviewSection()
+                        // Gradient Divider
+                        gradientDivider
+                        // Call section
+                        callSection()
                         
                         Spacer().frame(height: 40)
                     }
+                    .padding(.horizontal, 16)
                     .padding(.top, 20)
                 }
             }
@@ -61,88 +50,144 @@ struct NotificationPreferencesView: View {
         .toolbar(.hidden, for: .navigationBar)
         .sheet(isPresented: $viewModel.showSoundPicker) {
             SoundPickerView(
-                selectedSound: viewModel.currentSoundPickerType == .messages ? 
+                selectedSound: viewModel.currentSoundPickerType == .messages ?
                     viewModel.currentMessagesSound : viewModel.currentGroupsSound,
                 onSoundSelected: viewModel.selectSound
             )
         }
         .ignoresSafeArea(.all, edges: [.top, .bottom])
+        .navigationDestination(for: NotificationRoute.self) { route in
+            switch route {
+            case .privateChats:
+                PrivateChatNotificationView()
+            case .groups:
+                GroupChatNotificationView()
+            case .stories:
+                NotificationStoryView()
+            case .reactions:
+                NotificationReactionsView()
+            }
+        }
+        
+    }
+    private var gradientDivider: some View {
+        Rectangle()
+            .fill(
+                LinearGradient(
+                    colors: [
+                        Color.blue,
+                        Color.purple
+                    ],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+            )
+            .frame(height: 1)
+            .padding(.horizontal, 5)
+            .padding(.vertical, 4)
     }
     
     // MARK: - Custom Navigation Bar
     private func customNavigationBar() -> some View {
-        HStack(spacing: 20) {
+        HStack(spacing: 16) {
             Button(action: {
                 dismiss()
             }) {
                 Image("back-long")
+                    .renderingMode(.template)
                     .resizable()
                     .frame(width: 20, height: 20)
+                    .foregroundColor(.white)
             }
             
-            Spacer().frame(width: 20)
-            
-            Text("Notifications")
-                .font(Design.Font.heavy(16))
-                .foregroundColor(Design.Color.headingText)
+            Text("Notifications and Sounds")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(.white)
             
             Spacer()
+            
+            Button(action: {
+                // More options action
+            }) {
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(.white)
+                    .rotationEffect(.degrees(90))
+            }
         }
-        .padding(.horizontal, 20)
+        .padding(.horizontal, 16)
         .padding(.top, 56)
+        .padding(.bottom, 16)
     }
     
-    // MARK: - Messages Section
-    private func messagesSection() -> some View {
-        sectionContainer {
+    // MARK: - Notification for chats Section
+    private func notificationChatsSection() -> some View {
+        darkCardContainer {
             VStack(spacing: 0) {
-                sectionHeader("Messages")
-                    .padding(.top, 4)
+                sectionHeader("Notification for chats")
                 
-                toggleRow(
-                    title: "Sound Notifications",
+                darkCardRow(
+                    icon: "private_chat",
+                    title: "Private chats",
+                    subtitle: "Preview, Sounds",
                     isOn: viewModel.settingsManager.settings.messagesSoundEnabled,
-                    action: viewModel.toggleMessagesSoundEnabled
+                    action: viewModel.toggleMessagesSoundEnabled,
+                    onNavigate: {
+                                navPath.append(ProfileRoute.notificationsPrivateChat)  // uses root stack
+                            }
                 )
                 
-                navigationRow(
-                    title: "Sound",
-                    action: viewModel.showMessagesSoundPicker
+                darkCardRow(
+                    icon: "group_user",
+                    title: "Groups",
+                    subtitle: "Preview, Sounds",
+                    isOn: viewModel.settingsManager.settings.groupsSoundEnabled,
+                    action: viewModel.toggleGroupsSoundEnabled,
+                    onNavigate: { navPath.append(ProfileRoute.notificationsGroupChat) }
                 )
                 
-                toggleRow(
-                    title: "Show reaction notifications",
-                    isOn: viewModel.isMessagesReactionEnabled,
-                    action: viewModel.toggleMessagesReactionNotifications,
-                    isEnabled: viewModel.settingsManager.settings.messagesSoundEnabled
+                darkCardRow(
+                    icon: "story",
+                    title: "Stories",
+                    subtitle: "Preview, Sounds",
+                    isOn: viewModel.settingsManager.settings.storiesSoundEnabled,
+                    action: viewModel.toggleStoreisSoundEnabled,
+                    onNavigate: { navPath.append(ProfileRoute.notifiationStoryView) }
+                )
+                
+                darkCardRow(
+                    icon: "reactions",
+                    title: "Reactions",
+                    subtitle: "Preview, Sounds",
+                    isOn: viewModel.settingsManager.settings.reactionsSoundEnabled,
+                    action: viewModel.toggleReactionsSoundEnabled,
+                    onNavigate: { navPath.append(ProfileRoute.notifiationReactionView) }
                 )
             }
         }
     }
-    
-    // MARK: - Groups Section
-    private func groupsSection() -> some View {
-        sectionContainer {
+    // MARK: - Call Section
+    private func callSection() -> some View {
+        darkCardContainer {
             VStack(spacing: 0) {
-                sectionHeader("Groups")
-                    .padding(.top, 4)
+                sectionHeader("Call")
                 
-                toggleRow(
-                    title: "Sound Notifications",
-                    isOn: viewModel.settingsManager.settings.groupsSoundEnabled,
-                    action: viewModel.toggleGroupsSoundEnabled
+                // Vibrate
+                darkCardRow(
+                    icon: "vibrate",
+                    title: "Vibrate",
+                    subtitle: "Default (system)",
+                    isOn: true,
+                    action: {}
                 )
                 
-                navigationRow(
-                    title: "Sound",
-                    action: viewModel.showGroupsSoundPicker
-                )
-                
-                toggleRow(
-                    title: "Show reaction notifications",
-                    isOn: viewModel.isGroupsReactionEnabled,
-                    action: viewModel.toggleGroupsReactionNotifications,
-                    isEnabled: viewModel.settingsManager.settings.groupsSoundEnabled
+                // Ringtone
+                darkCardRow(
+                    icon: "ringtone",
+                    title: "Ringtone",
+                    subtitle: "Default (system)",
+                    isOn: true,
+                    action: {}
                 )
             }
         }
@@ -150,25 +195,34 @@ struct NotificationPreferencesView: View {
     
     // MARK: - Notification Content Section
     private func notificationContentSection() -> some View {
-        sectionContainer {
+        darkCardContainer {
             VStack(spacing: 0) {
                 sectionHeader("Notification Content")
-                    .padding(.top, 4)
+                
+                Divider()
+                    .background(Color.white.opacity(0.1))
+                    .padding(.horizontal, 16)
                 
                 VStack(spacing: 0) {
                     Text("Show")
-                        .font(Design.Font.medium(14))
-                        .foregroundColor(Design.Color.headingText)
+                        .font(.system(size: 14, weight: .regular))
+                        .foregroundColor(Color.white.opacity(0.6))
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 20)
-                        .padding(.top, 16)
+                        .padding(.horizontal, 16)
+                        .padding(.top, 12)
+                        .padding(.bottom, 8)
                     
-                    ForEach(NotificationContentType.allCases, id: \.self) { type in
-                        radioRow(
+                    ForEach(Array(NotificationContentType.allCases.enumerated()), id: \.element) { index, type in
+                        if index > 0 {
+                            Divider()
+                                .background(Color.white.opacity(0.1))
+                                .padding(.horizontal, 16)
+                        }
+                        
+                        darkRadioRow(
                             title: type.displayName,
                             isSelected: viewModel.currentNotificationContentType == type,
                             action: {
-                                print("Selected content type:", type)
                                 Storage.save(type, for: .notificationContentType, type: .userDefaults)
                                 viewModel.selectNotificationContentType(type)
                             }
@@ -181,9 +235,15 @@ struct NotificationPreferencesView: View {
     
     // MARK: - Reminders Section
     private func remindersSection() -> some View {
-        sectionContainer {
+        darkCardContainer {
             VStack(spacing: 0) {
-                toggleRowWithDescription(
+                sectionHeader("Reminders")
+                
+                Divider()
+                    .background(Color.white.opacity(0.1))
+                    .padding(.horizontal, 16)
+                
+                darkToggleRowWithDescription(
                     title: "Reminders",
                     description: "Get occasional reminders about messages, calls, or status updates you haven't seen.",
                     isOn: viewModel.settingsManager.settings.remindersEnabled,
@@ -195,12 +255,15 @@ struct NotificationPreferencesView: View {
     
     // MARK: - Home Screen Notifications Section
     private func homeScreenNotificationsSection() -> some View {
-        sectionContainer {
+        darkCardContainer {
             VStack(spacing: 0) {
                 sectionHeader("Home screen notifications")
-                    .padding(.top, 4)
                 
-                toggleRowWithDescription(
+                Divider()
+                    .background(Color.white.opacity(0.1))
+                    .padding(.horizontal, 16)
+                
+                darkToggleRowWithDescription(
                     title: "Clear badge",
                     description: "Your home screen badge clears completely after every time you open the app.",
                     isOn: viewModel.settingsManager.settings.clearBadgeEnabled,
@@ -212,17 +275,28 @@ struct NotificationPreferencesView: View {
     
     // MARK: - In-app Notifications Section
     private func inAppNotificationsSection() -> some View {
-        sectionContainer {
+        darkCardContainer {
             VStack(spacing: 0) {
                 sectionHeader("In-app notifications")
-                    .padding(.top, 4)
                 
-                ForEach(InAppNotificationType.allCases, id: \.self) { type in
-                    radioRow(
-                        title: type.displayName,
-                        isSelected: viewModel.currentInAppNotificationType == type,
-                        action: { viewModel.selectInAppNotificationType(type) }
-                    )
+                Divider()
+                    .background(Color.white.opacity(0.1))
+                    .padding(.horizontal, 16)
+                
+                VStack(spacing: 0) {
+                    ForEach(Array(InAppNotificationType.allCases.enumerated()), id: \.element) { index, type in
+                        if index > 0 {
+                            Divider()
+                                .background(Color.white.opacity(0.1))
+                                .padding(.horizontal, 16)
+                        }
+                        
+                        darkRadioRow(
+                            title: type.displayName,
+                            isSelected: viewModel.currentInAppNotificationType == type,
+                            action: { viewModel.selectInAppNotificationType(type) }
+                        )
+                    }
                 }
             }
         }
@@ -230,110 +304,137 @@ struct NotificationPreferencesView: View {
     
     // MARK: - Show Preview Section
     private func showPreviewSection() -> some View {
-        sectionContainer {
+        darkCardContainer {
             VStack(spacing: 0) {
-                toggleRow(
+                darkToggleRow(
                     title: "Show preview",
                     isOn: viewModel.settingsManager.settings.showPreview,
-                    action: viewModel.toggleShowPreview,
-                    font: Design.Font.semiBold(16)
+                    action: viewModel.toggleShowPreview
                 )
             }
         }
     }
     
     // MARK: - Helper Views
-    private func sectionContainer<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+    private func darkCardContainer<Content: View>(@ViewBuilder content: () -> Content) -> some View {
         VStack(spacing: 0) {
             content()
         }
-        .background(Design.Color.tabHighlight.opacity(0.12))
+        .background(Color(hex: "0A171F"))
+        .cornerRadius(12)
     }
     
     private func sectionHeader(_ title: String) -> some View {
         Text(title)
-            .font(Design.Font.semiBold(14))
-            .foregroundColor(Design.Color.headingText)
+            .font(.system(size: 10, weight: .regular))
+            .foregroundColor(Color(hex: "#F7F7F7"))
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 20)
-            .padding(.vertical, 8)
+            .padding(.horizontal, 5)
+            .padding(.vertical, 0)
     }
     
-    private func toggleRow(
+    private func darkCardRow(
+        icon: String,
         title: String,
+        subtitle: String,
         isOn: Bool,
         action: @escaping () -> Void,
-        isEnabled: Bool = true,
-        font: Font = Design.Font.regular(16)
+        onNavigate: (() -> Void)? = nil
     ) -> some View {
-        HStack {
-            Text(title)
-                .font(font)
-                .foregroundColor(Design.Color.headingText)
-                        
-            Toggle("", isOn: .constant(isOn))
-                .toggleStyle(SwitchToggleStyle(tint: Design.Color.blue))
-                .disabled(!isEnabled)
-                .onTapGesture {
-                    if isEnabled {
+        HStack(spacing: 12) {
+            Image(icon)
+                .font(.system(size: 24))
+                .foregroundColor(.white)
+                .frame(width: 32, height: 32)
+            
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(.white)
+                
+                Text(subtitle)
+                    .font(.system(size: 12, weight: .regular))
+                    .foregroundColor(Color.white.opacity(0.5))
+            }
+            
+            Spacer()
+            
+            Toggle("", isOn: Binding(
+                get: { isOn },
+                set: { newValue in
+                    if newValue == false {
+                        action()
+                        onNavigate?()
+                    } else {
                         action()
                     }
                 }
+            ))
+            .toggleStyle(GradientToggleStyle(
+                gradient: LinearGradient(
+                    colors: [Color.blue, Color.purple],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+            ))
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 8)
+        .padding(.horizontal, 5)
+        .padding(.vertical, 14)
     }
     
-    private func toggleRowWithDescription(
+    private func darkToggleRow(
+        title: String,
+        isOn: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
+        HStack {
+            Text(title)
+                .font(.system(size: 16, weight: .regular))
+                .foregroundColor(.white)
+                        
+            Spacer()
+            
+            Toggle("", isOn: .constant(isOn))
+                .toggleStyle(SwitchToggleStyle(tint: Color.blue))
+                .onTapGesture {
+                    action()
+                }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+    }
+    
+    private func darkToggleRowWithDescription(
         title: String,
         description: String,
         isOn: Bool,
         action: @escaping () -> Void
     ) -> some View {
-        HStack(alignment: .top) {
+        HStack(alignment: .top, spacing: 12) {
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)
-                    .font(Design.Font.semiBold(14))
-                    .foregroundColor(Design.Color.headingText)
-                    .padding(.top, 4)
+                    .font(.system(size: 16, weight: .regular))
+                    .foregroundColor(.white)
                 
                 Text(description)
-                    .font(Design.Font.regular(10))
-                    .foregroundColor(Color(hex: "828188"))
+                    .font(.system(size: 13, weight: .regular))
+                    .foregroundColor(Color.white.opacity(0.5))
                     .multilineTextAlignment(.leading)
             }
             
             Spacer()
             
             Toggle("", isOn: .constant(isOn))
-                .toggleStyle(SwitchToggleStyle(tint: Design.Color.blue))
+                .toggleStyle(SwitchToggleStyle(tint: Color.blue))
                 .onTapGesture {
                     action()
                 }
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 8)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
     }
     
-    private func navigationRow(title: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack {
-                Text(title)
-                    .font(Design.Font.regular(16))
-                    .foregroundColor(Design.Color.headingText)
-                
-                Spacer()
-                
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(Design.Color.grayText)
-            }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 8)
-        }
-    }
-    
-    private func radioRow(
+    private func darkRadioRow(
         title: String,
         isSelected: Bool,
         action: @escaping () -> Void
@@ -341,20 +442,19 @@ struct NotificationPreferencesView: View {
         Button(action: action) {
             HStack {
                 Image(systemName: isSelected ? "largecircle.fill.circle" : "circle")
-                    .font(.system(size: 20))
-                    .foregroundColor(isSelected ? Design.Color.blue : Design.Color.grayText)
+                    .font(.system(size: 22))
+                    .foregroundColor(isSelected ? .blue : Color.white.opacity(0.3))
                 
                 Text(title)
-                    .font(Design.Font.regular(16))
-                    .foregroundColor(Design.Color.headingText)
+                    .font(.system(size: 16, weight: .regular))
+                    .foregroundColor(.white)
                 
                 Spacer()
             }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 8)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
         }
     }
-    
 }
 
 // MARK: - Sound Picker View
@@ -365,30 +465,41 @@ struct SoundPickerView: View {
     
     var body: some View {
         NavigationView {
-            VStack(spacing: 0) {
-                ForEach(NotificationSoundType.allCases, id: \.self) { sound in
-                    Button(action: {
-                        onSoundSelected(sound)
-                    }) {
-                        HStack {
-                            Text(sound.displayName)
-                                .font(Design.Font.regular(16))
-                                .foregroundColor(Design.Color.headingText)
-                            
-                            Spacer()
-                            
-                            if selectedSound == sound {
-                                Image(systemName: "checkmark")
-                                    .font(.system(size: 16, weight: .medium))
-                                    .foregroundColor(Design.Color.blue)
-                            }
-                        }
-                        .padding(.horizontal, 20)
-                        .padding(.vertical, 8)
-                    }
-                }
+            ZStack {
+                Color(hex: "1C1C1E")
+                    .ignoresSafeArea()
                 
-                Spacer()
+                VStack(spacing: 0) {
+                    ForEach(NotificationSoundType.allCases, id: \.self) { sound in
+                        Button(action: {
+                            onSoundSelected(sound)
+                        }) {
+                            HStack {
+                                Text(sound.displayName)
+                                    .font(.system(size: 16, weight: .regular))
+                                    .foregroundColor(.white)
+                                
+                                Spacer()
+                                
+                                if selectedSound == sound {
+                                    Image(systemName: "checkmark")
+                                        .font(.system(size: 16, weight: .semibold))
+                                        .foregroundColor(.blue)
+                                }
+                            }
+                            .padding(.horizontal, 20)
+                            .padding(.vertical, 12)
+                        }
+                        
+                        if sound != NotificationSoundType.allCases.last {
+                            Divider()
+                                .background(Color.white.opacity(0.1))
+                                .padding(.horizontal, 20)
+                        }
+                    }
+                    
+                    Spacer()
+                }
             }
             .navigationTitle("Notification Sound")
             .navigationBarTitleDisplayMode(.inline)
@@ -398,8 +509,34 @@ struct SoundPickerView: View {
                     Button("Cancel") {
                         dismiss()
                     }
+                    .foregroundColor(.blue)
                 }
             }
+        }
+        .preferredColorScheme(.dark)
+    }
+}
+
+struct GradientToggleStyle: ToggleStyle {
+    var gradient: LinearGradient
+    
+    func makeBody(configuration: Configuration) -> some View {
+        HStack {
+            configuration.label
+            Spacer()
+            RoundedRectangle(cornerRadius: 16)
+                .fill(configuration.isOn ? gradient : LinearGradient(colors: [Color.gray.opacity(0.3)], startPoint: .leading, endPoint: .trailing))
+                .frame(width: 36, height: 20)
+                .overlay(
+                    Circle()
+                        .fill(Color.white)
+                        .padding(2)
+                        .offset(x: configuration.isOn ? 10 : -10)
+                )
+                .animation(.spring(response: 0.3), value: configuration.isOn)
+                .onTapGesture {
+                    configuration.isOn.toggle()
+                }
         }
     }
 }

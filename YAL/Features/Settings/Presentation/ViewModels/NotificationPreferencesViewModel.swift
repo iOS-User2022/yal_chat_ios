@@ -8,12 +8,19 @@
 import SwiftUI
 import Combine
 
+enum NotificationRoute: Hashable {
+    case privateChats
+    case groups
+    case stories
+    case reactions
+}
 class NotificationPreferencesViewModel: ObservableObject {
     // MARK: - Published Properties
     @Published var settingsManager = NotificationSettingsManager()
     @Published var showSoundPicker = false
     @Published var currentSoundPickerType: SoundPickerType = .messages
-    
+    @Published var navigationPath = NavigationPath()
+
     // MARK: - Private Properties
     private var cancellables = Set<AnyCancellable>()
     
@@ -65,6 +72,12 @@ class NotificationPreferencesViewModel: ObservableObject {
         }
     }
     
+    func toggleStoriesSoundEnabled() {
+        let newValue = !settingsManager.settings.storiesSoundEnabled
+        settingsManager.updateStoriesSoundEnabled(newValue)
+    }
+
+    
     func toggleMessagesReactionNotifications() {
         let newValue = !settingsManager.settings.messagesReactionNotifications
         settingsManager.updateMessagesReactionNotifications(newValue)
@@ -79,7 +92,24 @@ class NotificationPreferencesViewModel: ObservableObject {
             settingsManager.updateGroupsReactionNotifications(false)
         }
     }
-    
+    func toggleStoreisSoundEnabled() {
+        let newValue = !settingsManager.settings.storiesSoundEnabled
+        settingsManager.updateStoriesSoundEnabled(newValue)
+        
+        // If disabling sound, also disable reaction notifications
+        if !newValue {
+            settingsManager.updateGroupsReactionNotifications(false)
+        }
+    }
+    func toggleReactionsSoundEnabled() {
+        let newValue = !settingsManager.settings.reactionsSoundEnabled
+        settingsManager.updateReactionsSoundEnabled(newValue)
+        
+        // If disabling sound, also disable reaction notifications
+        if !newValue {
+            settingsManager.updateGroupsReactionNotifications(false)
+        }
+    }
     func toggleGroupsReactionNotifications() {
         let newValue = !settingsManager.settings.groupsReactionNotifications
         settingsManager.updateGroupsReactionNotifications(newValue)

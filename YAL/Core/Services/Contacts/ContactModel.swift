@@ -9,6 +9,7 @@ import Foundation
 import Contacts
 import CoreData
 import SwiftUI
+import ObjectiveC
 
 final class ContactModel: ObservableObject, Identifiable, Hashable, Codable {
     @Published var randomeProfileColor: Color = randomBackgroundColor()
@@ -26,11 +27,16 @@ final class ContactModel: ObservableObject, Identifiable, Hashable, Codable {
     @Published var dob: String?
     @Published var gender: String?
     @Published var profession: String?
+    @Published var isSpeaking: Bool = false
+    @Published var isVideoEnabled: Bool = false
     @Published var isBlocked: Bool = false
     var isSynced: Bool = false
     
-    var id: String { phoneNumber }
-
+//    var id: String { phoneNumber }
+    var id: String {
+        if let userId = userId, !userId.isEmpty { return userId }
+        return phoneNumber.isEmpty ? UUID().uuidString : phoneNumber
+    }
     // MARK: - Initializers
     init(contact: CNContact, phoneNumber: String) {
         let name = "\(contact.givenName) \(contact.familyName)"
@@ -225,7 +231,8 @@ extension ContactModel {
         m.profession     = lite.profession
         m.isBlocked      = lite.isBlocked
         m.isSynced       = lite.isSynced
-
+        m.lastSeen       = lite.lastSeen
+        m.isOnline       = lite.isOnline
         // Presence defaults already false/nil in your inits
         return m
     }

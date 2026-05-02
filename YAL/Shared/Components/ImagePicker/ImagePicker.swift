@@ -15,6 +15,7 @@ enum ImagePickerSource {
 
 struct ImagePicker: UIViewControllerRepresentable {
     var source: ImagePickerSource = .photoLibrary
+    var selectionLimit = 1
     var filter: [UTType] = [.image, .movie, .gif] // default filter
     var onPicked: (_ url: URL?, _ fileName: String?, _ mimeType: String?, _ fileSize: Int?) -> Void
 
@@ -28,7 +29,7 @@ struct ImagePicker: UIViewControllerRepresentable {
                 return nil
             }
             config.filter = pickerFilters.isEmpty ? nil : .any(of: pickerFilters)
-            config.selectionLimit = 1
+            config.selectionLimit = selectionLimit
 
             let picker = PHPickerViewController(configuration: config)
             picker.delegate = context.coordinator
@@ -61,11 +62,14 @@ struct ImagePicker: UIViewControllerRepresentable {
         // MARK: - PHPicker delegate
         func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
             picker.dismiss(animated: true)
-            guard let provider = results.first?.itemProvider else {
+            guard !results.isEmpty else {
                 parent.onPicked(nil, nil, nil, nil)
                 return
             }
-            handleItemProvider(provider)
+            
+            for result in results {
+                handleItemProvider(result.itemProvider)
+            }
         }
 
         // MARK: - UIImagePickerController delegate

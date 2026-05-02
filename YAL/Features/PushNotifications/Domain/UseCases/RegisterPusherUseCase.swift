@@ -15,7 +15,7 @@ public struct RegisterPusherUseCase {
         self.service = service
     }
     
-    public func execute(deviceTokenHex: String) -> AnyPublisher<Void, Error> {
-        service.setPusher(deviceToken: deviceTokenHex)
+    public func execute(deviceTokenHex: String, type:PusherType) -> AnyPublisher<Void, Error> {
+        service.setPusher(deviceToken: deviceTokenHex, type: type)
     }
 }

@@ -13,102 +13,96 @@ struct LanguagePickerView: View {
     @State private var selection: String = "en"
     
     var body: some View {
-        VStack(spacing: 20) {
-            // MARK: Header
-            HStack {
-                Text("Select Language")
-                    .font(Design.Font.heavy(16))
-                    .foregroundColor(Design.Color.primaryText)
-                Spacer()
-                Button {
+        ZStack {
+            VStack(spacing: 0) {
+
+                // MARK: — Header Row
+                HStack {
+                    Text("Select Language")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(.white)
+
+                    Spacer()
+
+                    Button {
+                        withAnimation { isPresented = false }
+                    } label: {
+                        Image(systemName: "xmark")
+                            .frame(width: 20, height: 20)
+                            .foregroundColor(.white)
+                    }
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 25)
+                .padding(.bottom, 16)
+
+              
+                // MARK: — Language Option
+                languageOptionRow(label: "English (Default)", tag: "en")
+                    .padding(.horizontal, 12)
+                    .padding(.top, 16)
+                    .padding(.bottom, 0)
+
+                
+                // Solid thin divider under header
+                Rectangle()
+                    .fill(Color(hex: "#0A171F"))
+                    .frame(height: 1)
+                    .padding(.horizontal, 20)
+                
+                // MARK: — Coming Soon text
+                Text("We are adding more languages soon")
+                    .font(.system(size: 12, weight: .regular))
+                    .foregroundColor(.white.opacity(0.8))
+                    .multilineTextAlignment(.center)
+                    .padding(.top, 18)
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 20)
+
+                // MARK: — Reset Default Button
+                Button(action: {
+                    selection = "en"
                     withAnimation { isPresented = false }
-                } label: {
-                    Text("Close")
-                        .font(Design.Font.heavy(14))
-                        .foregroundColor(Design.Color.navy)
-                        .underline(true, color: Design.Color.navy)
-                }
-            }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 12)
-
-
-            // MARK: Options
-            RadioRow(label: "English (Default)", tag: "en", selection: $selection)
-//            RadioRow(label: "Hindi", tag: "hd", selection: $selection)
-//            RadioRow(label: "Español", tag: "es", selection: $selection)
-//            RadioRow(label: "Marathi", tag: "mr", selection: $selection)
-
-            // Future languages…
-            // RadioRow(label: "Español", tag: "es", selection: $selection)
-            // …
-            
-            Text("We are adding more languages soon")
-                .font(Design.Font.regular(12))
-                .foregroundColor(Design.Color.primaryText.opacity(0.7))
-                .padding(.horizontal, 20)
-            
-            // MARK: Reset Button
-            Button(action: {
-                selection = "en"
-                withAnimation { isPresented = false }
-            }) {
-                HStack(alignment: .center, spacing: 8) {
-                    Image("reset")
-                        .resizable()
-                        .frame(width: 16, height: 16)
+                }) {
                     Text("Reset Default")
-                        .font(Design.Font.regular(14))
-                        .foregroundColor(Design.Color.navy)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(.white)
+                        .frame(width: 150)
+                        .frame(height: 40)
+                        .background(Design.Color.appGradient)
+                        .cornerRadius(12)
                 }
-                .font(.body.weight(.semibold))
-                .frame(maxWidth: .infinity)
-                .frame(height: 40)
                 .padding(.horizontal, 20)
-                .background(Design.Color.lightWhiteBackground)
-                .cornerRadius(8)
+                .padding(.bottom, 24)
             }
-
+            .background(Color(hex: "#202D35"))
+            .cornerRadius(20)
+            .shadow(color: Color.black.opacity(0.4), radius: 24, x: 0, y: 8)
+            .padding(.horizontal, 24)
         }
-        .padding(.horizontal, 20)
-        .padding(.top, 16)
-        .padding(.bottom, 40)
-        // Fixed height to match your design
-        .frame(maxWidth: 340, minHeight: 200)
-        .background(.ultraThinMaterial)
-        .cornerRadius(24)
-        .shadow(radius: 20)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
-}
 
-// Simple radio-button row
-fileprivate struct RadioRow: View {
-    let label: String
-    let tag: String
-    @Binding var selection: String
-
-    var body: some View {
+    // MARK: — Language Option Row
+    @ViewBuilder
+    private func languageOptionRow(label: String, tag: String) -> some View {
         Button {
             selection = tag
         } label: {
-            VStack(alignment: .center, spacing: 0) {
-                HStack(spacing: 12) {
-                    Image(selection == tag ? "radio-selected" : "radio")
-                        .resizable()
-                        .frame(width: 20, height: 20)
-                    Text(label)
-                        .font(Design.Font.regular(14))
-                        .foregroundColor(Design.Color.primaryText.opacity(0.6))
-                    Spacer()
-                }
-                .padding(.horizontal, 32)
-                .padding(.vertical, 12)
-                
-                Rectangle()
-                    .fill(Design.Color.primaryText.opacity(0.04))
-                    .frame(height: 1)
-                    .frame(maxWidth: .infinity)
+            HStack(spacing: 14) {
+                // Radio button from asset images
+                Image(selection == tag ? "radioButton" : "radio")
+                    .resizable()
+                    .frame(width: 20, height: 20)
+
+                Text(label)
+                    .font(.system(size: 15, weight: .regular))
+                    .foregroundColor(.white.opacity(0.85))
+
+                Spacer()
             }
+            .padding(.horizontal, 45)
+            .padding(.vertical, 14)
         }
         .buttonStyle(.plain)
     }

@@ -8,7 +8,11 @@
 
 import Combine
 
+public enum PusherType {
+    case apns
+    case voip
+}
 public protocol PushRegistrationRepositoryProtocol {
-    func registerPusher(deviceTokenHex: String) -> AnyPublisher<Void, Error>
+    func registerPusher(deviceTokenHex: String, type:PusherType) -> AnyPublisher<Void, Error>
     func unregisterPusher(deviceTokenHex: String) -> AnyPublisher<Void, Error>
 }

@@ -46,7 +46,7 @@ struct SelectContactsListView: View {
                 contentSection()
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Design.Color.white)
+            .background(Design.Color.backgroundColor)
             .onAppear {
                 viewModel.startContactSync()
             }
@@ -54,7 +54,6 @@ struct SelectContactsListView: View {
                 switch route {
                 case .groupSelect:
                     NewGroupContactSelectorView(viewModel: viewModel, selectedContacts: $participants, invitedContacts: $invitedContacts) {
-                        print("contcts selected")
                         navPath.append(GroupCreateRoute.groupName)
                     } onDismiss: {
                         onDismiss?()
@@ -79,7 +78,7 @@ struct SelectContactsListView: View {
 
     // MARK: - Header View
     private func headerView() -> some View {
-        HStack(alignment: .center, spacing: 12) {
+        HStack(alignment: .center, spacing: BlockedUserScreen.rowSpacing) {
 //            Button(action: {
 //                // Action for back button
 //            }) {
@@ -88,14 +87,14 @@ struct SelectContactsListView: View {
 //                    .frame(width: 24, height: 24)
 //            }
             
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Select Contact")
-                    .font(Design.Font.bold(14))
-                    .foregroundColor(Design.Color.primaryText)
+            VStack(alignment: .leading, spacing: UIConstants.Layout.tightSpacing) {
+                Text(Constants.selectContact.rawValue)
+                    .font(Design.Font.bold(UIConstants.Layout.menuItemIconSpacing))
+                    .foregroundColor(Design.Color.primaryTextColor)
                 
-                Text("\(viewModel.yalContacts.count) Yal contacts")
-                    .font(Design.Font.medium(12))
-                    .foregroundColor(Design.Color.primaryText.opacity(0.4))
+                Text("\(viewModel.yalContacts.count) \(Constants.yalContact.rawValue)")
+                    .font(Design.Font.medium(BlockedUserScreen.rowSpacing))
+                    .foregroundColor(Design.Color.primaryTextColor.opacity(UIConstants.Layout.color1))
             }
             .padding(.leading)
             
@@ -104,23 +103,23 @@ struct SelectContactsListView: View {
             Button(action: {
                 onDismiss?()
             }) {
-                Image("cross-black")
-                    .frame(width: 24, height: 24)
+                Image(Constants.crossBlack.rawValue)
+                    .frame(width: UIConstants.Layout.Radius.large, height: UIConstants.Layout.Radius.large)
                     .aspectRatio(contentMode: .fit)
             }
-            .padding(.top,-40)
+            .padding(.top,CGFloat(UIConstants.Layout.topPaddinglagging))
         }
-        .background(Design.Color.white)
-        .padding(.horizontal, 20)
-        .padding(.top, 56)
+        .background(Design.Color.backgroundColor)
+        .padding(.horizontal, UIConstants.Layout.screenPadding)
+        .padding(.top, ChatLayout.viewTopPad)
     }
 
     // MARK: - Search Bar View
     private func searchBarView() -> some View {
-        SearchBarView(placeholder: "Search numbers, names & more", text: $viewModel.search)
-            .padding(.horizontal, 20)
-            .frame(maxHeight: 44)
-            .padding(.top, 20)
+        SearchBarView(placeholder: Constants.searchPlaceholderText.rawValue, text: $viewModel.search)
+            .padding(.horizontal,  UIConstants.Layout.screenPadding)
+            .frame(maxHeight: UIConstants.Layout.Height.tapTarget)
+            .padding(.top,  UIConstants.Layout.screenPadding)
     }
 
     // MARK: - Content Section (buttons, separator, and contact list)
@@ -130,129 +129,139 @@ struct SelectContactsListView: View {
             buttonsSection()
                 .listRowSeparator(.hidden)
                 .listRowInsets(EdgeInsets())
-            
+                .listRowBackground(Design.Color.backgroundColor)
+
             if !viewModel.filteredYalContacts.isEmpty {
                 // First Group: Contacts with userId
                 Section(
-                    header: Text("Contact on YAL.ai")
-                        .font(Design.Font.heavy(14))
-                        .foregroundColor(Design.Color.primaryText)
-                        .padding(.top, 12)
-                        .padding(.bottom, 20)
+                    header: Text(Constants.contactOnYalAi.rawValue)
+                        .font(Design.Font.heavy(UIConstants.Layout.menuItemIconSpacing))
+                        .foregroundColor(Design.Color.primaryTextColor)
+                        .padding(.top, UIConstants.Layout.zeroSpacing)
+                        .padding(.bottom,  UIConstants.Layout.screenPadding)
+                        .listRowInsets(EdgeInsets())
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Design.Color.backgroundColor)
+
                 ) {
                     ForEach(viewModel.filteredYalContacts) { contact in
                         ContactRow(contact: contact)
+                            .listRowBackground(Design.Color.backgroundColor)
+
                             .onTapGesture {
                                 participants.append(contact)
                                 onComplete?(nil, nil)
                             }
+                            .listRowBackground(Design.Color.backgroundColor)
                     }
                 }
                 .listRowSeparator(.hidden)
                 .listRowInsets(EdgeInsets())
-                .padding(.horizontal, 20)
-                .padding(.bottom, 8)
-
-                separatorView()
-                    .listRowSeparator(.hidden)
-                    .listRowInsets(EdgeInsets())
+                .padding(.horizontal,  UIConstants.Layout.screenPadding)
+                .padding(.bottom, UIConstants.Layout.Radius.small)
+                .background(Design.Color.backgroundColor)
             }
 
             // Second Group: Contacts without userId
             Section(
-                header: Text("Invite on YAL.ai")
-                    .font(Design.Font.heavy(14))
-                    .foregroundColor(Design.Color.primaryText)
-                    .padding(.top, 12)
-                    .padding(.bottom, 20)
+                header: Text(Constants.inviteOnYalAi.rawValue)
+                    .font(Design.Font.heavy(UIConstants.Layout.menuItemIconSpacing))
+                    .foregroundColor(Design.Color.primaryTextColor)
+                    .padding(.top, BlockedUserScreen.rowSpacing)
+                    .padding(.bottom,  UIConstants.Layout.screenPadding)
+                    .listRowInsets(EdgeInsets())
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Design.Color.backgroundColor)
+
             ) {
                 ForEach(viewModel.filteredOtherContacts) { contact in
-                    ContactRow(contact: contact)
-                        .onTapGesture {
-                            //participants.append(contact)
+                    ContactRow(
+                        contact: contact,
+                        showInviteButton: true,
+                        onInviteTap: {
+                            print("\(Constants.inviteTapped.rawValue) \(contact.fullName ?? "")")
+                            invitedContacts.append(contact)
                         }
+                    )
+                    .listRowBackground(Design.Color.backgroundColor)
                 }
             }
             .listRowSeparator(.hidden)
             .listRowInsets(EdgeInsets())
-            .padding(.horizontal, 20)
+            .padding(.horizontal,  UIConstants.Layout.screenPadding)
+            .background(Design.Color.backgroundColor)
         }
-        .listRowSpacing(20)
-        .environment(\.defaultMinListRowHeight, 8)
+        .listRowSpacing(UIConstants.Layout.innerBottomSpacing)
+        .environment(\.defaultMinListRowHeight, UIConstants.Layout.Radius.small)
         .frame(maxWidth: .infinity)
         .listStyle(PlainListStyle())
+        .scrollContentBackground(.hidden)  // Add this - hides default List background
+        .background(Design.Color.backgroundColor)
     }
 
     // MARK: - Buttons Section (New Group and New Contact)
     private func buttonsSection() -> some View {
-        VStack(spacing: 0) {
+        VStack(spacing: UIConstants.Layout.zeroSpacing) {
+            // New Group Button
             Button(action: {
                 navPath.append(GroupCreateRoute.groupSelect)
             }) {
-                HStack {
-                    Image("new-group")
+                HStack(spacing: BlockedUserScreen.rowSpacing) {
+                    Image(Constants.newGroup.rawValue)
                         .resizable()
-                        .frame(width: 48, height: 48)
-                    Text("New Group")
-                        .font(Design.Font.bold(14))
-                        .foregroundColor(Design.Color.primaryText)
+                        .frame(width: UIConstants.Layout.wideScreenPadding, height: UIConstants.Layout.wideScreenPadding)
+                    Text(Constants.newGroup1.rawValue)
+                        .font(Design.Font.semiBold(UIConstants.Layout.menuItemIconSpacing))
+                        .foregroundColor(Design.Color.primaryTextColor)
                     
                     Spacer()
                 }
-                .frame(maxWidth: .infinity)
-                .font(.subheadline)
-                .foregroundColor(.blue)
+                .padding(.horizontal,  UIConstants.Layout.screenPadding)
+                .padding(.vertical,  UIConstants.Layout.Radius.small)
+                .background(Design.Color.backgroundColor)
             }
-            .background(Design.Color.white)
-            .frame(maxWidth: .infinity)
-            .padding(.horizontal, 20)
-            .padding(.vertical, 8)
+            .buttonStyle(.plain)
             
-//            Button(action: {
-//                // Action for new contact
-//            }) {
-//                HStack(alignment: .center, spacing: 12) {
-//                    Image("new-contact")
-//                        .resizable()
-//                        .frame(width: 48, height: 48)
-//
-//                    Text("New Contact")
-//                        .font(Design.Font.bold(14))
-//                        .foregroundColor(Design.Color.primaryText)
-//                    
-//                    Spacer()
-//                }
-//                .frame(maxWidth: .infinity)
-//                .font(.subheadline)
-//                .foregroundColor(.blue)
-//            }
-//            .background(Design.Color.white)
-//            .frame(maxWidth: .infinity)
-//            .padding(.horizontal, 20)
-//            .padding(.vertical, 8)
-            
-            // Separator
-            separatorView()
-                .listRowSeparator(.hidden)
-                .frame(maxWidth: .infinity)
+            // New Contact Button
+            Button(action: {
+                // Add your New Contact action here
+            }) {
+                HStack(spacing: BlockedUserScreen.rowSpacing) {
+                    Image(Constants.newContact.rawValue)   // Replace with your asset name when added
+                        .resizable()
+                        .frame(width: UIConstants.Layout.wideScreenPadding, height: UIConstants.Layout.wideScreenPadding)
+                    Text(Constants.newContact1.rawValue)
+                        .font(Design.Font.semiBold(UIConstants.Layout.menuItemIconSpacing))
+                        .foregroundColor(Design.Color.primaryTextColor)
+                    
+                    Spacer()
+                }
+                .padding(.horizontal,  UIConstants.Layout.screenPadding)
+                .padding(.vertical,  UIConstants.Layout.Radius.small)
+                .background(Design.Color.backgroundColor)
+            }
+            .buttonStyle(.plain)
         }
-        .padding(.top, 16)
+        .padding(.top, UIConstants.Layout.zeroSpacing)
+        .padding(.bottom,  UIConstants.Layout.zeroSpacing)
     }
 
     // MARK: - Separator View
     private func separatorView() -> some View {
         Rectangle()
-            .fill(Design.Color.appGradient.opacity(0.12))
-            .frame(height: 8)
+            .fill(Design.Color.appGradient.opacity(UIConstants.Layout.color4))
+            .frame(height:  UIConstants.Layout.Radius.small)
 
     }
 }
 
 struct ContactRow: View {
     let contact: ContactLite
+    var showInviteButton: Bool = false
+    var onInviteTap: (() -> Void)? = nil
     
     var body: some View {
-        HStack(alignment: .center, spacing: 12) {
+        HStack(alignment: .center, spacing: BlockedUserScreen.rowSpacing) {
             // Avatar
             if let imageURLString = contact.avatarURL {
                 MediaView(
@@ -268,7 +277,7 @@ struct ContactRow: View {
                     localURLOverride: nil
                 )
                 .scaledToFill()
-                .frame(width: 40, height: 40)
+                .frame(width: UIConstants.Layout.wideScreenPadding, height: UIConstants.Layout.wideScreenPadding)
                 .clipShape(Circle())
             } else if let imageURLString = contact.imageURL {
                 MediaView(
@@ -284,46 +293,87 @@ struct ContactRow: View {
                     localURLOverride: nil
                 )
                 .scaledToFill()
-                .frame(width: 40, height: 40)
+                .frame(width: UIConstants.Layout.wideScreenPadding, height: UIConstants.Layout.wideScreenPadding)
                 .clipShape(Circle())
             } else if let imageData = contact.imageData, let uiImage = UIImage(data: imageData) {
                 Image(uiImage: uiImage)
                     .resizable()
                     .scaledToFill()
-                    .frame(width: 40, height: 40)
+                    .frame(width: UIConstants.Layout.wideScreenPadding, height: UIConstants.Layout.wideScreenPadding)
                     .clipShape(Circle())
             } else {
                 // Generate a placeholder with initials
                 Text(getInitials(from: contact.fullName ?? ""))
-                    .font(.system(size: 16, weight: .bold))
-                    .foregroundColor(Design.Color.primaryText.opacity(0.7))
-                    .frame(width: 40, height: 40)  // Set the circle size
-                    .background(contact.randomeProfileColor.opacity(0.3))
+                    .font(.system(size: UIConstants.Layout.menuOptionVPadding, weight: .bold))
+                    .foregroundColor(Design.Color.primaryTextColor.opacity(UIConstants.Layout.ProfileView.AboutSection.editorOpacity))
+                    .frame(width: UIConstants.Layout.wideScreenPadding, height: UIConstants.Layout.wideScreenPadding)  // Set the circle size
+                    .background(contact.randomeProfileColor.opacity(UIConstants.Opacity.overlay))
                     .clipShape(Circle())
             }
             
-            VStack(alignment: .leading, spacing: 4) {
+            // MARK: Name + Phone
+            VStack(alignment: .leading, spacing: UIConstants.Layout.tightSpacing) {
                 Text(contact.fullName ?? "")
-                    .font(Design.Font.bold(14))
-                    .foregroundColor(Design.Color.primaryText)
+                    .font(Design.Font.bold(UIConstants.Layout.menuItemIconSpacing))
+                    .foregroundColor(Design.Color.primaryTextColor)
                 Text(contact.phoneNumber)  // Placeholder for actual status
-                    .font(Design.Font.regular(12))
-                    .foregroundColor(Design.Color.primaryText.opacity(0.4))
+                    .font(Design.Font.regular(BlockedUserScreen.rowSpacing))
+                    .foregroundColor(Design.Color.primaryTextColor.opacity(UIConstants.Layout.color1))
             }
             Spacer()
+                if showInviteButton {
+                Button {
+                    shareApp()
+                } label: {
+                    Text(Constants.invite.rawValue)
+                        .font(Design.Font.medium(BlockedUserScreen.rowSpacing))
+                        .foregroundColor(.white)
+                        .frame(width: UIConstants.Layout.wideScreenPadding, height:  UIConstants.Layout.screenPadding)
+                        .background(Color(hex: UIConstants.Layout.EditProfile.selectContactBgColor))
+                        .cornerRadius( UIConstants.Layout.ProfileView.CameraButton.strokeWidth)
+                }
+                .buttonStyle(.plain)
+            }
         }
+        .padding(.vertical,  UIConstants.Layout.ProfileView.ProfileImage.shadowRadius)
+        .background(Design.Color.backgroundColor)
     }
     
     private var placeholderInitialsView: some View {
         return Text(getInitials(from: contact.fullName ?? contact.displayName ?? contact.phoneNumber))
-            .font(Design.Font.bold(8))
-            .frame(width: 40, height: 40)
+            .font(Design.Font.bold(UIConstants.Layout.Radius.small))
+            .frame(width: UIConstants.Layout.wideScreenPadding, height: UIConstants.Layout.wideScreenPadding)
             .background(randomBackgroundColor())
-            .foregroundColor(Design.Color.primaryText.opacity(0.7))
+            .foregroundColor(Design.Color.primaryTextColor.opacity(UIConstants.Layout.ProfileView.AboutSection.editorOpacity))
             .clipShape(Circle())
             .overlay(
                 Circle()
-                    .stroke(Design.Color.white, lineWidth: 1)
+                    .stroke(Design.Color.white, lineWidth: UIConstants.Layout.deleteButtonBorderWidth)
             )
     }
 }
+private func shareApp() {
+    let shareText = Constants.shareItemStr.rawValue
+    let activityVC = UIActivityViewController(
+        activityItems: [shareText],
+        applicationActivities: nil
+    )
+
+    // Get the current top-most view controller and present
+    if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+       let rootVC = windowScene.windows.first?.rootViewController {
+        
+        // Handle iPad popover (required or it crashes on iPad)
+        activityVC.popoverPresentationController?.sourceView = rootVC.view
+        activityVC.popoverPresentationController?.sourceRect = CGRect(
+            x: rootVC.view.bounds.midX,
+            y: rootVC.view.bounds.midY,
+            width:  UIConstants.Layout.zeroSpacing,
+            height:  UIConstants.Layout.zeroSpacing
+        )
+        activityVC.popoverPresentationController?.permittedArrowDirections = []
+
+        rootVC.present(activityVC, animated: true)
+    }
+}
+

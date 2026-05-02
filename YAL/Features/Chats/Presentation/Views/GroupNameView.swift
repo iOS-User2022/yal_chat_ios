@@ -36,221 +36,246 @@ struct GroupNameView: View {
     }
     
     var body: some View {
-        VStack(spacing: 0) {
-            // Header
-            HStack(spacing: 12) {
-                Button(action: { dismiss() }) {
-                    Image("back-long")
-                        .resizable()
-                        .frame(width: 24, height: 24)
+        ZStack {
+            VStack(spacing: 0) {
+                // Header
+                HStack(spacing: 12) {
+                    Button(action: { dismiss() }) {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 20, weight: .semibold))
+                            .foregroundColor(.white)
+                    }
+                    
+                    Text("New group")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundColor(.white)
+                    
+                    Spacer()
                 }
-                Text("New group")
-                    .font(Design.Font.bold(16))
-                    .foregroundColor(Design.Color.primaryText)
-                Spacer()
-            }
-            .padding(.horizontal, 20)
-            .padding(.top, 56)
-            .padding(.bottom, 30)
-
-            
-            // Group Avatar & Name Field
-            HStack(spacing: 12) {
-                // Placeholder for group avatar (optionally add tap action to pick an image)
-                Button(action: {
-                    isImagePickerPresented = true
-                }) {
-                    ZStack {
-                        Circle()
-                            .fill(Color.gray.opacity(0.3))
-                            .frame(width: 60, height: 60)
-                        
-                        if let selectedImage = selectedImage {
-                            // If a new image was selected from gallery
-                            Image(uiImage: selectedImage)
+                .padding(.horizontal, 20)
+                .padding(.top, 15)
+                .padding(.bottom, 40)
+                
+                // Centered Group Avatar
+                VStack(spacing: 16) {
+                    Button(action: {
+                        isImagePickerPresented = true
+                    }) {
+                        ZStack(alignment: .bottomTrailing) {
+                            // Avatar circle
+                            if let selectedImage = selectedImage {
+                                Image(uiImage: selectedImage)
+                                    .resizable()
+                                    .scaledToFill()
+                                    .frame(width: 100, height: 100)
+                                    .clipShape(Circle())
+                                    .overlay(Circle().stroke(Color.white.opacity(0.1), lineWidth: 2))
+                            } else if !displayImage.isEmpty, let profileImageUrl = URL(string: displayImage) {
+                                WebImage(url: profileImageUrl, options: [.retryFailed, .continueInBackground]) { phase in
+                                    if let image = phase.image {
+                                        image
+                                            .resizable()
+                                    } else {
+                                        placeholderAvatarView()
+                                    }
+                                }
                                 .resizable()
                                 .scaledToFill()
-                                .frame(width: 60, height: 60)
+                                .frame(width: 100, height: 100)
                                 .clipShape(Circle())
-                                .overlay(Circle().stroke(Color.white, lineWidth: 2))
-                                .shadow(radius: 4)
-                        } else if let profileImageUrl = URL(string: "") {
-                            WebImage(url: profileImageUrl, options: [.retryFailed, .continueInBackground]) { phase in
-                                if let image = phase.image {
-                                    image
-                                        .resizable()
-                                } else {
-                                    Image(systemName: "camera")
-                                        .font(.system(size: 22))
-                                        .foregroundColor(.gray)
-                                }
+                                .overlay(Circle().stroke(Color.white.opacity(0.1), lineWidth: 2))
+                            } else {
+                                placeholderAvatarView()
                             }
-                            .resizable()
-                            .scaledToFill()
-                            .frame(width: 60, height: 60)
-                            .clipShape(Circle())
-                            .overlay(Circle().stroke(Color.white, lineWidth: 2))
-                            .shadow(radius: 4)
-                        } else {
-                            // No URL, no new image → fallback placeholder
-                            Image(systemName: "camera")
-                                .font(.system(size: 22))
-                                .foregroundColor(.gray)
+                            
+                            // Edit icon overlay
+                            Circle()
+                                .fill(Color(red: 0.2, green: 0.5, blue: 1.0))
+                                .frame(width: 28, height: 28)
+                                .overlay(
+                                    Image("edit_icon")
+                                        .font(.system(size: 14, weight: .semibold))
+                                        .foregroundColor(.white)
+                                )
+                                .offset(x: 4, y: 4)
                         }
                     }
+                    
+                    // Group Name TextField
+                    TextField("", text: $groupName)
+                        .placeholder(when: groupName.isEmpty) {
+                            Text("Enter group name")
+                                .foregroundColor(.white.opacity(0.4))
+                                .font(.system(size: 16))
+                        }
+                        .font(.system(size: 16))
+                        .foregroundColor(.white)
+                        .multilineTextAlignment(.center)
+                        .padding(.vertical, 14)
+                        .padding(.horizontal, 40)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(Color.white.opacity(0.08))
+                        )
                 }
+                .padding(.horizontal, 20)
+                .padding(.bottom, 40)
                 
-                TextField(
-                    "",
-                    text: $groupName,
-                    prompt: Text("Enter group name")
-                        .foregroundColor(Design.Color.secondaryText.opacity(0.7))
-                        .font(Design.Font.body)
-                )
-                .font(Design.Font.body)
-                .multilineTextAlignment(.center)
-                .padding(12)
-                .overlay(
-                    Rectangle()
-                        .fill(Design.Color.navy)
-                        .frame(height: 1),
-                    alignment: .bottom
-                )
-            }
-            .padding(.horizontal, 20)
-            .padding(.bottom, 20)
-
-            separatorView()
-            
-            // Members row
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Member : \(selectedContacts.count)")
-                    .font(.system(size: 15, weight: .medium))
-                    .foregroundColor(.black)
-                    .padding(.horizontal, 20)
-                    .padding(.top, 12)
-                
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 22) {
-                        ForEach(selectedContacts) { contact in
-                            VStack(spacing: 8) {
-                                ZStack(alignment: .topTrailing) {
-                                    // Avatar
-                                    if let imageURLString = contact.avatarURL {
-                                        MediaView(
-                                            mediaURL: imageURLString,
-                                            userName: "",
-                                            timeText: "",
-                                            mediaType: .image,
-                                            placeholder: placeholderInitialsView(for: contact),
-                                            errorView: placeholderInitialsView(for: contact),
-                                            isSender: false,
-                                            downloadedImage: nil,
-                                            senderImage: "",
-                                            localURLOverride: nil
-                                        )
-                                        .scaledToFill()
-                                        .frame(width: 40, height: 40)
-                                        .clipShape(Circle())
-                                    } else if let imageURLString = contact.imageURL {
-                                        MediaView(
-                                            mediaURL: imageURLString,
-                                            userName: "",
-                                            timeText: "",
-                                            mediaType: .image,
-                                            placeholder: placeholderInitialsView(for: contact),
-                                            errorView: placeholderInitialsView(for: contact),
-                                            isSender: false,
-                                            downloadedImage: nil,
-                                            senderImage: "",
-                                            localURLOverride: nil
-                                        )
-                                        .scaledToFill()
-                                        .frame(width: 40, height: 40)
-                                        .clipShape(Circle())
-                                    } else if let imageData = contact.imageData, let img = UIImage(data: imageData) {
-                                        Image(uiImage: img)
-                                            .resizable()
-                                            .scaledToFill()
-                                            .frame(width: 40, height: 40)
-                                            .clipShape(Circle())
-                                    } else {
-                                        Text(getInitials(from: contact.fullName ?? ""))
-                                            .font(.system(size: 16, weight: .bold))
-                                            .foregroundColor(Design.Color.primaryText.opacity(0.7))
-                                            .frame(width: 40, height: 40)  // Set the circle size
-                                            .background(contact.randomeProfileColor.opacity(0.3))
-                                            .clipShape(Circle())
-                                    }
-                                    // Remove button
-                                    Button(action: {
-                                        if let idx = selectedContacts.firstIndex(of: contact) {
-                                            selectedContacts.remove(at: idx)
+                // Members Section - Updated to Horizontal Layout
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("Member : \(selectedContacts.count)")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 20)
+                    
+                    // Horizontal ScrollView for members
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 15) {
+                            ForEach(selectedContacts) { contact in
+                                VStack(spacing: 16) {
+                                    ZStack(alignment: .topTrailing) {
+                                        // Avatar
+                                        Group {
+                                            if let imageURLString = contact.avatarURL {
+                                                MediaView(
+                                                    mediaURL: imageURLString,
+                                                    userName: "",
+                                                    timeText: "",
+                                                    mediaType: .image,
+                                                    placeholder: placeholderInitialsView(for: contact),
+                                                    errorView: placeholderInitialsView(for: contact),
+                                                    isSender: false,
+                                                    downloadedImage: nil,
+                                                    senderImage: "",
+                                                    localURLOverride: nil
+                                                )
+                                                .scaledToFill()
+                                                .frame(width: 48, height: 48)
+                                                .clipShape(Circle())
+                                            } else if let imageURLString = contact.imageURL {
+                                                MediaView(
+                                                    mediaURL: imageURLString,
+                                                    userName: "",
+                                                    timeText: "",
+                                                    mediaType: .image,
+                                                    placeholder: placeholderInitialsView(for: contact),
+                                                    errorView: placeholderInitialsView(for: contact),
+                                                    isSender: false,
+                                                    downloadedImage: nil,
+                                                    senderImage: "",
+                                                    localURLOverride: nil
+                                                )
+                                                .scaledToFill()
+                                                .frame(width: 48, height: 48)
+                                                .clipShape(Circle())
+                                            } else if let imageData = contact.imageData, let img = UIImage(data: imageData) {
+                                                Image(uiImage: img)
+                                                    .resizable()
+                                                    .scaledToFill()
+                                                    .frame(width: 48, height: 48)
+                                                    .clipShape(Circle())
+                                            } else {
+                                                Text(getInitials(from: contact.fullName ?? ""))
+                                                    .font(.system(size: 20, weight: .bold))
+                                                    .foregroundColor(.white)
+                                                    .frame(width: 48, height: 48)
+                                                    .background(contact.randomeProfileColor.opacity(0.5))
+                                                    .clipShape(Circle())
+                                            }
                                         }
-                                    }) {
-                                        Image("cross-circle")
-                                            .resizable()
-                                            .background(Circle().fill(Design.Color.white))
-                                            .clipShape(Circle())
-                                            .frame(width: 22, height: 22)
-                                            .offset(x: 10, y: 20)
+                                        
+                                        // Remove button
+                                        Button(action: {
+                                            if let idx = selectedContacts.firstIndex(of: contact) {
+                                                selectedContacts.remove(at: idx)
+                                            }
+                                        }) {
+                                            Circle()
+                                                .fill(Color(red: 0.2, green: 0.5, blue: 1.0))
+                                                .frame(width: 22, height: 22)
+                                                .overlay(
+                                                    Image("x-small")
+                                                        .font(.system(size: 10, weight: .bold))
+                                                        .foregroundColor(.white)
+                                                )
+                                                .offset(x: 1, y: -1)
+                                        }
                                     }
+                                    
+                                    Text(contact.fullName?.components(separatedBy: " ").first ?? "")
+                                        .font(.system(size: 8, weight: .semibold))
+                                        .foregroundColor(.white.opacity(0.9))
+                                        .frame(maxWidth: 56)
+                                        .lineLimit(1)
+                                        .truncationMode(.tail)
                                 }
-                                
-                                Text(contact.fullName ?? "")
-                                    .font(Design.Font.semiBold(10))
-                                    .foregroundColor(Design.Color.primaryText)
-                                    .frame(maxWidth: 52)
                             }
                         }
+                        .padding(.horizontal, 20)
+                    }
+                }
+                .padding(.bottom, 30)
+                
+                Spacer()
+                
+                // Bottom Action Buttons Container
+                VStack(spacing: 0) {
+                    HStack(spacing: 12) {
+                        Button(action: {
+                            onDismiss?()
+                        }) {
+                            Text("Cancel")
+                                .font(.system(size: 17, weight: .semibold))
+                                .foregroundColor(.black)
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 50)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .fill(Color.white)
+                                )
+                        }
+                        
+                        Button(action: {
+                            onCreateGroup?(groupName, displayImage, selectedContacts)
+                        }) {
+                            Text("Create Group")
+                                .font(.system(size: 17, weight: .semibold))
+                                .foregroundColor(.white)
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 50)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .fill(
+                                            LinearGradient(
+                                                colors: [
+                                                    Color(red: 0.3, green: 0.4, blue: 1.0),
+                                                    Color(red: 0.55, green: 0.36, blue: 0.96)
+                                                ],
+                                                startPoint: .leading,
+                                                endPoint: .trailing
+                                            )
+                                        )
+                                        .opacity(groupName.isEmpty || selectedContacts.isEmpty ? 0.5 : 1.0)
+                                )
+                        }
+                        .disabled(groupName.isEmpty || selectedContacts.isEmpty)
                     }
                     .padding(.horizontal, 20)
                     .padding(.top, 16)
+                    .padding(.bottom, 40)
                 }
+                .background(
+                    RoundedRectangle(cornerRadius: 20)
+                        .fill(Color(Design.Color.darkgrayColor))
+                        .shadow(color: Color.black.opacity(0.2), radius: 10, x: 0, y: -4)
+                )
+                .transition(.move(edge: .bottom))
             }
-            
-            Spacer()
-            
-            // Bottom bar
-            VStack(spacing: 20) {
-                HStack(spacing: 20) {
-                    Button("Cancel") {
-                        onDismiss?()
-                    }
-                    .font(Design.Font.regular(14))
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(Design.Color.lightWhiteBackground)
-                    .cornerRadius(8)
-                    .foregroundColor(Design.Color.primaryText)
-                    
-                    Button("Create Group") {
-                        onCreateGroup?(groupName, displayImage, selectedContacts)
-                    }
-                    .disabled(groupName.isEmpty || selectedContacts.isEmpty)
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(
-                        (groupName.isEmpty || selectedContacts.isEmpty)
-                        ? Design.Color.appGradient.opacity(0.6)
-                        : Design.Color.appGradient.opacity(1.0)
-                    )
-                    .cornerRadius(8)
-                    .foregroundColor(.white)
-                }
-                .padding(.horizontal, 20)
-                .padding(.bottom, 24)
-                .padding(.top, 20)
-            }
-            .background(
-                RoundedRectangle(cornerRadius: 20)
-                    .fill(.ultraThinMaterial) // Native blurred background
-                    .background(Color.white.opacity(0.6)) // Light white tint
-                    .clipShape(RoundedRectangle(cornerRadius: 16))
-                    .shadow(color: Color.black.opacity(0.12), radius: 10, x: 0, y: -4)
-            )
         }
-        .background(Color.white.ignoresSafeArea())
+        .background(Design.Color.backgroundColor)
+        .ignoresSafeArea(.container, edges: .bottom)
+        .navigationBarBackButtonHidden(true)
+        .navigationBarHidden(true)
         .sheet(isPresented: $isImagePickerPresented) {
             ImagePicker { url, fileName, mimeType, filesize  in
                 if let url = url,
@@ -272,24 +297,39 @@ struct GroupNameView: View {
         }
     }
     
+    // MARK: - Helper Views
+    
     @ViewBuilder
-    private func separatorView() -> some View {
-        Rectangle()
-            .fill(Design.Color.appGradient.opacity(0.12))
-            .frame(height: 8)
-
+    private func placeholderAvatarView() -> some View {
+        // Group icon from assets folder with circular shape
+        Image("group_icon")
+            .resizable()
+            .scaledToFill()
+            .frame(width: 60, height: 60)
+            .clipShape(Circle())
     }
     
     private func placeholderInitialsView(for contact: ContactLite) -> some View {
         return Text(getInitials(from: contact.fullName ?? contact.displayName ?? contact.phoneNumber))
-            .font(Design.Font.bold(8))
-            .frame(width: 40, height: 40)
+            .font(.system(size: 20, weight: .bold))
+            .frame(width: 60, height: 60)
             .background(randomBackgroundColor())
-            .foregroundColor(Design.Color.primaryText.opacity(0.7))
+            .foregroundColor(.white)
             .clipShape(Circle())
-            .overlay(
-                Circle()
-                    .stroke(Design.Color.white, lineWidth: 1)
-            )
+    }
+}
+
+// MARK: - TextField Placeholder Extension
+
+extension View {
+    func placeholder<Content: View>(
+        when shouldShow: Bool,
+        alignment: Alignment = .leading,
+        @ViewBuilder placeholder: () -> Content
+    ) -> some View {
+        ZStack(alignment: alignment) {
+            placeholder().opacity(shouldShow ? 1 : 0)
+            self
+        }
     }
 }

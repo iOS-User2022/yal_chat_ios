@@ -91,7 +91,7 @@ struct SMSListView: View {
                     .padding(.horizontal, 30)
                     .scrollIndicators(.hidden)
                 }
-                .background(Design.Color.white)
+                .background(Design.Color.backgroundColor)
                 .ignoresSafeArea(edges: .bottom)
                 
                 if showAlert {
@@ -197,8 +197,4 @@ struct SMSListView: View {
             UIApplication.shared.open(settingsUrl)
         }
     }
-}
-
-#Preview {
-    SMSListView()
 }

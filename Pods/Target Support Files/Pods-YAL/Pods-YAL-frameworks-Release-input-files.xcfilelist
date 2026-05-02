@@ -1,2 +1,7 @@
 ${PODS_ROOT}/Target Support Files/Pods-YAL/Pods-YAL-frameworks.sh
+${BUILT_PRODUCTS_DIR}/libwebp/libwebp.framework
 ${BUILT_PRODUCTS_DIR}/netfox/netfox.framework
+${PODS_XCFRAMEWORKS_BUILD_DIR}/Giphy/GiphyUISDK.framework/GiphyUISDK
+${PODS_XCFRAMEWORKS_BUILD_DIR}/JitsiMeetSDK/JitsiMeetSDK.framework/JitsiMeetSDK
+${PODS_XCFRAMEWORKS_BUILD_DIR}/JitsiMeetSDK/hermes.framework/hermes
+${PODS_XCFRAMEWORKS_BUILD_DIR}/JitsiWebRTC/WebRTC.framework/WebRTC

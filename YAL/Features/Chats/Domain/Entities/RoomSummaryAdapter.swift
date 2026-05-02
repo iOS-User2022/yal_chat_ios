@@ -35,7 +35,7 @@ struct RoomSummaryAdapter {
         let oldestTs = sortedTimeline.first?.originServerTs ??
             (stateEvents.map { $0.originServerTs ?? 0 }.min() ?? 0)
 
-        let lastMsg = sortedTimeline.last(where: { $0.type == "m.room.message" })
+        let lastMsg = sortedTimeline.last(where: { $0.type == "m.room.message" || $0.type == "m.call.invite" })
         let lastMessageBody = lastMsg?.content?.body
         let lastSender = lastMsg?.sender
 
@@ -116,7 +116,7 @@ struct RoomSummaryAdapter {
                        let dn = nameEvent.content?.name, !dn.isEmpty {
                         return dn
                     }
-                    return opp // fallback to userId; UI may resolve later via contacts
+                    return "Chat" // fallback to chat; UI may resolve later via contacts
                 }
                 return explicitName.isEmpty ? "Chat" : explicitName
             }
@@ -230,7 +230,7 @@ struct RoomSummaryAdapter {
         }
         
         // --- last message (timeline)
-        if let msg = timeline.last(where: { $0.type == "m.room.message" }) {
+        if let msg = timeline.last(where: { $0.type == "m.room.message" || $0.type == "m.call.invite"}) {
             lastMessage = msg.content?.body
             lastSender  = msg.sender
         }
@@ -282,8 +282,8 @@ struct RoomSummaryAdapter {
                     ?? (timeline.first { $0.type == "m.room.member" && $0.stateKey == opp }),
                    let dn = mem.content?.name, !dn.isEmpty {
                     name = dn
-                } else if name.isEmpty || name == "Chat" {
-                    name = opp
+                } else if name.isEmpty {
+                    name = "Chat"
                 }
                 // prefer opponent avatar if present
                 if let mem = (state.first { $0.type == "m.room.member" && $0.stateKey == opp })

@@ -31,7 +31,7 @@ struct ConversationView: View {
                 } else {
                     Text(getInitials(from: roomModel.name))
                         .font(.system(size: 16, weight: .bold))
-                        .foregroundColor(Design.Color.primaryText.opacity(0.7))
+                        .foregroundColor(Design.Color.primaryTextColor.opacity(0.7))
                         .frame(width: 48, height: 48)  // Set the circle size
                         .background(roomModel.randomeProfileColor.opacity(0.3))
                         .clipShape(Circle())
@@ -47,19 +47,19 @@ struct ConversationView: View {
                 HStack {
                     Text(roomModel.name)
                         .font(roomModel.unreadCount > 0 ? Design.Font.bold(14) : Design.Font.regular(14))
-                        .foregroundColor(Design.Color.primaryText)
+                        .foregroundColor(Design.Color.primaryTextColor)
                     
                     Spacer()
                     
-                    Text(lastActiveString(from: roomModel.opponent?.lastSeen))
+                    Text(lastActiveString(from: roomModel.lastServerTimestamp))
                         .font(Design.Font.regular(12))
-                        .foregroundColor(Design.Color.primaryText.opacity(0.6))
+                        .foregroundColor(Design.Color.primaryTextColor.opacity(0.6))
                 }
                 
                 if !typingIndicator.isEmpty {
                     Text(typingIndicator)
                         .font(Design.Font.regular(12))
-                        .foregroundColor(Design.Color.primaryText.opacity(0.4))
+                        .foregroundColor(Design.Color.primaryTextColor.opacity(0.4))
                         .lineLimit(1)
                 } else {
                     HStack {
@@ -67,7 +67,7 @@ struct ConversationView: View {
                         if roomModel.isGroup {
                             Text(!(roomModel.lastSenderName?.isEmpty ?? true) ? "\(roomModel.lastSenderName ?? "") :" : "")
                                 .font(Design.Font.regular(12))
-                                .foregroundColor(Design.Color.primaryText.opacity(0.4))
+                                .foregroundColor(Design.Color.primaryTextColor.opacity(0.4))
                                 .lineLimit(1)
                             
                             Spacer()
@@ -76,7 +76,7 @@ struct ConversationView: View {
                         // Last message text
                         lastMessagePreview
                             .font(roomModel.unreadCount > 0 ? Design.Font.semiBold(12) : Design.Font.regular(12))
-                            .foregroundColor(roomModel.unreadCount > 0 ? Design.Color.primaryText : Design.Color.primaryText.opacity(0.4))
+                            .foregroundColor(roomModel.unreadCount > 0 ? Design.Color.primaryTextColor : Design.Color.primaryTextColor.opacity(0.4))
                             .lineLimit(1)
                             .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -84,6 +84,8 @@ struct ConversationView: View {
                         
                         if roomModel.isMuted {
                             Image("notification-bing")
+                                .renderingMode(.template)
+                                .foregroundColor(.white)
                                 .frame(width: 10, height: 10)
                         }
                         
@@ -203,6 +205,10 @@ struct ConversationView: View {
             return AnyView(Label("File", systemImage: "doc.fill"))
         case .gif:
             return AnyView(Label("GIF", systemImage: "sparkles"))
+        case .voiceCall:
+            return AnyView(Text(roomModel.lastMessage ?? "No messages"))
+        case .videoCall:
+            return AnyView(Text(roomModel.lastMessage ?? "No messages"))
         }
     }
 

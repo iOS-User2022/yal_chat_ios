@@ -60,6 +60,8 @@ func messageType(for mimeType: String) -> MessageType {
     if mimeType.hasPrefix("image/") { return .image }
     if mimeType.hasPrefix("video/") { return .video }
     if mimeType.hasPrefix("audio/") { return .audio }
+    if mimeType.hasPrefix("voiceCall/") { return .voiceCall }
+    if mimeType.hasPrefix("videoCall/") { return .videoCall }
     if mimeType == "text/plain" { return .text }
     return .file
 }
@@ -202,6 +204,10 @@ func buildMatrixMediaInfo(
         )
     case .text:
         break
+    case .voiceCall:
+            break
+    case .videoCall:
+            break
     case .gif:
         if let image = UIImage(contentsOfFile: fileURL.path) {
             width = Int(image.size.width)
@@ -245,11 +251,21 @@ func randomBackgroundColor() -> Color {
     return Color(red: red, green: green, blue: blue)
 }
 
-func lastActiveString(from millis: Int?) -> String {
+func lastActiveString(from millis: Int64?, isEpoch: Bool = true, currentlyActive: Bool? = nil) -> String {
+    if currentlyActive == true { return "Online" }
     guard let millis = millis else { return "" }
-    let nowMillis = Int(Date().timeIntervalSince1970 * 1000)
-    let deltaSeconds = max((nowMillis - millis) / 1000, 0) // Ensure non-negative
-    
+    guard millis > 0 else { return "" }
+    // If it's an absolute epoch ms → convert to "ago".
+    // If it's Matrix presence last_active_ago (already "ms ago") → use directly.
+    let deltaSeconds: Int = {
+        if isEpoch {
+            let nowMillis = Int64(Date().timeIntervalSince1970 * 1000)
+            return Int(max((nowMillis - millis) / 1000, 0))
+        } else {
+            return Int(max(millis / 1000, 0))
+        }
+    }()
+
     if deltaSeconds < 30 {
         return "just now"
     } else if deltaSeconds < 60 {
@@ -274,7 +290,6 @@ func lastActiveString(from millis: Int?) -> String {
         return "\(years) year\(years == 1 ? "" : "s") ago"
     }
 }
-
 
 func getMediaDimensions(mediaType: String, localURL: String?) -> (Int, Int) {
     guard let localURL, let url = makeURL(from: localURL) else { return (0, 0) }

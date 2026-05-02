@@ -24,6 +24,10 @@ struct BaseScreenContainer<Content: View, BottomBar: View>: View {
             )
             .padding(.horizontal, 8)
             .padding(.top, 12)
+            .background(
+                Color(Design.Color.darkgrayColor)
+                    .ignoresSafeArea(edges: [.top, .leading, .trailing])
+            )
 
             content()
                 .frame(maxWidth: .infinity, maxHeight: .infinity)

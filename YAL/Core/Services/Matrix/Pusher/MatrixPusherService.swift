@@ -17,10 +17,8 @@ final class MatrixPusherService {
     }
 
     // Register/replace an HTTP pusher (Matrix CS API v3).
-    func setPusher(
-        deviceToken: String
-    ) -> AnyPublisher<Void, Error> {
-        return matrixPusherRepository.registerPusher(deviceTokenHex: deviceToken)
+    func setPusher(deviceToken: String, type:PusherType) -> AnyPublisher<Void, Error> {
+        return matrixPusherRepository.registerPusher(deviceTokenHex: deviceToken, type: type)
     }
 
     // Delete a pusher via the dedicated endpoint (alt to kind:nil).

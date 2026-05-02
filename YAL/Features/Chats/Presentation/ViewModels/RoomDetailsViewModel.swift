@@ -108,6 +108,11 @@ final class RoomDetailsViewModel: ObservableObject {
             }, receiveValue: { _ in })
             .store(in: &cancellables)
     }
+    
+    func toggeleFavorite(for room: RoomModel) {
+        roomService.toggleFavoriteRoom(roomID: room.id)
+        self.isFavorite = roomService.getFavoriteRooms().contains(where: { $0.isEmpty ? false : $0 == room.id })
+    }
 
     func inviteUsers(users: [ContactLite]) {
         LoaderManager.shared.show()

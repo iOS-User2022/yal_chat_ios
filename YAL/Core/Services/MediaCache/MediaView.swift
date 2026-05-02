@@ -12,6 +12,7 @@ import QuickLookThumbnailing
 import RealmSwift
 import QuickLook
 import SDWebImageSwiftUI
+import PDFKit
 
 enum MediaType: String, PersistableEnum {
     case image = "m.image"
@@ -26,7 +27,8 @@ final class MediaLoader: ObservableObject {
     @Published var localURL: URL?
     @Published var progress: Double = 0
     @Published var error: Error? = nil
-
+    var isVisible = false
+    
     func load(remoteURL: String, type: MediaType, localURL: URL? = nil) {
         if let localURL {
             DispatchQueue.main.async {
@@ -41,10 +43,12 @@ final class MediaLoader: ObservableObject {
             url: remoteURL,
             type: type,
             progressHandler: { [weak self] p in
-                DispatchQueue.main.async { self?.progress = p }
+                if let self, isVisible {
+                    DispatchQueue.main.async { self.progress = p }
+                }
             },
             completion: { [weak self] result in
-                guard let self else { return }
+                guard let self, self.isVisible else { return }
                 switch result {
                 case .success(let pathString):
                     let url = pathString.hasPrefix("file://")
@@ -57,12 +61,13 @@ final class MediaLoader: ObservableObject {
                     }
                     // Only decode images as UIImage. Never attempt for video/audio/pdf.
                     DispatchQueue.global(qos: .userInitiated).async {
+                        guard self.isVisible else { return }
                         switch type {
                         case .image, .gif:
                             // If it's truly an image or gif, try to decode a bitmap
                             // Only attempt bitmap decode for real images (or gifs)
                             DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-                                guard let self = self else { return }
+                                guard let self = self, isVisible else { return }
                                 let target: CGFloat = 640
                                 if let img = MediaDecodeHelper.downsampleCached(url: url, maxPixel: target) {
                                     MediaDecodeHelper.setWithoutAnimation { self.image = img }
@@ -74,6 +79,7 @@ final class MediaLoader: ObservableObject {
                         case .video:
                             // Generate a thumbnail (or rely on server /thumbnail)
                             generateVideoThumbnailAsync(from: url) { result in
+                                if !self.isVisible { return }
                                 switch result {
                                 case .success(let image):
                                     self.image = image
@@ -84,6 +90,7 @@ final class MediaLoader: ObservableObject {
                         case .document, .audio:
                             // Prepare a generic preview thumbnail (QuickLook)
                             generateDocumentThumbnailAsync(from: url) { result in
+                                if !self.isVisible { return }
                                 switch result {
                                 case .success(let image):
                                     self.image = image
@@ -135,6 +142,9 @@ struct MediaView<Placeholder: View, ErrorView: View>: View {
     @State private var isVisible = false
     @State private var lastProgress: Double = 0
     @State private var playGIF = false
+    @EnvironmentObject var idleCenter: ScrollIdleCenter
+    @State private var idleGate: AnyCancellable?
+    @State private var progressCancellable: AnyCancellable?
     
     private var displayedProgress: Double {
         let live = clamp((externalProgress ?? loader.progress), min: 0, max: 1)
@@ -146,67 +156,25 @@ struct MediaView<Placeholder: View, ErrorView: View>: View {
         ZStack {
             switch mediaType {
             case .image:
-                if let img = loader.image {
-                    let aspectRatio = img.size.width / img.size.height
-                    let displayWidth = calculateDisplayWidth(aspectRatio: aspectRatio)
-                    
-                    Image(uiImage: img)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: displayWidth, height: displayWidth / aspectRatio)
-                        .onTapGesture { showFullScreen = true }
-                        .fullScreenCover(isPresented: $showFullScreen) {
-                            FullScreenImageView(
-                                source: .uiImage(img),
-                                userName: userName ?? "",
-                                timeText: timeText ?? "",
-                                isPresented: $showFullScreen
-                            )
-                        }
-                } else if loader.progress > 0 && loader.progress < 1 {
-                    placeholder
-                } else if loader.error != nil {
-                    errorView
-                } else {
-                    placeholder
-                }
+                imageContentView
             
             case .gif:
-                if let localURL = loader.localURL?.absoluteString, let fileURL = URL(string: localURL) {
-                    let gifURL = URL(fileURLWithPath: fileURL.path)
-                    Group {
-                        if playGIF {
-                            // Animate only when the user taps
-                            AnimatedImage(url: gifURL)
-                                .resizable()
-                                .scaledToFit()
-                                .frame(maxWidth: 220)
-                                .clipped()
-                        } else {
-                            // Static first frame while scrolling (cheap to render)
-                            WebImage(
-                                url: gifURL,
-                                options: [.decodeFirstFrameOnly, .scaleDownLargeImages],
-                                context: [.imageThumbnailPixelSize : CGSize(width: 440, height: 430)] // ~2x of display
-                            )
-                            .resizable()
-                            .scaledToFit()
-                            .frame(maxWidth: 220)
-                            .clipped()
-                            .onTapGesture { playGIF = true }
-                        }
-                    }
-                } else {
-                    placeholder
-                }
+                gifContentView
 
             case .video:
                 if let url = loader.localURL {
                     ZStack {
                         if let thumb = thumbnail {
-                            Image(uiImage: thumb).resizable().scaledToFit()
+                            let aspectRatio = thumb.size.width / thumb.size.height
+                            let displayWidth = calculateDisplayWidth(aspectRatio: aspectRatio)
+                            
+                            Image(uiImage: thumb)
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: displayWidth, height: displayWidth / aspectRatio)
                         } else {
-                            Rectangle().fill(Color.black.opacity(0.1)).frame(height: 200)
+                            Rectangle().fill(Color.black.opacity(0.1))
+                                .frame(width: 220, height: 240)
                         }
                         Image(systemName: "play.circle.fill")
                             .font(.system(size: 50)).foregroundColor(.white)
@@ -238,8 +206,8 @@ struct MediaView<Placeholder: View, ErrorView: View>: View {
                     DocumentMessageRow(
                         fileURL: url,
                         fileName: url.lastPathComponent,
-                        pageCountText: "0",
-                        fileSizeText: ""
+                        pageCountText: self.getPDFPageCount(from: url),
+                        fileSizeText: self.getFileSize(from: url)
                     )
                 } else if loader.progress > 0 && loader.progress < 1 {
                     placeholder
@@ -270,31 +238,26 @@ struct MediaView<Placeholder: View, ErrorView: View>: View {
         .overlay(progressOverlay, alignment: .bottom)
         .onAppear {
             isVisible = true
-            // show latest known value immediately when appearing
+            loader.isVisible = true
+            setupProgressObserver()
             stickyProgress = max(stickyProgress, lastProgress)
             
-            if loader.localURL == nil && loader.image == nil {
-                if let local = localURLOverride {
-                    loader.load(remoteURL: mediaURL, type: mediaType, localURL: local)
-                } else if !mediaURL.isEmpty {
-                    loader.load(remoteURL: mediaURL, type: mediaType, localURL: nil)
-                }
+            beginLocalPreviewIfAvailable()
+            
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                guard isVisible else { return }
+                scheduleNetworkLoadIfNeeded()
             }
         }
         .onDisappear {
             isVisible = false
+            loader.isVisible = false
+            playGIF = false
+            idleGate?.cancel()
+            progressCancellable?.cancel()
         }
-        .onReceive(
-            loader.$progress
-                .map { MediaDecodeHelper.quantizeProgress($0, steps: 20) } // 5% steps
-                .removeDuplicates()
-                .throttle(for: .milliseconds(250), scheduler: RunLoop.main, latest: true)
-        ) { p in
-            lastProgress = p
-            if isVisible {
-                stickyProgress = max(stickyProgress, p)
-                if p >= 0.999 { finishedOnce = true }
-            }
+        .onChange(of: mediaURL) { _ in
+            if isVisible { scheduleNetworkLoadIfNeeded() }
         }
         .animation(nil, value: displayedProgress)
         .onChange(of: externalProgress) { v in
@@ -307,14 +270,125 @@ struct MediaView<Placeholder: View, ErrorView: View>: View {
         }
     }
     
+    func getFileSize(from url: URL) -> String {
+        do {
+            let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
+            if let size = attributes[.size] as? Int64 {
+                let formatter = ByteCountFormatter()
+                formatter.allowedUnits = [.useKB, .useMB]
+                formatter.countStyle = .file
+                return formatter.string(fromByteCount: size)
+            }
+        } catch {
+            print("Error getting file size: \(error)")
+        }
+        return "0 KB"
+    }
+    
+    func getPDFPageCount(from url: URL) -> String {
+        if let document = PDFDocument(url: url) {
+            return "\(document.pageCount) pages"
+        }
+        return "1 pages"
+    }
+    
     // MARK: - Helper: Calculate Display Width
     private func calculateDisplayWidth(aspectRatio: CGFloat) -> CGFloat {
         let targetHeight: CGFloat = 240
-        let maxWidth: CGFloat = 320
+        let screenWidth = UIScreen.main.bounds.width
+        let availableWidth = 240.0
+        let portraitMaxWidth: CGFloat = 320
+        let wideImageMaxWidth = availableWidth  // Allow wide images to use more screen space
         let minWidth: CGFloat = 150
         let calculatedWidth = targetHeight * aspectRatio
-        return min(maxWidth, max(minWidth, calculatedWidth))
+        
+        if aspectRatio > 1.5 {
+            return min(calculatedWidth, wideImageMaxWidth)
+        } else if aspectRatio > 1.0 {
+            return min(calculatedWidth, portraitMaxWidth)
+        } else {
+            return min(portraitMaxWidth, max(minWidth, calculatedWidth))
+        }
     }
+    
+    // MARK: - Dynamic Image Content View
+    @ViewBuilder
+    private var imageContentView: some View {
+        if let img = loader.image {
+            let aspectRatio = img.size.width / img.size.height
+            let displayWidth = calculateDisplayWidth(aspectRatio: aspectRatio)
+            
+            Image(uiImage: img)
+                .resizable()
+                .scaledToFit()
+                .frame(width: displayWidth, height: displayWidth / aspectRatio)
+                .onTapGesture { showFullScreen = true }
+                .fullScreenCover(isPresented: $showFullScreen) {
+                    FullScreenImageView(
+                        source: .uiImage(img),
+                        userName: userName ?? "",
+                        timeText: timeText ?? "",
+                        isPresented: $showFullScreen
+                    )
+                }
+        } else if loader.progress > 0 && loader.progress < 1 {
+            placeholder
+        } else if loader.error != nil {
+            errorView
+        } else {
+            placeholder
+        }
+    }
+    
+    // MARK: - Dynamic GIF Content View
+    @ViewBuilder
+    private var gifContentView: some View {
+        if let localURL = loader.localURL?.absoluteString, let fileURL = URL(string: localURL) {
+            let gifURL = URL(fileURLWithPath: fileURL.path)
+            Group {
+                if playGIF && isVisible {
+                    // Animate only when the user taps
+                    AnimatedImage(url: gifURL)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(maxWidth: 220)
+                        .clipped()
+                } else {
+                    // Static first frame while scrolling (cheap to render)
+                    WebImage(
+                        url: gifURL,
+                        options: [.decodeFirstFrameOnly, .scaleDownLargeImages],
+                        context: [.imageThumbnailPixelSize : CGSize(width: 440, height: 430)] // ~2x of display
+                    )
+                    .resizable()
+                    .scaledToFit()
+                    .frame(maxWidth: 220)
+                    .clipped()
+                    .onTapGesture { playGIF = true }
+                }
+            }
+        } else {
+            placeholder
+        }
+    }
+    
+    private func setupProgressObserver() {
+        progressCancellable?.cancel()
+        progressCancellable = loader.$progress
+            .map { MediaDecodeHelper.quantizeProgress($0, steps: 10) }
+            .removeDuplicates()
+            .throttle(for: .milliseconds(250), scheduler: RunLoop.main, latest: true)
+            .sink { p in
+                guard self.isVisible else { return }
+                self.lastProgress = p
+                self.stickyProgress = max(self.stickyProgress, p)
+                if p >= 0.999 {
+                    self.finishedOnce = true
+                    self.progressCancellable?.cancel()
+                }
+            }
+    }
+    
     private var progressOverlay: some View {
         let p = displayedProgress
         // show only while actively moving between (0,1)
@@ -339,14 +413,54 @@ struct MediaView<Placeholder: View, ErrorView: View>: View {
     }
     
     private func generateVideoThumbnail(for url: URL) {
+        guard isVisible else { return }
         let asset = AVAsset(url: url)
         let gen = AVAssetImageGenerator(asset: asset)
         gen.appliesPreferredTrackTransform = true
         let t = CMTime(seconds: 1, preferredTimescale: 60)
         DispatchQueue.global().async {
+            guard self.isVisible else { return }
             if let cg = try? gen.copyCGImage(at: t, actualTime: nil) {
-                DispatchQueue.main.async { thumbnail = UIImage(cgImage: cg) }
+                DispatchQueue.main.async {
+                    guard self.isVisible else { return }
+                    thumbnail = UIImage(cgImage: cg)
+                }
             }
+        }
+    }
+    
+    private func beginLocalPreviewIfAvailable() {
+        // If caller passed a local file (cache), set preview immediately without hitting network.
+        if let local = localURLOverride {
+            // Pass empty remoteURL to avoid starting a fetch here.
+            loader.load(remoteURL: "", type: mediaType, localURL: local)
+        }
+    }
+
+    private func scheduleNetworkLoadIfNeeded() {
+        guard !mediaURL.isEmpty else { return }
+        idleGate?.cancel()
+        
+        MediaCacheManager.shared.peekCachedPath(url: mediaURL) { cachedPath in
+            guard isVisible else { return }
+            
+            if let cachedPath, !cachedPath.isEmpty {
+                let url = cachedPath.hasPrefix("file://")
+                ? URL(string: cachedPath)!
+                : URL(fileURLWithPath: cachedPath)
+                
+                loader.load(remoteURL: "", type: mediaType, localURL: url)
+                return
+            }
+            
+            idleGate = idleCenter.idlePublisher
+                .filter { $0 }
+                .first()
+                .sink { _ in
+                    if isVisible {
+                        loader.load(remoteURL: mediaURL, type: mediaType, localURL: nil)
+                    }
+                }
         }
     }
 }
@@ -383,10 +497,6 @@ extension MediaView where Placeholder == Image, ErrorView == Image {
     }
 }
 
-
-import SwiftUI
-import AVFoundation
-
 // MARK: - Voice message bubble
 
 struct VoiceMessageBubble: View {
@@ -403,55 +513,60 @@ struct VoiceMessageBubble: View {
     var backgroundColor: Color = .clear
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 4) {
             
             if isSender {
-                if isPlaying {
-                    Button(action: onTapRate) {
-                        Text("\(Int(playbackRate))x")
-                            .font(.system(size: 12, weight: .bold))
-                            .foregroundColor(.white)
-                            .frame(minWidth: 20)
-                    }
-                    .padding(.horizontal, 4)
-                    .padding(.vertical, 4)
-                    .background(Color.blue.opacity(0.7))
-                    .cornerRadius(8)
-                } else {
-                    ZStack {
-                        if let url = URL(string: senderImage) {
-                            AsyncImage(url: url) { phase in
-                                switch phase {
-                                case .empty:
-                                    ProgressView()
-                                        .frame(width: 48, height: 48)
-                                case .success(let image):
-                                    image
+                Group {
+                    if isPlaying {
+                        Button(action: onTapRate) {
+                            Text("\(Int(playbackRate))x")
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundColor(.white)
+                                .frame(minWidth: 20)
+                        }
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 4)
+                        .background(Color.blue.opacity(0.7))
+                        .cornerRadius(8)
+                        .frame(width: 48, height: 48)
+                    } else {
+                        ZStack {
+                            if let url = URL(string: senderImage) {
+                                AsyncImage(url: url) { phase in
+                                    switch phase {
+                                    case .empty:
+                                        ProgressView()
+                                            .frame(width: 48, height: 48)
+                                    case .success(let image):
+                                        image
+                                            .resizable()
+                                            .scaledToFill()
+                                            .frame(width: 48, height: 48)
+                                            .clipShape(Circle())
+                                    case .failure(_):
+                                        initialsView
+                                    @unknown default:
+                                        EmptyView()
+                                    }
+                                }
+                            } else {
+                                initialsView
+                            }
+                            HStack {
+                                Spacer()
+                                VStack {
+                                    Spacer()
+                                    Image("micButton")
                                         .resizable()
-                                        .scaledToFill()
-                                        .frame(width: 48, height: 48)
-                                        .clipShape(Circle())
-                                case .failure(_):
-                                    initialsView
-                                @unknown default:
-                                    EmptyView()
+                                        .scaledToFit()
+                                        .frame(width: 20, height: 20)
                                 }
                             }
-                        } else {
-                            initialsView
                         }
-                        HStack {
-                            Spacer()
-                            VStack {
-                                Spacer()
-                                Image("micButton")
-                                    .resizable()
-                                    .scaledToFit()
-                                    .frame(width: 20, height: 20)
-                            }
-                        }
+                        .frame(width: 48, height: 48)
                     }
                 }
+                .transaction { $0.animation = nil }
                 Button(action: onTapPlay) {
                     Image(systemName: isPlaying ? "pause.fill" : "play.fill")
                         .font(.headline)
@@ -460,7 +575,7 @@ struct VoiceMessageBubble: View {
                 Image("Component 27 white")
                     .resizable()
                     .scaledToFit()
-                    .frame(width: 120)
+                    .frame(width: 90)
                 
                 Text(current)
                     .font(Design.Font.regular(10))
@@ -468,73 +583,75 @@ struct VoiceMessageBubble: View {
                     .frame(minWidth: 40)
 
             } else {
-               
-                
                 Button(action: onTapPlay) {
                     Image(systemName: isPlaying ? "pause.fill" : "play.fill")
                         .font(.headline)
-                        .foregroundColor(.black)
+                        .foregroundColor(.white)
                 }
                 
-                Image("Component 27")
+                Image("Component 27 white")
                     .resizable()
                     .scaledToFit()
-                    .frame(width: 120)
+                    .frame(width: 90)
                 
                 Text(current)
                     .font(Design.Font.regular(10))
-                    .foregroundColor(.black)
+                    .foregroundColor(.white)
                     .frame(minWidth: 40)
                 
-                if isPlaying {
-                    Button(action: onTapRate) {
-                        Text("\(Int(playbackRate))x")
-                            .font(.system(size: 12, weight: .bold))
-                            .foregroundColor(.black)
-                            .frame(minWidth: 20)
-                    }
-                    .padding(.horizontal, 4)
-                    .padding(.vertical, 4)
-                    .background(Color.gray.opacity(0.2))
-                    .cornerRadius(8)
-                } else {
-                    ZStack {
-                        if receiverAvatar != Image(uiImage: UIImage()) {
-                            receiverAvatar
-                                .resizable()
-                                .scaledToFill()
-                                .frame(width: 48, height: 48)
-                                .clipShape(Circle())
-                        } else {
-                            initialsView
+                Group {
+                    if isPlaying {
+                        Button(action: onTapRate) {
+                            Text("\(Int(playbackRate))x")
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundColor(.white)
+                                .frame(minWidth: 20)
                         }
-                        HStack {
-                            Spacer()
-                            VStack {
-                                Spacer()
-                                Image("micButton")
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 4)
+                        .background(Color.gray.opacity(0.2))
+                        .cornerRadius(8)
+                        .frame(width: 38, height: 48)
+                    } else {
+                        ZStack {
+                            if receiverAvatar != Image(uiImage: UIImage()) {
+                                receiverAvatar
                                     .resizable()
-                                    .scaledToFit()
-                                    .frame(width: 20, height: 20)
+                                    .scaledToFill()
+                                    .frame(width: 38, height: 38)
+                                    .clipShape(Circle())
+                            } else {
+                                initialsView
                             }
+                            HStack {
+                                Spacer()
+                                VStack {
+                                    Spacer()
+                                    Image("micButton")
+                                        .resizable()
+                                        .scaledToFit()
+                                        .frame(width: 20, height: 20)
+                                }
+                            }
+                            
                         }
-                        
+                        .frame(width: 38, height: 38)
                     }
                    
                 }
+                .transaction { $0.animation = nil }
             }
             
         }
-        .frame(maxWidth: .infinity, alignment: isSender ? .trailing : .leading)
-        .padding(.horizontal)
-        .padding(.vertical, 8)
+        .frame(width: 200, height: 60)
+        .frame(maxWidth: 200, alignment: isSender ? .trailing : .leading)
     }
     
     @ViewBuilder
     private var initialsView: some View {
         Text(senderInitial)
             .font(Design.Font.bold(16))
-            .frame(width: 48, height: 48)
+            .frame(width: 38, height: 38)
             .background(backgroundColor)
             .foregroundColor(Design.Color.primaryText.opacity(0.7))
             .clipShape(Circle())
@@ -554,6 +671,8 @@ struct DocumentMessageBubble: View {
     var time: String = "00:00"
 
     var body: some View {
+        let maxWidth = 240.0
+        
         ZStack(alignment: .bottomTrailing) {
             VStack(spacing: 0) {
                 // bottom card
@@ -564,12 +683,15 @@ struct DocumentMessageBubble: View {
                             .foregroundColor(.red)
                     }
                     .frame(width: 20, height: 20)
+                    .layoutPriority(1)
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text(fileName)
                             .font(Design.Font.regular(12))
-                            .foregroundColor(.primary)
+                            .foregroundColor(.black)
                             .lineLimit(1)
+                            .truncationMode(.middle)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                         HStack(spacing: 8) {
                             Text(metaTop)
                             Text("•")
@@ -581,16 +703,21 @@ struct DocumentMessageBubble: View {
                         .foregroundColor(Design.Color.grayText)
                         .lineLimit(1)
                     }
-                    Spacer()
+                    .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
+                    Spacer(minLength: 0)
                 }
                 .padding(10)
+                .frame(maxWidth: maxWidth)
+                .padding(.vertical, 16)
                 .background(
                     RoundedRectangle(cornerRadius: 0, style: .continuous)
                         .fill(Color.white.opacity(0.9))
                         .shadow(color: .black.opacity(0.08), radius: 4, y: 1)
+                        .clipShape(TopRoundedCorners(radius: 6))
                 )
             }
         }
+        .frame(maxWidth: maxWidth)
         .fixedSize(horizontal: false, vertical: true)
     }
 }
@@ -609,6 +736,7 @@ extension UIImage {
 
 import SwiftUI
 import AVFoundation
+import Combine
 
 final class AudioBubblePlayer: NSObject, ObservableObject, AVAudioPlayerDelegate {
     @Published var isPlaying = false
@@ -617,8 +745,9 @@ final class AudioBubblePlayer: NSObject, ObservableObject, AVAudioPlayerDelegate
     @Published var playbackRate: Float = 1.0
 
     private var player: AVAudioPlayer?
-    private var timer: Timer?
-
+    private var timerSource: DispatchSourceTimer?
+    var isVisible = false
+    
     func load(url: URL) {
         stop()
         do {
@@ -633,6 +762,10 @@ final class AudioBubblePlayer: NSObject, ObservableObject, AVAudioPlayerDelegate
         }
     }
 
+    deinit {
+        cleanup()
+    }
+    
     func toggle() {
         guard let p = player else { return }
         if p.isPlaying { pause() } else { play() }
@@ -671,17 +804,54 @@ final class AudioBubblePlayer: NSObject, ObservableObject, AVAudioPlayerDelegate
         stopTimer()
     }
 
+    func cleanup() {
+        stop()
+        player = nil
+        isVisible = false
+    }
+    
     private func startTimer() {
         stopTimer()
-        timer = Timer.scheduledTimer(withTimeInterval: 0.2, repeats: true) { [weak self] _ in
-            guard let self, let p = self.player else { return }
+        guard isVisible else { return }
+        
+        let timer = DispatchSource.makeTimerSource(queue: .main)
+        timer.schedule(deadline: .now(), repeating: 0.2)
+        timer.setEventHandler { [weak self] in
+            guard let self else {
+                timer.cancel()
+                return
+            }
+            
+            guard self.isVisible else {
+                DispatchQueue.main.async { [weak self] in
+                    self?.stopTimer()
+                }
+                return
+            }
+            
+            guard let p = self.player, p.isPlaying else {
+                DispatchQueue.main.async { [weak self] in
+                    self?.stopTimer()
+                }
+                return
+            }
+            
             self.current = p.currentTime
             self.total = p.duration
-            if p.currentTime >= p.duration { self.stop() }
+            if p.currentTime >= p.duration {
+                DispatchQueue.main.async { [weak self] in
+                    self?.stop()
+                }
+            }
         }
-        RunLoop.main.add(timer!, forMode: .common)
+        timer.resume()
+        self.timerSource = timer
     }
-    private func stopTimer() { timer?.invalidate(); timer = nil }
+    
+    private func stopTimer() {
+        timerSource?.cancel()
+        timerSource = nil
+    }
     
     func setPlaybackRate(_ rate: Float) {
         self.playbackRate = rate
@@ -706,6 +876,7 @@ struct AudioMessageRow: View {
     let isSender: Bool
     let senderImage: String
     let senderName: String
+    @State private var isVisible = false
 
     @StateObject private var vm = AudioBubblePlayer()
     private let speeds: [Float] = [1.0, 2.0, 3.0, 4.0]
@@ -728,7 +899,16 @@ struct AudioMessageRow: View {
             senderInitial: getInitials(from: senderName),
             backgroundColor: randomBackgroundColor()
         )
-        .onAppear { vm.load(url: fileURL) }
+        .onAppear {
+            isVisible = true
+            vm.isVisible = true
+            vm.load(url: fileURL)
+        }
+        .onDisappear {
+            isVisible = false
+            vm.isVisible = false
+            vm.cleanup()
+        }
     }
 }
 

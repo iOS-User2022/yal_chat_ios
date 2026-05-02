@@ -13,7 +13,7 @@ struct SettingsView: View {
     @Environment(\.dismiss) var dismiss
     @StateObject private var viewModel: SettingsViewModel
     @Binding var navPath: NavigationPath
-
+    
     init(navPath: Binding<NavigationPath> = .constant(NavigationPath())) {
         let viewModel = DIContainer.shared.container.resolve(SettingsViewModel.self)!
         _viewModel = StateObject(wrappedValue: viewModel)
@@ -21,178 +21,168 @@ struct SettingsView: View {
     }
     
     var body: some View {
-        GeometryReader { geometry in
-            ZStack(alignment: .bottom) {
-                ScrollView(.vertical, showsIndicators: false) {
-                    VStack(spacing: 0) {
-                        Spacer().frame(height: 56)
-                        // ✅ Custom NavBar
-                        HStack(spacing: 20) {
-                            Button(action: {
-                                dismiss()
-                            }) {
-                                Image("back-long")
-                                    .resizable()
-                                    .frame(width: 20, height: 20)
-                            }
-                            Spacer().frame(width: 20)
-                            Text("Settings")
-                                .font(Design.Font.heavy(16))
-                                .foregroundColor(Design.Color.headingText)
-                            Spacer()
+        ZStack {
+            
+            // MARK: - Full Gradient Background
+            Color(hex: "#0A171F")
+            .ignoresSafeArea()
+            
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(spacing: 0) {
+                    
+                    Spacer().frame(height: 56)
+                    
+                    // MARK: - Custom NavBar
+                    HStack(spacing: 16) {
+                        Button(action: {
+                            dismiss()
+                        }) {
+                            Image("back-long")
+                                .renderingMode(.template)
+                                .resizable()
+                                .frame(width: 20, height: 20)
+                                .foregroundColor(.white)
                         }
-                        .padding(.horizontal, 20)
                         
-                        Spacer().frame(height: 44)
+                        Text("Settings")
+                            .font(Design.Font.semiBold(14))
+                            .foregroundColor(.white)
                         
-                        ScrollView {
-                            VStack(spacing: 0) {
-
-                                // MARK: Terms / About / FAQ
-                                sectionBox {
-                                    settingRow("Notification Settings", icon: "notification-mute") {
-                                        navPath.append(ProfileRoute.notifications)
-                                    }
-                                    
-                                    Spacer().frame(height: 4)
-                                    
-                                    settingRow("Term of Service", icon: "terms-of-service") {
-                                        open("https://www.yal.chat/terms-of-service")
-                                    }
-                                    
-                                    Spacer().frame(height: 4)
-                                    
-                                    settingRow("About App", icon: "info") {
-                                        open("https://www.yal.chat/about-us")
-                                    }
-                                    
-                                    Spacer().frame(height: 4)
-                                    
-                                    settingRow("FAQs", icon: "faqs") {
-                                        open("https://www.yal.chat/faq")
-                                    }
-                                }
-                                
-                                Spacer().frame(height: 8)
-                                
-                                // MARK: Logout & Delete
-                                sectionBox {
-                                    destructiveRow("Logout", icon: "logout") {
-                                        authViewModel.logout()
-                                    }
-                                    
-                                    Spacer().frame(height: 4)
-                                    
-                                    destructiveRow("Delete Account", icon: "delete-account") {
-                                        authViewModel.logout()
-                                    }
-                                }
-                                
-                                Spacer()
-                            }
-                            .background(Design.Color.appGradient.opacity(0.12))
+                        Spacer()
+                    }
+                    .padding(.horizontal, 20)
+                    
+                    Spacer().frame(height: 44)
+                    
+                    // MARK: - Settings List
+                    
+                    VStack(spacing: 0) {
+                        
+                        navigableSettingRow("Chat Settings", icon: "messages_icon") {
+                            ChatSettingsView()
+                        }
+                        settingRow("Notification and Sounds", icon: "notification-mute") {
+                            navPath.append(ProfileRoute.notifications)
+                        }
+                        
+                        settingRow("Privacy and Security", icon: "privacy_policy") {
+                            navPath.append(ProfileRoute.blocked)
+                        }
+                        
+                        // Gradient Divider
+                        gradientDivider
+                        
+                        settingRow("Term of Service", icon: "terms-of-service") {
+                            open("https://www.yal.chat/terms-of-service")
+                        }
+                        settingRow("About App", icon: "info") {
+                            open("https://www.yal.chat/about-us")
+                        }
+                        
+                        settingRow("FAQs", icon: "faqs") {
+                            open("https://www.yal.chat/faq")
+                        }
+                        
+                        // Gradient Divider
+                        gradientDivider
+                        
+                        destructiveRow("Logout", icon: "logout") {
+                            authViewModel.logout()
+                        }
+                        
+                        destructiveRow("Delete Account", icon: "delete-account") {
+                            authViewModel.logout()
                         }
                     }
-                    .background(Design.Color.white)
                     
+                    Spacer()
                 }
-                .background(Design.Color.white)
-                // Footer
-                footer
             }
-            .ignoresSafeArea(.all, edges: [.top, .bottom])
         }
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
     }
-
-    // MARK: - Helpers
-
-    private var footer: some View {
-        VStack {
-            Divider()
-            HStack(spacing: 12) {
-                Image("yal-shield")
-                    .resizable()
-                    .frame(width: 52, height: 52)
-                    .foregroundColor(.blue)
-                Text("YAL.ai never sends your personal information to the cloud. Your data stays on your device.")
-                    .font(.footnote)
-                    .foregroundColor(.gray)
-                    .multilineTextAlignment(.leading)
+    
+    private func navigableSettingRow<Destination: View>(
+        _ title: String,
+        icon: String,
+        @ViewBuilder destination: () -> Destination
+    ) -> some View {
+        NavigationLink(destination: destination()) {
+            HStack(spacing: 16) {
+                Image(icon)
+                    .renderingMode(.template)
+                    .foregroundColor(.white)
+                
+                Text(title)
+                    .foregroundColor(.white)
+                    .font(Design.Font.bold(14))
+                
+                Spacer()
             }
             .padding(.horizontal, 20)
-            .padding(.top, 20)
-            .padding(.bottom, 40)
+            .padding(.vertical, 18)
         }
-        .background(Color.white)
-        .overlay(
-            Rectangle()
-                .inset(by: 0.5)
-                .stroke(Design.Color.backgroundMuted, lineWidth: 1)
-            
-        )
     }
-    private func sectionBox<Content: View>(@ViewBuilder content: () -> Content) -> some View {
-        VStack(spacing: 0) {
-            content()
-        }
-        .background(Color.white)
-    }
+}
 
+// MARK: - Components
+
+extension SettingsView {
+    
     private func settingRow(_ title: String, icon: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            HStack(spacing: 12) {
+            HStack(spacing: 16) {
                 Image(icon)
+                    .renderingMode(.template)
+                    .foregroundColor(.white)
+                
                 Text(title)
-                    .foregroundColor(Design.Color.headingText)
+                    .foregroundColor(.white)
                     .font(Design.Font.bold(14))
-                Spacer()
-                Image("arrow-right")
-            }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 16)
-        }
-    }
-
-    private func destructiveRow(_ title: String, icon: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack(spacing: 12) {
-                Image(icon)
-                Text(title)
-                    .foregroundColor(Design.Color.destructiveRed)
-                    .font(Design.Font.bold(14))
+                
                 Spacer()
             }
             .padding(.horizontal, 20)
-            .padding(.vertical, 16)
+            .padding(.vertical, 18)
         }
     }
     
-    #if DEBUG
-    private func testRow(icon: String, color: Color, title: String, subtitle: String) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: icon)
-                .foregroundColor(color)
-                .frame(width: 24)
-            VStack(alignment: .leading, spacing: 2) {
+    private func destructiveRow(_ title: String, icon: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 16) {
+                Image(icon)
+                    .renderingMode(.template)
+                    .foregroundColor(Design.Color.destructiveRed)
+                
                 Text(title)
-                    .foregroundColor(Design.Color.headingText)
-                    .font(Design.Font.bold(14))
-                Text(subtitle)
-                    .foregroundColor(Design.Color.secondaryText)
-                    .font(Design.Font.regular(11))
+                    .foregroundColor(Design.Color.white)
+                    .font(Design.Font.semiBold(14))
+                
+                Spacer()
             }
-            Spacer()
-            Image(systemName: "arrow.right")
-                .foregroundColor(Design.Color.secondaryText.opacity(0.5))
-                .font(.system(size: 12, weight: .semibold))
+            .padding(.horizontal, 20)
+            .padding(.vertical, 18)
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 16)
     }
-    #endif
-
+    
+    private var gradientDivider: some View {
+        Rectangle()
+            .fill(
+                LinearGradient(
+                    colors: [
+                        Color.blue,
+                        Color.purple
+                    ],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+            )
+            .frame(height: 1)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 8)
+    }
+    
     private func open(_ urlString: String) {
         if let url = URL(string: urlString) {
             openURL(url)

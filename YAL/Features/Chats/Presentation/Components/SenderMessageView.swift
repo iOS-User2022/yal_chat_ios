@@ -8,20 +8,24 @@
 import SwiftUI
 import SDWebImageSwiftUI
 import AVKit
+import Combine
 
 struct SenderMessageView: View {
     @EnvironmentObject var chatViewModel: ChatViewModel
     @ObservedObject var message: ChatMessageModel
     let senderName: String?
+    let participantCount: Int
     @State private var downloadRequested = false
     @State private var isVideoPlayerPresented = false
     @State private var progressQ: Double = 0
+    @State private var isVisible = false
 
     var onDownloadNeeded: ((ChatMessageModel) -> Void)?
     var onTap: (() -> Void)?
     var onLongPress: (() -> Void)?
     var onEmoji: (() -> Void)?
     var onScrollToMessage: ((String) -> Void)?
+    var onCallBack: (() -> Void)?
     let selectedEventId: String?
     let searchText: String
     var isForwarding: Bool? = false
@@ -47,14 +51,30 @@ struct SenderMessageView: View {
             }
         }
         .padding(.trailing, 20)
+        .onAppear {
+            isVisible = true
+            // Defer expensive work to allow smooth scroll
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                guard isVisible else { return }
+                triggerDownloadIfNeeded()
+            }
+        }
+        .onDisappear {
+            isVisible = false
+        }
     }
     
     @ViewBuilder
     private var messgeBubble: some View {
         VStack(alignment: .trailing, spacing: 0)  {
             VStack(alignment: .trailing, spacing: 0) {
-                
-                if message.isRedacted || message.content == thisMessageWasDeleted {
+                // Handle call messages
+                if message.isCallMessage {
+                    CallMessageView(message: message, isReceived: message.callMessageShouldShowOnLeft, participantCount: participantCount) {
+                        onCallBack?()
+                    }
+                    timestampSection
+                } else if message.isRedacted || message.content == thisMessageWasDeleted {
                     redactedPlaceholder
                     timestampSection
 
@@ -76,32 +96,36 @@ struct SenderMessageView: View {
                         )
                     }
                     
-                    VStack(alignment: .trailing, spacing: 8) {
-                        // Show text only if message doesn't contain URL, or if there's text beyond the URL
-                        if !message.containsURL || !message.contentWithoutURLs.isEmpty {
-                            textSection
+                    // Only show text/URL section if there's actual content
+                    if hasTextContent || message.containsURL {
+                        VStack(alignment: .trailing, spacing: 8) {
+                            // Show text only if message doesn't contain URL, or if there's text beyond the URL
+                            if hasTextContent {
+                                textSection
+                            }
+                            
+                            // URL Preview for sent messages
+                            if message.containsURL, let urlString = message.firstURL {
+                                URLPreviewForMessage(
+                                    urlString: urlString,
+                                    message: message,
+                                    onURLTapped: onURLTapped
+                                )
+                                .frame(maxWidth: 250, alignment: .trailing)
+                                .padding(.horizontal, 8)
+                                .padding(.top, hasTextContent ? 0 : 8)
+                            }
                         }
-                        
-                        // URL Preview for sent messages
-                        if message.containsURL, let urlString = message.firstURL {
-                            URLPreviewForMessage(
-                                urlString: urlString,
-                                message: message,
-                                onURLTapped: onURLTapped
-                            )
-                            .frame(maxWidth: 250, alignment: .trailing)
-                            .padding(.horizontal, 8)
-                            .padding(.top, message.containsURL && !message.contentWithoutURLs.isEmpty ? 0 : 8)
-                        }
-                    }
-                    
+                    }                    
                     timestampSection
+                    
                 }
             }
             .onReceive(
                 message.$downloadProgress
-                    .map { MediaDecodeHelper.quantizeProgress($0, steps: 20) }
+                    .map { MediaDecodeHelper.quantizeProgress($0, steps: 10) }
                     .removeDuplicates()
+                    .throttle(for: .milliseconds(250), scheduler: RunLoop.main, latest: true)
             ) { progressQ = $0 }
             .background(
                 ZStack {
@@ -122,12 +146,19 @@ struct SenderMessageView: View {
                 onLongPress?()
             }
             .onAppear { triggerDownloadIfNeeded() }
-            .onChange(of: message.mediaUrl) { _ in triggerDownloadIfNeeded() }
+            .onChange(of: message.mediaUrl) { newURL in
+                guard isVisible, newURL != nil else { return }
+                triggerDownloadIfNeeded()
+            }
             
             if !message.reactions.isEmpty {
                 reactionsBar
-                    .background(Design.Color.lighterGrayBackground)
+                    .background(Color(Design.Color.darkgrayColor))
                     .cornerRadius(20)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 20)
+                            .stroke(Color.black, lineWidth: 1)
+                    )
                     .padding(.top, -2) // slightly overlap bubble
                     .padding(.bottom, 8) // space below bar
             }
@@ -151,7 +182,7 @@ struct SenderMessageView: View {
                         .lineSpacing(2)
                         .padding(.vertical, 3)
                         .padding(.horizontal, 3)
-                        .fixedSize(horizontal: false, vertical: true) // <-- this lets it wrap
+                        .fixedSize(horizontal: false, vertical: true)
                     
                     Text("\(totalReactions)")
                         .font(Design.Font.regular(10))
@@ -166,7 +197,15 @@ struct SenderMessageView: View {
 
     // MARK: - Media Check
     private var hasMedia: Bool {
-        MessageType(rawValue: message.msgType) != .text
+        let messageType = MessageType(rawValue: message.msgType)
+        return messageType != .text && messageType != .voiceCall && messageType != .videoCall
+    }
+    
+    // MARK: - Text Content Check
+    private var hasTextContent: Bool {
+        // Check if there's actual text content (not empty or just whitespace)
+        let textToCheck = message.containsURL ? message.contentWithoutURLs : message.content
+        return !textToCheck.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     // MARK: - Media Section
@@ -191,10 +230,7 @@ struct SenderMessageView: View {
             externalProgress: progressQ,
             isUploading: (message.messageStatus == .sending) || (message.downloadState == .downloading)
         )
-        .frame(
-            width: mediaType == .audio ? 260 : 220,
-            height: (mediaType == .image || mediaType == .video || mediaType == .gif) ? 215: 56
-        )
+        .frame(width: mediaType == .audio ? 260 : nil)
         .fixedSize(horizontal: mediaType != .audio, vertical: false)
         .padding(.horizontal, 4)
         .padding(.top, 4)
@@ -313,7 +349,7 @@ struct SenderMessageView: View {
             ProgressView(value: progressQ)
                 .progressViewStyle(LinearProgressViewStyle())
                 .frame(height: 4)
-                .animation(.none, value: progressQ)
+                .transaction { $0.animation = nil }
                 .frame(maxWidth: .infinity)
                 .background(Design.Color.white)
                 .zIndex(1)
@@ -348,6 +384,8 @@ struct SenderMessageView: View {
                 .foregroundColor(Design.Color.senderTime)
             Image(message.messageStatus.imageName)
                 .resizable()
+                .renderingMode(.template)
+                .foregroundColor(.white)
                 .frame(width: 12, height: 12)
         }
         .padding(.horizontal, 8)
@@ -464,6 +502,11 @@ struct URLPreviewForMessage: View {
     @StateObject private var previewFetcher = URLPreviewFetcher()
     @State private var hasAttemptedFetch = false
     
+    @EnvironmentObject private var idleCenter: ScrollIdleCenter
+    @State private var isVisible = false
+    @State private var idleGate: AnyCancellable?
+    @State private var canFetchLightAssets = false
+    
     var body: some View {
         Group {
             if let cachedPreview = URLPreviewCache.shared.getPreview(for: urlString) {
@@ -485,7 +528,18 @@ struct URLPreviewForMessage: View {
             }
         }
         .onAppear {
-            fetchPreviewIfNeeded()
+            isVisible = true
+            schedulePreviewFetchIfNeeded()
+        }
+        .onDisappear {
+            isVisible = false
+            idleGate?.cancel()
+        }
+        .onChange(of: urlString) { _ in
+            // reset gating for a new URL
+            hasAttemptedFetch = false
+            previewFetcher.previewData = nil
+            schedulePreviewFetchIfNeeded()
         }
     }
     
@@ -499,13 +553,16 @@ struct URLPreviewForMessage: View {
         }) {
             HStack(spacing: 12) {
                 // Favicon or globe icon
-                AsyncImage(url: URL(string: faviconURL)) { image in
-                    image
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                } placeholder: {
-                    Image(systemName: "globe")
-                        .foregroundColor(.gray)
+                Group {
+                    if canFetchLightAssets, let u = URL(string: faviconURL) {
+                        AsyncImage(url: u) { image in
+                            image.resizable().aspectRatio(contentMode: .fit)
+                        } placeholder: {
+                            Image(systemName: "globe").foregroundColor(.gray)
+                        }
+                    } else {
+                        Image(systemName: "globe").foregroundColor(.gray)
+                    }
                 }
                 .frame(width: 24, height: 24)
                 .cornerRadius(4)
@@ -559,6 +616,33 @@ struct URLPreviewForMessage: View {
             // Fallback to opening in the system browser if no handler is provided
             UIApplication.shared.open(url)
         }
+    }
+    
+    private func schedulePreviewFetchIfNeeded() {
+        // If cached or already fetched, allow light assets (favicon) immediately and bail.
+        if URLPreviewCache.shared.getPreview(for: urlString) != nil ||
+            previewFetcher.previewData != nil {
+            canFetchLightAssets = true
+            return
+        }
+        
+        // Don’t double schedule
+        guard !hasAttemptedFetch else {
+            canFetchLightAssets = true
+            return
+        }
+        
+        // Wait for user to be idle ≥ 1s, then (if still visible) fetch preview
+        idleGate?.cancel()
+        idleGate = idleCenter.idlePublisher
+            .filter { $0 }   // idle
+            .first()
+            .sink { _ in
+                canFetchLightAssets = true
+                guard isVisible else { return }
+                hasAttemptedFetch = true
+                Task { await previewFetcher.fetchPreview(for: urlString) }
+            }
     }
 }
 // MARK: - Loading Preview View

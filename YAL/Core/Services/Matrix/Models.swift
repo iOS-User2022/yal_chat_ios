@@ -281,7 +281,7 @@ struct GetMessagesResponse: Codable {
 }
 
 struct MessagesFilter: Codable {
-    var types: [String]?          // e.g. ["m.room.message", "m.room.encrypted"]
+    var types: [String]?          // e.g. ["m.room.message", "m.room.encrypted", "m.call.invite"]
     var notTypes: [String]?
     var senders: [String]?
     var notSenders: [String]?
@@ -301,7 +301,7 @@ struct Message: Codable {
     let eventId: String?  // Event ID
     let sender: String?   // Sender of the message
     let content: MessageContent?  // The content of the message
-    let type: String?     // The type of event (e.g., "m.room.message")
+    let type: String?     // The type of event (e.g., "m.room.message", "m.call.invite")
     let roomId: String?   // Room ID where the message was sent
     let originServerTs: Int64?  // Timestamp of when the message was sent on the server
     let unsigned: UnsignedData?  // Additional unsigned data, like "age"
@@ -911,8 +911,10 @@ enum MessageType: String, Codable {
     case file = "m.file"
     case video = "m.video"
     case audio = "m.audio"
+    case voiceCall = "m.voiceCall"
+    case videoCall = "m.videoCall"
     case gif = "m.gif"
-    
+
     init(from raw: String?) {
         self = MessageType(rawValue: raw ?? "") ?? .text
     }

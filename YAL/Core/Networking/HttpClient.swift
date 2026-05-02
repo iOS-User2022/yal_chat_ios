@@ -244,13 +244,17 @@ final class HttpClient: NSObject, HttpClientProtocol {
     }
 
     // MARK: - Internal Request Helper
-    // MARK: - Internal Request Helper
     private func request<T: Decodable>(
         _ path: String,
         method: String,
         body: Data? = nil,
         expecting: T.Type
     ) async -> APIResult<T> {
+        
+        guard NetworkMonitor.shared.isConnected else {
+            return .unsuccess(.networkUnavailable)
+        }
+        
         guard let url = URL(string: path) else { return .unsuccess(.invalidURL) }
         
         var request = URLRequest(url: url)
@@ -320,11 +324,11 @@ final class HttpClient: NSObject, HttpClientProtocol {
     // MARK: - Header Helpers
     private func addHeaders(to request: inout URLRequest) {
         if isMatrixClient {
-            if let token = tokenProvider.matrixToken, !token.isEmpty {
+            if let token = Storage.get(for: .matrixToken, type: .keychain, as: String.self), !token.isEmpty {
                 request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
             }
         } else {
-            if let token = tokenProvider.accessToken, !token.isEmpty {
+            if let token = Storage.get(for: .token, type: .keychain, as: String.self), !token.isEmpty {
                 request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
             }
         }

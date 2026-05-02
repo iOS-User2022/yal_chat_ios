@@ -26,7 +26,9 @@ struct RootContainer: View {
                 TabContainerView()
 
             case .onboarding:
-                OnboardingView()
+                OnboardingView {
+                    authViewModel.initiateLogin()
+                }
             
             case .tutorial:
                 TutorialView()

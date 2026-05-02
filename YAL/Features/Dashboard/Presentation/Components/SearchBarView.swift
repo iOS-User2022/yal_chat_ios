@@ -14,14 +14,38 @@ struct SearchBarView: View {
     var body: some View {
         HStack(spacing: 12) {
             Image("search")
-
-            TextField(placeholder, text: $text)
-                .font(Design.Font.regular(12))
-                .foregroundColor(Design.Color.navy)
-                .frame(maxWidth: .infinity)
+                .resizable()
+                .renderingMode(.template)
+                .frame(width: 18, height: 18)
+                .foregroundColor(Design.Color.primaryTextColor).opacity(0.4)
+            
+            ZStack(alignment: .leading) {
+                if text.isEmpty {
+                    Text(placeholder)
+                        .font(Design.Font.regular(14))
+                        .foregroundColor(Design.Color.primaryTextColor).opacity(0.4)
+                }
+                
+                TextField("", text: $text)
+                    .font(Design.Font.regular(14))
+                    .foregroundColor(Design.Color.primaryTextColor)
+            }
+            
+            if !text.isEmpty {
+                Button(action: {
+                    text = ""
+                }) {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 16))
+                        .foregroundColor(Design.Color.primaryTextColor).opacity(0.4)
+                }
+            }
         }
-        .padding()
-        .background(Design.Color.lighterGrayBackground)
-        .cornerRadius(12)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(Design.Color.primaryTextColor).opacity(0.08)
+        )
     }
 }

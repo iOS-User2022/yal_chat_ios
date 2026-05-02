@@ -35,9 +35,27 @@
 			</array>
 		</dict>
 	</dict>
+	<key>NSContactsUsageDescription</key>
+	<string>We need access to your contacts to help you find and connect with your friends within the app. We only use this data locally and do not upload it to our servers</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>We need access to your photo library to allow you to select images for your profile. The images you select will be used only within the app and not shared with any external services without your consent</string>
+	<key>NSCameraUsageDescription</key>
+	<string>We need access to your camera to allow you to take a photo for your profile. This photo will be used only within the app and is not shared without your consent</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>We need access to your microphone to record audio messages. Your recordings are only sent when you choose to send them.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>We need access to save media.</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+	<key>NSFaceIDUsageDescription</key>
+	<string>We use Face ID/Touch ID to secure access to your locked chats.</string>
+	<key>NSCalendarsUsageDescription</key>
+	<string>This app needs access to your calendar to manage and schedule events.</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>remote-notification</string>
+		<string>voip</string>
+		<string>audio</string>
 	</array>
 </dict>
 </plist>

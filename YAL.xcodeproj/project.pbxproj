@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		4839E7F62ED06FD700567861 /* FirebaseAnalytics in Frameworks */ = {isa = PBXBuildFile; productRef = 4839E7F52ED06FD700567861 /* FirebaseAnalytics */; };
 		B570746FE502094D44BF51D8 /* Pods_YAL.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 7BB08A36C7C1730C08ABD6F4 /* Pods_YAL.framework */; };
+		C81814B42E9D2E52005D3D89 /* LiveKit in Frameworks */ = {isa = PBXBuildFile; productRef = C81814B32E9D2E52005D3D89 /* LiveKit */; };
 		C903D7192E6ECE4A0026736F /* FirebaseCrashlytics in Frameworks */ = {isa = PBXBuildFile; productRef = C903D7182E6ECE4A0026736F /* FirebaseCrashlytics */; };
 		C916DD622DCCE84700F2FE3E /* IdentityLookup.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = C97389172DCC9F61001399CD /* IdentityLookup.framework */; settings = {ATTRIBUTES = (Weak, ); }; };
 		C9553D6F2DD60548006D0802 /* RealmSwift in Frameworks */ = {isa = PBXBuildFile; productRef = C9553D6E2DD60548006D0802 /* RealmSwift */; };
@@ -234,6 +235,7 @@
 				C9DDFF0B2DAD4C48007126C3 /* Swinject in Frameworks */,
 				4839E7F62ED06FD700567861 /* FirebaseAnalytics in Frameworks */,
 				B570746FE502094D44BF51D8 /* Pods_YAL.framework in Frameworks */,
+				C81814B42E9D2E52005D3D89 /* LiveKit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -404,6 +406,7 @@
 				C9ABE9B82E66DF2E003EE418 /* PhoneNumberKit */,
 				C9ABE9BC2E66DF2E003EE418 /* PhoneNumberKit-Static */,
 				C903D7182E6ECE4A0026736F /* FirebaseCrashlytics */,
+				C81814B32E9D2E52005D3D89 /* LiveKit */,
 				4839E7F52ED06FD700567861 /* FirebaseAnalytics */,
 			);
 			productName = YAL;
@@ -500,6 +503,7 @@
 				C9553D6D2DD60548006D0802 /* XCRemoteSwiftPackageReference "realm-swift" */,
 				C9ABE9B72E66DF2E003EE418 /* XCRemoteSwiftPackageReference "PhoneNumberKit" */,
 				C89DCAFE2E73F89F00616FC9 /* XCRemoteSwiftPackageReference "netfox" */,
+				C81814B22E9D2E52005D3D89 /* XCRemoteSwiftPackageReference "client-sdk-swift" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = C9DDFB302DA7C1A8007126C3 /* Products */;
@@ -1075,17 +1079,21 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = YAL/YALDebug.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 521;
 				DEVELOPMENT_TEAM = 8S3YYR85J4;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "$(SRCROOT)/YAL/SupportingFiles/Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = "YAL.ai ";
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
+				INFOPLIST_KEY_NSCalendarsUsageDescription = "This app needs access to your calendar to manage and schedule events.";
 				INFOPLIST_KEY_NSCameraUsageDescription = "We need access to your camera to allow you to take a photo for your profile. This photo will be used only within the app and is not shared without your consent";
 				INFOPLIST_KEY_NSContactsUsageDescription = "We need access to your contacts to help you find and connect with your friends within the app. We only use this data locally and do not upload it to our servers";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "We needs access to your microphone to send voice messages and make calls.";
-				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "We need access to your photo library to select images.";
+				INFOPLIST_KEY_NSFaceIDUsageDescription = "We use Face ID/Touch ID to secure access to your locked chats.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "We need access to your microphone to record audio messages and make calls. Your recordings are only sent when you choose to send them.";
+				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "We need access to save media.";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "We need access to your photo library to allow you to select images for your profile. The images you select will be used only within the app and not shared with any external services without your consent";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
@@ -1117,17 +1125,21 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = YAL/YAL.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 521;
 				DEVELOPMENT_TEAM = 8S3YYR85J4;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "$(SRCROOT)/YAL/SupportingFiles/Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = "YAL.ai ";
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
+				INFOPLIST_KEY_NSCalendarsUsageDescription = "This app needs access to your calendar to manage and schedule events.";
 				INFOPLIST_KEY_NSCameraUsageDescription = "We need access to your camera to allow you to take a photo for your profile. This photo will be used only within the app and is not shared without your consent";
 				INFOPLIST_KEY_NSContactsUsageDescription = "We need access to your contacts to help you find and connect with your friends within the app. We only use this data locally and do not upload it to our servers";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "We needs access to your microphone to send voice messages and make calls.";
-				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "We need access to your photo library to select images.";
+				INFOPLIST_KEY_NSFaceIDUsageDescription = "We use Face ID/Touch ID to secure access to your locked chats.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "We need access to your microphone to record audio messages and make calls. Your recordings are only sent when you choose to send them.";
+				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "We need access to save media.";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "We need access to your photo library to allow you to select images for your profile. The images you select will be used only within the app and not shared with any external services without your consent";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
@@ -1293,6 +1305,14 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
+		C81814B22E9D2E52005D3D89 /* XCRemoteSwiftPackageReference "client-sdk-swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/livekit/client-sdk-swift.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.8.1;
+			};
+		};
 		C89DCAFE2E73F89F00616FC9 /* XCRemoteSwiftPackageReference "netfox" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/kasketis/netfox";
@@ -1348,6 +1368,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = C9D88F9C2DC35F7D004A5887 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
 			productName = FirebaseAnalytics;
+		};
+		C81814B32E9D2E52005D3D89 /* LiveKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = C81814B22E9D2E52005D3D89 /* XCRemoteSwiftPackageReference "client-sdk-swift" */;
+			productName = LiveKit;
 		};
 		C903D7182E6ECE4A0026736F /* FirebaseCrashlytics */ = {
 			isa = XCSwiftPackageProductDependency;

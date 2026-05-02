@@ -12,14 +12,16 @@ enum NavigationTarget: Hashable {
     case chat(room: RoomModel, isSearching: Bool = false)
     case groupDetails(room: RoomModel, currentUser: ContactModel?, sharedMedia: [ChatMessageModel]?)
     case userDetails(room: RoomModel, user: ContactModel?, sharedMedia: [ChatMessageModel]?)
+    case callManager(room: RoomModel, autoAccept: Bool)
     case messageInfo(room: RoomModel, user: ContactModel?, selectedMessage: ChatMessageModel)
     case notificationSettings(room: RoomModel)
     case lockedRoom(rooms: [RoomModel])
     case manageLockedChats
 }
-
 struct RoomListView: View {
     @State private var showContactsList = false
+    @State private var showInviteView = false  // Add this
+
     @StateObject private var viewModel: RoomListViewModel
     @EnvironmentObject var router: Router
     @ObservedObject private var chatViewModel: ChatViewModel
@@ -44,7 +46,8 @@ struct RoomListView: View {
     @State private var showSetPinView = false
     @State private var isConfirmMode = true
     @State private var showMismatchAlert = false
-    
+    @EnvironmentObject var callManager: CallManager
+
     @State private var scrollOffset: CGFloat = 0
     @State private var showLockedButton: Bool = false
     struct ScrollOffsetPreferenceKey: PreferenceKey {
@@ -75,16 +78,37 @@ struct RoomListView: View {
     var body: some View {
         GeometryReader { geometry in
             ZStack {
+                Design.Color.backgroundColor.ignoresSafeArea()
+                ZStack(alignment: .top) {
+                    if (CallManager.shared.callState == .ongoing || CallManager.shared.callState == .outgoing || CallManager.shared.callState == .incoming) && CallManager.shared.currentRoomModel != nil {                        OngoingCallWidget(
+                            participants: CallManager.shared.currentRoomModel!.participants,
+                            callType: CallManager.shared.isVideoCall ? Constants.video.localized.lowercased() : Constants.voice.localized,
+                            callState: CallManager.shared.callState,
+                            onJoinCall: {
+                                if(CallManager.shared.currentRoomModel != nil){
+                                    CallManager.shared.presentCall(for: CallManager.shared.currentRoomModel!)
+                                    CallManager.shared.callState = .ongoing
+                                }
+                            }
+                        )
+                        .padding(.horizontal, 8)
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                        .zIndex(1) // ensure it appears above messages
+                    }
+                }
+                .background(Design.Color.appGradient.opacity(0.2))
+
                 if viewModel.filteredRooms.isEmpty && !viewModel.didLoadRooms {
-                    RoomEmptyWelcomeView(startChatAction: {
-                        showContactsList.toggle()
-                    }, inviteFriendAction: {
-                        // Your invite logic here
-                    })
+                    VStack(){
+                        tabFilters
+                        Spacer()
+                    }
                 } else {
                     VStack(spacing: 0) {
-                        searchBar
-                        tabFilters
+                        //searchBar
+                        //if !viewModel.filteredRooms.isEmpty && viewModel.didLoadRooms {
+                                                    tabFilters
+                        //}
                         let isLockedChatsEnabled: Bool = Storage.get(for: .isLockedChatsEnabled, type: .userDefaults, as: Bool.self) ?? true
                         if isLockedChatsEnabled && showLockedButton {
                             if viewModel.getLockedRooms().count > 0 {
@@ -105,7 +129,7 @@ struct RoomListView: View {
                                     } else {
                                         Task {
                                             let result = await BiometricAuthService.shared.authenticate(
-                                                reason: "Authenticate to secure your chats"
+                                                reason: Constants.authTxt.rawValue
                                             )
                                             switch result {
                                             case .success(let success) where success:
@@ -123,10 +147,10 @@ struct RoomListView: View {
                         if viewModel.isDownloadingMessages {
                             VStack(alignment: .leading, spacing: 8) {
                                 HStack(spacing: 6) {
-                                    Image(systemName: "arrow.down.circle.fill")
+                                    Image(systemName: UIConstants.Symbols.arrowDownCircleFilled)
                                         .font(.system(size: 14, weight: .semibold))
                                     
-                                    Text("Downloading your messages…")
+                                    Text(Constants.downloadingMessages.localized)
                                         .font(.system(size: 13, weight: .semibold))
                                     
                                     Spacer()
@@ -161,13 +185,15 @@ struct RoomListView: View {
                         }
                         roomList
                     }
-                    .background(Design.Color.chatBackground)
-                    
-                    floatingButton
-                        .position(
-                            x: geometry.size.width - 20 - 22,
-                            y: geometry.size.height - 12 - 22
-                        )
+                    .background(Design.Color.backgroundColor)
+                    if !viewModel.filteredRooms.isEmpty && viewModel.didLoadRooms || showInviteView{
+                        
+                        floatingButton
+                            .position(
+                                x: geometry.size.width - 20 - 22,
+                                y: geometry.size.height - 25 - 22
+                            )
+                    }
                 }
                 if viewModel.isHydrating {
                     RestoreChatsAnimationView(
@@ -188,6 +214,9 @@ struct RoomListView: View {
                 viewModel.loadRooms()
                 setupNotificationListener()
                 DeepLinkManager.shared.pendingURL = nil
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .navigateToChat)) { notification in
+                handleNavigateToChat(notification)
             }
             .sheet(isPresented: $showContactsList, onDismiss: {
                 viewModel.participants.removeAll()
@@ -250,8 +279,8 @@ struct RoomListView: View {
                     }
                 }, isConfirmMode: isConfirmMode)
             }
-            .alert("Incorrect PIN.", isPresented: $showMismatchAlert) {
-                Button("OK", role: .cancel) { }
+            .alert(Constants.incorrectPin.localized, isPresented: $showMismatchAlert) {
+                Button(Constants.ok.localized, role: .cancel) { }
             }
             .overlay {
                 if showDelete {
@@ -282,7 +311,7 @@ struct RoomListView: View {
                     SecureYourChatsView {
                         Task {
                             let result = await BiometricAuthService.shared.authenticate(
-                                reason: "Authenticate to secure your chats"
+                                reason: Constants.authTxt.rawValue
                             )
                             
                             switch result {
@@ -344,7 +373,7 @@ struct RoomListView: View {
                                   let user = room.opponent
                             else { return }
                             
-                            viewModel.banUser(from: room, user: user, reason: "Blocked by admin") { success in
+                            viewModel.banUser(from: room, user: user, reason: Constants.blockedByAdmin.localized) { success in
                                 if success {
                                     if selectedRoomForMenu?.isBlocked == false {
                                         viewModel.toggeleBlocked(for: room)
@@ -494,10 +523,6 @@ struct RoomListView: View {
                         viewModel.clearChat(roomId: roomModel.id)
                     }
                 )
-                .onAppear {
-                    chatViewModel.currentRoomId = roomModel.id
-                    chatViewModel.selectedRoom = roomModel
-                }
                 .navigationBarBackButtonHidden(true)
                 .navigationBarHidden(true)
                 .toolbar(.hidden, for: .navigationBar)
@@ -538,6 +563,10 @@ struct RoomListView: View {
                     .navigationBarHidden(true)
                     .toolbar(.hidden, for: .navigationBar)
                 }
+            case .callManager(room: let room, autoAccept: let autoAccept):
+                    CallScreen(roomModel: room, callState: .outgoing)
+                        .environmentObject(CallManager.shared)
+                    
             case .messageInfo(room: let room, user: let user, let selectedMessage):
                 if let currentUser = user {
                     if room.isGroup {
@@ -665,7 +694,256 @@ struct RoomListView: View {
         // Room not found
         return nil
     }
+    // MARK: - Empty State View (Extracted)
+    private var emptyStateView: some View {
+        VStack(spacing: 0) {
+            Spacer()
+                .frame(height: 150)
+            
+            // Dog image from assets
+            Image(UIConstants.Symbols.animal_ss)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 150, height: 150)
+                .padding(.bottom, 10)
+            
+            // Empty state text
+            VStack(spacing: 0) {
+                Text(Constants.inboxEmpty.localized)
+                    .font(.system(size: 16, weight: .regular))
+                    .foregroundColor(.white)
+                
+                Text(Constants.startNewChat.localized)
+                    .font(.system(size: 16, weight: .regular))
+                    .foregroundColor(.white)
+            }
+            .padding(.bottom, 40)
+            
+            // Buttons
+            VStack(spacing: 20) {
+                Button(action: {
+                    // showContactsList = true
+                    showInviteView = true
+                }) {
+                    Text(Constants.messageContact.localized)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(.white)
+                        .frame(maxWidth: 200)
+                        .frame(height: 50)
+                        .background(
+                            LinearGradient(
+                                gradient: Gradient(colors: [
+                                    Color(red: 0.4, green: 0.5, blue: 1.0),
+                                    Color(red: 0.7, green: 0.3, blue: 0.9)
+                                ]),
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                        .cornerRadius(12)
+                }
+                Button(action: {
+                    showInviteView = true
+                }) {
+                    Text(Constants.inviteFriend.localized)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(.white)
+                        .frame(maxWidth: 200)
+                        .frame(height: 50)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(Color.white, lineWidth: 1)
+                        )
+                }
+            }
+            .padding(.horizontal, 50)
+            
+            Spacer()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Design.Color.backgroundColor)
+    }
+   
 
+    // MARK: - Updated Invite Contacts View - COMPACT 224pt Design
+
+    private var inviteContactsView: some View {
+        VStack(spacing: 0) {
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: 20) {
+                    // Discover Contacts Card - Compact 224pt design
+                    VStack(spacing: 0) {
+                        Text(Constants.discoverContactsYal.localized)
+                            .font(.system(size: 16, weight: .regular))
+                            .foregroundColor(.white)
+                            .multilineTextAlignment(.center)
+                            .padding(.top, 20)
+                            .padding(.horizontal, 20)
+                        
+                        // Contact Avatars Row - no scroll, all visible
+                        HStack(spacing: 12) {
+                            // Rishabh
+                            VStack(spacing: 8) {
+                                Image("mask_group_m")
+                                    .resizable()
+                                    .scaledToFill()
+                                    .frame(width: 56, height: 56)
+                                    .clipShape(Circle())
+                                
+                                Text("Rishabh")
+                                    .font(.system(size: 12, weight: .medium))
+                                    .foregroundColor(.white)
+                            }
+                            
+                            // Sam K
+                            VStack(spacing: 8) {
+                                Image("mask_group")
+                                    .resizable()
+                                    .scaledToFill()
+                                    .frame(width: 56, height: 56)
+                                    .clipShape(Circle())
+                                
+                                Text("Sam K")
+                                    .font(.system(size: 12, weight: .medium))
+                                    .foregroundColor(.white)
+                            }
+                            
+                            // Khushbu
+                            VStack(spacing: 8) {
+                                Image("mask_group_g")
+                                    .resizable()
+                                    .scaledToFill()
+                                    .frame(width: 56, height: 56)
+                                    .clipShape(Circle())
+                                
+                                Text("Khushbu")
+                                    .font(.system(size: 12, weight: .medium))
+                                    .foregroundColor(.white)
+                            }
+                            
+                            // Jordan
+                            VStack(spacing: 8) {
+                                Image("ss_boy")
+                                    .resizable()
+                                    .scaledToFill()
+                                    .frame(width: 56, height: 56)
+                                    .clipShape(Circle())
+                                
+                                Text("Jordan")
+                                    .font(.system(size: 12, weight: .medium))
+                                    .foregroundColor(.white)
+                            }
+                            
+                            // Priya S
+                            VStack(spacing: 8) {
+                                Image("white_girl")
+                                    .resizable()
+                                    .scaledToFill()
+                                    .frame(width: 56, height: 56)
+                                    .clipShape(Circle())
+                                
+                                Text("Priya S")
+                                    .font(.system(size: 12, weight: .medium))
+                                    .foregroundColor(.white)
+                            }
+                        }
+                        .padding(.horizontal, 20)
+                        .padding(.top, 16)
+                        
+                        // Choose Contact Button
+                        Button(action: {
+                            showContactsList = true
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                showInviteView = false
+                            }
+                        }) {
+                            Text(Constants.chooseContact.localized)
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundColor(.white)
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 50)
+                                .background(
+                                    LinearGradient(
+                                        gradient: Gradient(colors: [
+                                            Color(red: 0.38, green: 0.51, blue: 1.0),
+                                            Color(red: 0.64, green: 0.36, blue: 0.95)
+                                        ]),
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    )
+                                )
+                                .cornerRadius(12)
+                        }
+                        .padding(.horizontal, 24)
+                        .padding(.top, 16)
+                        .padding(.bottom, 20)
+                    }
+                    .frame(height: 224)
+                    .background(
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(Color(red: 32/255,green: 45/255,blue: 53/255))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16)
+                            .stroke(Color.white.opacity(0.05), lineWidth: 1)
+                    )
+                    .padding(.top, 10)
+                    
+                    // Invite Friends Section
+                    Button(action: {
+                        shareInviteLink()
+                    }) {
+                        HStack(spacing: 16) {
+                            // Icon with objects.png
+                            Image(UIConstants.Symbols.objects)
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 35, height: 35)
+                                .clipShape(RoundedRectangle(cornerRadius: 16))
+                            
+                            
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text(Constants.inviteFriends.localized)
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundColor(.white)
+                                
+                                Text(Constants.connectFriendsYal.localized)
+                                    .font(.system(size: 12, weight: .regular))
+                                    .foregroundColor(.white.opacity(0.5))
+                            }
+                            
+                            Spacer()
+                            
+                            Image(systemName: UIConstants.Symbols.chevronRight)
+                                .font(.system(size: 24, weight: .medium))
+                                .foregroundColor(.white.opacity(0.5))
+                        }
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 18)
+
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    Spacer(minLength: 100)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Design.Color.backgroundColor)
+    }
+
+    // MARK: - Helper function to share invite link
+    private func shareInviteLink() {
+        let inviteText = Constants.inviteShareText.localized
+        let activityController = UIActivityViewController(
+            activityItems: [inviteText],
+            applicationActivities: nil
+        )
+        
+        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+           let rootViewController = windowScene.windows.first?.rootViewController {
+            rootViewController.present(activityController, animated: true)
+        }
+    }
 }
 
 struct LockedChatsButton: View {
@@ -673,7 +951,7 @@ struct LockedChatsButton: View {
     
     var body: some View {
         HStack(spacing: 16) {
-            Image("lockWhite")
+            Image(UIConstants.Symbols.lockWhite)
                 .font(.system(size: 20, weight: .medium))
                 .foregroundColor(.white)
                 .frame(width: 48, height: 48)
@@ -681,15 +959,15 @@ struct LockedChatsButton: View {
                 .clipShape(Circle())
             
             // Text
-            Text("Locked Chats")
+            Text(Constants.lockedChats.localized)
                 .font(Design.Font.bold(14))
-                .foregroundColor(Design.Color.primaryText)
+                .foregroundColor(Design.Color.primaryTextColor)
             
             Spacer()
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 16)
-        .background(Design.Color.tabHighlight.opacity(0.12))
+        .background(Design.Color.backgroundColor)
         .onTapGesture {
             action()
         }
@@ -700,7 +978,8 @@ struct LockedChatsButton: View {
 private extension RoomListView {
 
     var searchBar: some View {
-        SearchBarView(placeholder: "Search numbers, names & more", text: $viewModel.searchText)
+        SearchBarView(placeholder: Constants.searchPlaceholderText.localized,
+                      text: $viewModel.searchText)
             .padding(.horizontal, 20)
             .padding(.top, 12)
             .padding(.bottom, 20)
@@ -723,8 +1002,20 @@ private extension RoomListView {
                         return viewModel.filteredRooms.filter {!$0.isDeleted}
                     }
                 }()
-                ForEach(rooms) { room in
-                    roomButton(for: room)
+                if rooms.isEmpty {
+                    if showInviteView {
+                        inviteContactsView
+                            .transition(.move(edge: .trailing).combined(with: .opacity))
+                            .zIndex(1)
+                    } else if viewModel.didLoadRooms {
+                        emptyStateView
+                            .transition(.move(edge: .leading).combined(with: .opacity))
+                            .zIndex(0)
+                    }
+                } else {
+                    ForEach(rooms) { room in
+                        roomButton(for: room)
+                    }
                 }
                 GeometryReader { geo in
                     Color.clear
@@ -741,7 +1032,7 @@ private extension RoomListView {
         }
         .coordinateSpace(name: "scroll")
         .frame(maxWidth: .infinity)
-        .background(Design.Color.tabHighlight.opacity(0.12))
+        .background(Design.Color.backgroundColor)
         .onPreferenceChange(ScrollOffsetPreferenceKey.self) { offset in
             
             let scrollTop = Double(viewModel.filteredRooms.count) * 58.6
@@ -761,7 +1052,15 @@ private extension RoomListView {
                 .contentShape(Rectangle())
                 .onTapGesture {
                     viewModel.selectedRoom = room
-                    navPath.append(NavigationTarget.chat(room: room))
+                   // navPath.append(NavigationTarget.chat(room: room))
+                    
+                    if !navPath.isEmpty {
+                        navPath.removeLast(navPath.count)
+                    }
+                    
+                    DispatchQueue.main.async {
+                        navPath.append(NavigationTarget.chat(room: room))
+                    }
                 }
                 .onLongPressGesture {
                     self.viewModel.refreshRoom(for: room)
@@ -769,7 +1068,7 @@ private extension RoomListView {
                     // Store the button's frame in global coordinates
                     rowFrame = geo.frame(in: .global)
                     showMoreMenu = true
-                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                    UIImpactFeedbackGenerator(style: .soft).impactOccurred()
                 }
         }
         .frame(height: 48)
@@ -779,6 +1078,33 @@ private extension RoomListView {
     func restoreSession() {
         if let session = Storage.get(for: .authSession, type: .keychain, as: AuthSession.self) {
             viewModel.restoreSession(accessToken: session.matrixToken)
+        }
+    }
+    
+    func handleNavigateToChat(_ notification: Notification) {
+        guard let data = notification.object as? [String: Any],
+              let roomId = data["roomId"] as? String else {
+            print("Invalid navigation data for chat")
+            return
+        }
+        
+        let autoAccept = data["autoAccept"] as? Bool ?? false
+        
+        // Find the room model with the matching ID
+        if let room = viewModel.filteredRooms.first(where: { $0.id == roomId }) {
+            print("Navigating to room: \(room.name), autoAccept: \(autoAccept)")
+            viewModel.selectedRoom = room
+            
+            if autoAccept {
+                // Navigate directly to CallManagerView with auto-accept
+                let eventId = UUID().uuidString
+                CallManager.shared.presentCall(for: room)
+                navPath.append(NavigationTarget.callManager(room: room, autoAccept: true))
+            } else {
+                navPath.append(NavigationTarget.chat(room: room))
+            }
+        } else {
+            print("Room not found with ID: \(roomId)")
         }
     }
 
@@ -791,7 +1117,7 @@ private extension RoomListView {
                     .fill(Design.Color.appGradient)
                     .frame(width: 44, height: 44)
 
-                Image("add-white")
+                Image(UIConstants.Symbols.addWhite)
                     .resizable()
                     .scaledToFit()
                     .frame(width: 20, height: 20)

@@ -82,13 +82,19 @@ final class MatrixAPIManager: MatrixAPIManagerProtocol {
       }
 
       let txnId = UUID().uuidString
-
+      var eventType = "m.room.message"
+    
+        if message.body.contains("Remove") {
+            eventType = "m.call.reject"
+        }else if message.msgtype == "m.voiceCall" || message.msgtype == "m.videoCall" {
+            eventType = "m.call.invite"
+        }
       let endpoint = MatrixAPIEndpoints
         .sendMessage
         .urlString(
           withPathParameters: [
             "roomId": roomId,
-            "eventType": "m.room.message",
+            "eventType": eventType,
             "txnId": txnId
           ]
         )
@@ -384,7 +390,7 @@ extension MatrixAPIManager {
         limit: Int? = 10,
         dir: String = "f"
     ) -> AnyPublisher<APIResult<GetMessagesResponse>, APIError> {
-        let filter = MessagesFilter(types: ["m.room.message", "m.room.encrypted"])
+        let filter = MessagesFilter(types: ["m.room.message", "m.room.encrypted", "m.call.invite"])
         guard self.accessToken != nil else {
             return Just(.unsuccess(.unauthorized))
                 .setFailureType(to: APIError.self)

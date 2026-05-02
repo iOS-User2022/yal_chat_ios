@@ -17,6 +17,8 @@ struct ChatInputBar: View {
     var onSendAudio: (URL) -> Void
     let onImageButtonTap: () -> Void
     var onCancelReply: (() -> Void)?
+    @Binding var focusRequested: Bool
+    @FocusState private var isTextFieldFocused: Bool
 
     @StateObject private var livePreviewFetcher = URLPreviewFetcher()
     @State private var showURLPreview = false
@@ -27,26 +29,26 @@ struct ChatInputBar: View {
     @State private var hasRecordingStarted = false
     
     var body: some View {
-        VStack(spacing: 4) {
+        VStack(spacing: UIConstants.Layout.tightSpacing) {
             // Typing indicator (shows above the input field)
             if !typingUsers.isEmpty {
-                HStack(spacing: 6) {
+                HStack(spacing: UIConstants.Layout.ProfileView.CameraButton.offset) {
                     Text(typingText)
-                        .font(.system(size: 13, weight: .medium, design: .default))
+                        .font(Design.ChatTextStyles.typingUser)
                         .italic()
-                        .foregroundColor(.secondary)
+                        .foregroundColor(.black)
                     TypingDotsView()
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 8)
-                .padding(.bottom, 2)
+                .padding(.horizontal, UIConstants.Layout.ProfileView.AboutSection.textSpacing)
+                .padding(.bottom, UIConstants.Layout.ProfileView.EditButton.shadowRadius)
                 .transition(.opacity)
             }
             replyView()
 
             // Show live URL preview if URL detected
             if showURLPreview, let preview = livePreviewFetcher.previewData {
-                HStack(alignment: .top, spacing: 8) {
+                HStack(alignment: .top, spacing: UIConstants.Layout.ProfileView.AboutSection.textSpacing) {
                     URLPreviewCard(previewData: preview) {
                         // Open URL in browser
                         if let url = URL(string: preview.url) {
@@ -63,14 +65,14 @@ struct ChatInputBar: View {
                     }) {
                         Image(systemName: "xmark.circle.fill")
                             .foregroundColor(.gray)
-                            .font(.system(size: 20))
+                            .font(Design.TextStyle.menuIconSize)
                     }
-                    .padding(.top, 8)
+                    .padding(.top, UIConstants.Layout.ProfileView.AboutSection.textSpacing)
                 }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
+                .padding(.horizontal, UIConstants.Layout.ProfileView.AboutSection.hPadding)
+                .padding(.vertical, UIConstants.Layout.ProfileView.AboutSection.textSpacing)
                 .background(Color(.systemGray6))
-                .cornerRadius(12)
+                .cornerRadius( UIConstants.Layout.ProfileView.AboutSection.hPadding)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
                 .animation(.easeInOut, value: showURLPreview)
             }
@@ -86,25 +88,39 @@ struct ChatInputBar: View {
                 })
             }
             else {
-                HStack(spacing: 12) {
+                HStack(spacing:  UIConstants.Layout.ProfileView.AboutSection.hPadding) {
                     Button(action: onImageButtonTap) {
                         Image("add")
-                            .frame(width: 40, height: 40)
-                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                            .frame(width:  UIConstants.Layout.ProfileView.EditButton.bottomPadding, height: UIConstants.Layout.ProfileView.EditButton.bottomPadding)
+                            .background(
+                                RoundedRectangle(cornerRadius:  UIConstants.Layout.ProfileView.AboutSection.hPadding)
+                                    .fill(Design.Color.white)
+                            )
                     }
 
-                    TextField("Message", text: $message)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 12)
-                        .background(Color.white)
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                        .shadow(color: .black.opacity(0.08), radius: 10, x: 0, y: 0)
+                    TextField("Meesage", text: $message)
+                        .padding(.horizontal, UIConstants.Layout.ProfileView.ProfileField.hSpacing)
+                        .padding(.vertical,  UIConstants.Layout.ProfileView.AboutSection.hPadding)
+                        .background(Color(Design.Color.darkgrayColor))
+                        .clipShape(RoundedRectangle(cornerRadius: UIConstants.Layout.ProfileView.AboutSection.textSpacing))
+                        .shadow(color: Design.Color.black.opacity(UIConstants.Opacity.high),
+                                radius: UIConstants.Layout.Radius.small, x: ChatLayout.inputBarBottomPad, y: ChatLayout.inputBarBottomPad)
+                        .focused($isTextFieldFocused)
+                        .onChange(of: focusRequested) { newValue in  // ← ADD THIS
+                                if newValue {
+                                    isTextFieldFocused = true
+                                    focusRequested = false
+                                }
+                            }
                     
                     if (!pendingAttachments.isEmpty) {
                         Button(action: onSend) {
                             Image("send")
-                                .frame(width: 40, height: 40)
-                                .clipShape(RoundedRectangle(cornerRadius: 12))
+                                .frame(width: UIConstants.Layout.ProfileView.EditButton.bottomPadding, height: UIConstants.Layout.ProfileView.EditButton.bottomPadding)
+                                .background(
+                                    RoundedRectangle(cornerRadius:  UIConstants.Layout.ProfileView.AboutSection.hPadding)
+                                        .fill(Design.Color.appGradient)
+                                )
                         }
                     } else {
                         if message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -112,25 +128,29 @@ struct ChatInputBar: View {
                                 startRecording()
                             }) {
                                 Image("fill_mic")
-                                    .frame(width: 40, height: 40)
-                                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                                    .frame(width: UIConstants.Layout.ProfileView.EditButton.bottomPadding, height: UIConstants.Layout.ProfileView.EditButton.bottomPadding)
+                                    .background(
+                                        RoundedRectangle(cornerRadius:  UIConstants.Layout.ProfileView.AboutSection.hPadding)
+                                            .fill(Design.Color.appGradient)
+                                    )
                             }
                         } else {
                             Button(action: onSend) {
                                 Image("send")
-                                    .frame(width: 40, height: 40)
-                                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                                    .frame(width: UIConstants.Layout.ProfileView.EditButton.bottomPadding, height: UIConstants.Layout.ProfileView.EditButton.bottomPadding)
+                                    .background(
+                                        RoundedRectangle(cornerRadius:  UIConstants.Layout.ProfileView.AboutSection.hPadding)
+                                            .fill(Design.Color.appGradient)
+                                    )
                             }
-                            .disabled(message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                            .opacity(message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.4 : 1.0)
                         }
                     }
                 }
             }
         }
-        .padding(.horizontal, 20)
-        .padding(.top, inReplyTo == nil ? 20 : 12)
-        .padding(.bottom, 20)
+        .padding(.horizontal, ChatLayout.senderLeadingPad)
+        .padding(.top, inReplyTo == nil ? ChatLayout.senderLeadingPad :  UIConstants.Layout.ProfileView.AboutSection.hPadding)
+        .padding(.bottom, ChatLayout.senderLeadingPad)
     }
     
     private func startRecording() {
@@ -213,42 +233,42 @@ struct ChatInputBar: View {
                     }) {
                         Image("cross-black")
                             .resizable()
-                            .frame(width: 12, height: 12)
+                            .frame(width:  UIConstants.Layout.ProfileView.AboutSection.hPadding, height:  UIConstants.Layout.ProfileView.AboutSection.hPadding)
                     }
                 }
-                .padding(.horizontal, 12)
-                .padding(.top, 8)
+                .padding(.horizontal,  UIConstants.Layout.ProfileView.AboutSection.hPadding)
+                .padding(.top, UIConstants.Layout.ProfileView.AboutSection.textSpacing)
 
                 Text(reply.content)
                     .font(Design.Font.regular(12))
                     .foregroundColor(Design.Color.primaryText)
-                    .padding(.horizontal, 12)
-                    .padding(.bottom, 8)
+                    .padding(.horizontal,  UIConstants.Layout.ProfileView.AboutSection.hPadding)
+                    .padding(.bottom, UIConstants.Layout.ProfileView.AboutSection.textSpacing)
 
             }
             .overlay(
                 Rectangle()
                     .fill(Color.black)
-                    .frame(width: 2),
+                    .frame(width: UIConstants.Layout.ProfileView.EditButton.shadowRadius),
                 alignment: .leading
             )
             .background(Color.gray.opacity(0.1))
-            .cornerRadius(8)
-            .padding(.horizontal, 0)
-            .padding(.bottom,8)
-            .frame(width: 355,height: 66)
+            .cornerRadius(UIConstants.Layout.ProfileView.AboutSection.textSpacing)
+            .padding(.horizontal, ChatLayout.inputBarBottomPad)
+            .padding(.bottom,UIConstants.Layout.ProfileView.AboutSection.textSpacing)
+            .frame(width: ChatLayout.replyViewWidth,height: ChatLayout.replyViewHeight)
         }
     }
     
     private var typingText: String {
         switch typingUsers.count {
         case 1:
-            return "\(typingUsers[0].firstNameOrFallback) is Typing"
+            return "\(typingUsers[0].firstNameOrFallback)\(Constants.isTyping)"
         case 2:
-            return "\(typingUsers[0].firstNameOrFallback) and \(typingUsers[1].firstNameOrFallback) are typing"
+            return "\(typingUsers[0].firstNameOrFallback) \(Constants.and) \(typingUsers[1].firstNameOrFallback) \(Constants.areTyping)"
         case let n where n > 2:
             let names = typingUsers.prefix(2).map { $0.firstNameOrFallback }.joined(separator: ", ")
-            return "\(names) and \(typingUsers.count - 2) others are typing"
+            return "\(names) \(Constants.and) \(typingUsers.count - 2) \(Constants.othersTyping)"
         default:
             return ""
         }

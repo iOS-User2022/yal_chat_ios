@@ -79,6 +79,15 @@ struct NotificationPreferences: Codable {
     var groupsSound: NotificationSoundType = .defaultSound
     var groupsReactionNotifications: Bool = true
     
+    //Reactions
+    var reactionsSoundEnabled: Bool = true
+    var reactionsSound: NotificationSoundType = .defaultSound
+    var reactionsReactionNotifications: Bool = true
+    
+    //Stories
+    var storiesSoundEnabled: Bool = true
+    var storiesSound: NotificationSoundType = .defaultSound
+    var storiesReactionNotifications: Bool = true
     // Notification Content
     var notificationContentType: NotificationContentType = .nameAndMessage
     
@@ -158,7 +167,14 @@ class NotificationSettingsManager: ObservableObject {
         settings.groupsSoundEnabled = enabled
         saveSettings()
     }
-    
+    func updateStoriesSoundEnabled(_ enabled: Bool) {
+        settings.storiesSoundEnabled = enabled
+        saveSettings()
+    }
+    func updateReactionsSoundEnabled(_ enabled: Bool) {
+        settings.reactionsSoundEnabled = enabled
+        saveSettings()
+    }
     func updateGroupsSound(_ sound: NotificationSoundType) {
         settings.groupsSound = sound
         saveSettings()

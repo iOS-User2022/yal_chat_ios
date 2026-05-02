@@ -7,6 +7,7 @@ end
 
 target 'YAL' do
   use_frameworks!
+  pod 'JitsiMeetSDK'
   pod 'netfox'
 end
 

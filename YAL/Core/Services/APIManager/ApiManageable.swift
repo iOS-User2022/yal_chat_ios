@@ -25,6 +25,7 @@ protocol ApiManageable {
     func getUserProfiles(userIds: [String]) -> AnyPublisher<APIResult<BatchUserProfileResponse>, APIError>
     func deleteRoom(roomId: String) -> AnyPublisher<APIResult<EmptyResponse>, APIError>
     func uplaodProfile(file: Data, fileName: String, mimeType: String) -> AnyPublisher<APIResult<EmptyResponse>, APIError>
+    func getLKAccessToken(roomName: String, participantName: String, participantId:String, avatarUrl:String) -> AnyPublisher<APIResult<LKTokenResponse>, APIError>
 }
 
 struct EmptyResponse: Decodable {}
@@ -45,7 +46,7 @@ enum Endpoint: String {
     case profileByUserId = "/v1/user/get-profile-by-userid"
     case deleteRoom = "v1/group/delete-group"
     case uplaodProfile = "v1/user/upload-profile-image"
-    
+    case getLKToken = "auth-livekit/getLiveKitToken"
     var path: String { rawValue }
     
 //    var  base: String {

@@ -14,10 +14,16 @@ enum ProfileRoute: Hashable {
     case setting
     case notifications
     case lockChats
+    case notificationsPrivateChat
+    case notificationsGroupChat
+    case notifiationStoryView
+    case notifiationReactionView
 }
 
 final class AppSettings: ObservableObject {
     @Published var disableScreenshot: Bool = (Storage.get(for: .screenshotEnabled, type: .userDefaults, as: Bool.self) ?? false)
+    @Published var muteNotification: Bool = false
+    @Published var ghostChat: Bool = false
 }
 
 struct ProfileMenuView: View {
@@ -28,7 +34,7 @@ struct ProfileMenuView: View {
 
     @StateObject private var viewModel: ProfileMenuViewModel
     @State private var navPath = NavigationPath()
-    
+
     @StateObject private var roomViewModel: RoomListViewModel
     @State private var showUnBlock = false
     @State private var selectedRoomForMenu: RoomModel? = nil
@@ -36,118 +42,77 @@ struct ProfileMenuView: View {
 
     let closeAction: () -> Void
 
+    // MARK: - Single source-of-truth for every layout constant
+    private enum Layout {
+        static let headerBackground  = Color(hex: "#0A171F")
+        static let contentBackground = Color(hex: "#202D35")
+        static let rowLeading:  CGFloat = 24
+        static let rowTrailing: CGFloat = 24
+        static let rowVPad:     CGFloat = 18
+        static let iconSize:    CGFloat = 20
+        static let iconGap:     CGFloat = 16
+        static let dividerInset: CGFloat = 24
+    }
+
     init(closeAction: @escaping () -> Void) {
         self.closeAction = closeAction
         let viewModel = DIContainer.shared.container.resolve(ProfileMenuViewModel.self)!
         _viewModel = StateObject(wrappedValue: viewModel)
-        
+
         let roomViewModel = DIContainer.shared.container.resolve(RoomListViewModel.self)!
         _roomViewModel = StateObject(wrappedValue: roomViewModel)
-    }
-    
-    var toggleSection: some View {
-        HStack {
-            Text("Disable screenshots for privacy")
-                .font(Design.Font.bold(14))
-                .foregroundColor(Design.Color.headingText)
-            
-            Spacer()
-            
-            Toggle(isOn: $appSettings.disableScreenshot) {
-                Text("")
-            }
-            .toggleStyle(SwitchToggleStyle(tint: Design.Color.blue))
-            .labelsHidden()
-            .frame(width: 40)
-        }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 6)
-        .background(Color.gray.opacity(0.1))
     }
 
     var body: some View {
         NavigationStack(path: $navPath) {
             ZStack {
+                //Two-tone background
+                Layout.contentBackground.ignoresSafeArea()
+
                 VStack(spacing: 0) {
                     headerSection()
-                    
+
                     ScrollView(showsIndicators: false) {
-                        VStack(spacing: 8) {
-                            sectionBox {
-                                SettingRow(label: "Language", value: "English", icon: "language") {
-                                    showLanguageSheet.toggle()
-                                }
-                                SettingRow(label: "Mute Notification", icon: "mute") {
-                                    openAppNotificationSettings()
-                                }
-                                
-                                SettingRow(label: "Manage Locked Chats", icon: "lockBlack") {
-                                    navPath.append(ProfileRoute.lockChats)
-                                }
-                                
-                                toggleSection
-                            }
-                            
-                            sectionBox {
-                                SettingRow(label: "Blocked Messages", icon: "blocked") {
-                                    navPath.append(ProfileRoute.blocked)
-                                }
-                                SettingRow(label: "Compromised Threats", icon: "comparison") {
-                                    navPath.append(ProfileRoute.threats)
-                                }
-                                SettingRow(label: "Settings", icon: "settings") {
-                                    navPath.append(ProfileRoute.setting)
-                                }
-                            }
-                            
-                            sectionBox {
-                                SettingRow(label: "Invite Friends", icon: "invite") {
-                                    showShareSheet.toggle()
-                                }
-                            }
+                        VStack(spacing: 0) {
+                            topTogglesSection()
+                            languageRow()
+                            menuDivider()
+                            middleSection()
+                            menuDivider()
+                            inviteFriendsRow()
                         }
-                        .background(Design.Color.appGradient.opacity(0.12))
-                        .padding(.horizontal, 0)
-                        .padding(.top, 12)
+                        .padding(.top, 8)
                     }
-                    .background(Color.white)
-                    
+
+                    Spacer(minLength: 0)
                     footerSection()
-                    Spacer().frame(height: 20)
                 }
-                .ignoresSafeArea(.all)
-                .background(Color.white)
+
                 .sheet(isPresented: $showShareSheet) {
                     ShareSheet(activityItems: ["Check out YAL.ai — private, secure messaging.\nDownload now: https://apps.apple.com/app/id123456789"])
                 }
                 .navigationDestination(for: ProfileRoute.self) { route in
                     switch route {
-                    case .blocked:
-                        destinationScreen(title: "Blocked Messages")
-                    case .threats:
-                        destinationScreen(title: "Compromised Threats")
-                    case .setting:
-                        SettingsView(navPath: $navPath)
-                    case .notifications:
-                        NotificationPreferencesView()
-                    case .lockChats:
-                        ManageLockedChatsView(navPath: $navPath)
+                    case .blocked:      PrivacySecurityView()
+                    case .threats:      destinationScreen(title: "Compromised Threats")
+                    case .setting:      SettingsView(navPath: $navPath)
+                    case .notifications: NotificationPreferencesView(navPath: $navPath)
+                    case .lockChats:    ManageLockedChatsView(navPath: $navPath)
+                    case .notificationsPrivateChat: PrivateChatNotificationView()
+                    case .notificationsGroupChat: GroupChatNotificationView()
+                    case .notifiationStoryView: NotificationStoryView()
+                    case .notifiationReactionView : NotificationReactionsView()
+                        
                     }
                 }
-                .onAppear() {
-                    viewModel.loadProfile()
-                }
-                
-                // — Overlay picker when needed —
+                .onAppear { viewModel.loadProfile() }
+
+                // Language picker overlay
                 if showLanguageSheet {
-                    // 1) Semi-transparent backdrop
                     Color.black.opacity(0.4)
                         .ignoresSafeArea()
-                        .onTapGesture {
-                            withAnimation { showLanguageSheet = false }
-                        }
-                    
-                    // 2) The floating card
+                        .onTapGesture { withAnimation { showLanguageSheet = false } }
+
                     LanguagePickerView(isPresented: $showLanguageSheet)
                 }
             }
@@ -155,144 +120,214 @@ struct ProfileMenuView: View {
         .ignoresSafeArea(.keyboard, edges: .bottom)
     }
 
-    // MARK: - Header
+    // MARK: - Reusable divider (matches design reference blue tint)
+    @ViewBuilder
+    private func menuDivider() -> some View {
+        Rectangle()
+            .fill(
+                LinearGradient(
+                    colors: [
+                        Color(hex: "#0C7BFF").opacity(1),
+                        Color(hex: "#A72CFF").opacity(1)
+                    ],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+            )
+            .frame(height: 1)
+            .padding(.horizontal, Layout.dividerInset)
+    }
+
+    // MARK: - Header Section
     @ViewBuilder
     private func headerSection() -> some View {
-        ZStack(alignment: .topLeading) {
-            VStack(spacing: 0) {
-                //Spacer().frame(height: 52)
-                Spacer().frame(height: UIApplication.shared.connectedScenes.compactMap { ($0 as? UIWindowScene)?.keyWindow }
-                               .first?.safeAreaInsets.top ?? 0 + 16)
-            
-                if let url = viewModel.imageURL {
-                    WebImage(url: url, options: [.retryFailed, .continueInBackground])
-                        .resizable()
-                        .scaledToFill()
-                        .frame(width: 72, height: 72)
-                        .clipShape(Circle())
-                        .overlay(Circle().stroke(Color.white, lineWidth: 2))
-                } else {
-                    Image("profile-icon")
-                        .resizable()
-                        .scaledToFill()
-                        .frame(width: 72, height: 72)
-                        .clipShape(Circle())
-                        .overlay(Circle().stroke(Color.white, lineWidth: 2))
+        VStack(spacing: 0) {
+            Layout.headerBackground
+                .frame(height: safeAreaTop())
+
+            HStack(spacing: Layout.iconGap) {
+                // Avatar
+                Group {
+                    if let url = viewModel.imageURL {
+                        WebImage(url: url, options: [.retryFailed, .continueInBackground])
+                            .resizable()
+                            .scaledToFill()
+                    } else {
+                        Image("profile-icon")
+                            .resizable()
+                            .scaledToFill()
+                    }
                 }
-                
-                Spacer().frame(height: 12)
-                
-                Text(viewModel.name)
-                    .font(.title2.bold())
+                .frame(width: 72, height: 72)
+                .clipShape(Circle())
+                .overlay(Circle().stroke(Color.white.opacity(0.2), lineWidth: 1.5))
+
+                // Name + phone
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(viewModel.name)
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(.white)
+
+                    Text(viewModel.phone)
+                        .font(.system(size: 14, weight: .regular))
+                        .foregroundColor(.white.opacity(0.6))
+                }
+
+                Spacer()
+            }
+            .padding(.horizontal, Layout.rowLeading)
+            .padding(.vertical, 20)
+
+        }
+        .background(Layout.headerBackground)
+    }
+
+    // MARK: - Top Toggles Section
+    @ViewBuilder
+    private func topTogglesSection() -> some View {
+        VStack(spacing: 0) {
+            toggleRow(icon: "volume-cross",  label: "Mute Notification",  binding: $appSettings.muteNotification)
+            toggleRow(icon: "camera-slash",  label: "Block screenshot",   binding: $appSettings.disableScreenshot)
+            toggleRow(icon: "lock _icon", label: "Ghost Chat",         binding: $appSettings.ghostChat)
+        }
+    }
+
+    @ViewBuilder
+    private func toggleRow(icon: String, label: String, binding: Binding<Bool>) -> some View {
+        HStack(spacing: Layout.iconGap) {
+            Image(icon)
+                .renderingMode(.template)
+                .foregroundColor(.white)
+                .frame(width: Layout.iconSize, height: Layout.iconSize)
+
+            Text(label)
+                .font(.system(size: 15, weight: .regular))
+                .foregroundColor(.white)
+
+            Spacer()
+
+            Toggle("", isOn: binding)
+                .toggleStyle(SwitchToggleStyle(tint: Color(hex: "#4A6FA5")))
+                .labelsHidden()
+                .scaleEffect(0.85)
+        }
+        .padding(.horizontal, Layout.rowLeading)
+        .padding(.vertical, Layout.rowVPad)
+    }
+    // MARK: - Language Row
+    @ViewBuilder
+    private func languageRow() -> some View {
+        Button(action: { showLanguageSheet.toggle() }) {
+            HStack(spacing: Layout.iconGap) {
+                Image("language_text")
+                    .renderingMode(.template)
                     .foregroundColor(.white)
-                
-                Spacer().frame(height: 8)
-                
-                Text(viewModel.phone)
-                    .foregroundColor(Design.Color.white)
-                    .font(Design.Font.bold(14))
-                
-                Spacer().frame(height: 20)
-            }
-            .frame(maxWidth: .infinity)
-            .background(Design.Color.appGradient)
-            .ignoresSafeArea(.all, edges: .top)
-            
-            Button(action: {
-                withAnimation {
-                    closeAction()
+                    .frame(width: Layout.iconSize, height: Layout.iconSize)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Language")
+                        .font(.system(size: 15, weight: .regular))
+                        .foregroundColor(.white)
+
+                    Text("English")
+                        .font(.system(size: 12, weight: .regular))
+                        .foregroundColor(.white.opacity(0.5))
                 }
-            }) {
-                Image("arrow-left-white")
-                    .resizable()
-                    .frame(width: 20, height: 20)
+
+                Spacer()
+
+                Image("arrow-right")
+                    .renderingMode(.template)
+                    .foregroundColor(.white.opacity(0.5))
+                    .frame(width: 14, height: 14)
             }
-            .padding(.top, 52)
-            .padding(.leading, 20)
+            .padding(.horizontal, Layout.rowLeading)
+            .padding(.vertical, Layout.rowVPad)
+        }
+    }
+
+    // MARK: - Middle Section
+    @ViewBuilder
+    private func middleSection() -> some View {
+        VStack(spacing: 0) {
+            darkMenuRow(icon: "block_msg", title: "Blocked Messages",    action: { navPath.append(ProfileRoute.blocked) })
+            darkMenuRow(icon: "thread",    title: "Compromised Threats", action: { navPath.append(ProfileRoute.threats) })
+            darkMenuRow(icon: "setting",   title: "Settings",            action: { navPath.append(ProfileRoute.setting) })
+        }
+    }
+
+    // MARK: - Invite Friends Row
+    @ViewBuilder
+    private func inviteFriendsRow() -> some View {
+        Button(action: { showShareSheet.toggle() }) {
+            HStack(spacing: Layout.iconGap) {
+                Image("user-add")
+                    .renderingMode(.template)
+                    .foregroundColor(.white)
+                    .frame(width: Layout.iconSize, height: Layout.iconSize)
+
+                Text("Invite Friends")
+                    .font(.system(size: 15, weight: .regular))
+                    .foregroundColor(.white)
+
+                Spacer()
+            }
+            .padding(.horizontal, Layout.rowLeading)
+            .padding(.vertical, Layout.rowVPad)
+        }
+    }
+
+    // MARK: - Dark Menu Row (navigation items)
+    private func darkMenuRow(icon: String, title: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: Layout.iconGap) {
+                Image(icon)
+                    .renderingMode(.template)
+                    .foregroundColor(.white)
+                    .frame(width: Layout.iconSize, height: Layout.iconSize)
+
+                Text(title)
+                    .font(.system(size: 15, weight: .regular))
+                    .foregroundColor(.white)
+
+                Spacer()
+            }
+            .padding(.horizontal, Layout.rowLeading)
+            .padding(.vertical, Layout.rowVPad)
         }
     }
 
     // MARK: - Footer
     @ViewBuilder
     private func footerSection() -> some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 0) {
             Rectangle()
+                .fill(
+                    .white.opacity(1)
+                )
+                .frame(maxWidth: .infinity)
+
                 .frame(height: 1)
-                .foregroundColor(Design.Color.backgroundMuted)
-
-            HStack(spacing: 12) {
-                Image("yal-shield")
-                    .resizable()
-                    .frame(width: 52, height: 52)
-
-                Text("YAL.ai never send your personal information to cloud, Your data stays on your device.")
-                    .font(.footnote)
-                    .foregroundColor(.gray)
-                    .multilineTextAlignment(.leading)
-            }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 20)
+            Text("YAL.ai never send your personal information to cloud, Your data stays on your device.")
+                .font(.system(size: 12, weight: .regular))
+                .foregroundColor(.white.opacity(0.8))
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 40)
+                .padding(.vertical, 20)
         }
-        .background(Color.white)
+        .background(Layout.contentBackground)
     }
 
-    // MARK: - Section Box
-    private func sectionBox<Content: View>(@ViewBuilder content: @escaping () -> Content) -> some View {
-        VStack(spacing: 12) {
-            content()
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.vertical, 12)
-        .background(Design.Color.white)
-    }
-
-    // MARK: - Setting Row
-    private func SettingRow(label: String, value: String? = nil, icon: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack(spacing: 12) {
-                Image(icon)
-                    .resizable()
-                    .renderingMode(.original)
-                    .aspectRatio(contentMode: .fit)
-                    .frame(width: 20, height: 20)
-
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(label)
-                        .font(Design.Font.bold(14))
-                        .foregroundColor(Design.Color.headingText)
-
-                    if let value = value {
-                        Text(value)
-                            .font(Design.Font.regular(12))
-                            .foregroundColor(Design.Color.tertiaryText)
-                    }
-                }
-
-                Spacer()
-
-                Image("arrow-right")
-                    .resizable()
-                    .renderingMode(.original)
-                    .aspectRatio(contentMode: .fit)
-                    .frame(width: 16, height: 16)
-            }
-            .padding(.vertical, 16)
-            .padding(.horizontal, 20)
-            .background(Color.white)
-        }
-    }
-    
+    // MARK: - Safe area helper
     private func safeAreaTop() -> CGFloat {
         UIApplication.shared.topSafeAreaInset
     }
 
-    // MARK: - Destination screen (for Blocked, Threats)
+    // MARK: - Destination screen (Blocked / Threats)
     private func destinationScreen(title: String) -> some View {
         VStack(spacing: 0) {
             HStack {
-                Button(action: {
-                    navPath.removeLast()
-                }) {
+                Button(action: { navPath.removeLast() }) {
                     Image("back-long")
                         .resizable()
                         .aspectRatio(contentMode: .fit)
@@ -300,18 +335,20 @@ struct ProfileMenuView: View {
                         .padding(.horizontal, 10)
                         .padding(.vertical, 10)
                 }
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Blocked Messages")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundColor(.black)
-                }
-                .padding(.leading, 4)
-                
+
+                Text(title)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(.white)
+                    .padding(.leading, 4)
+
                 Spacer()
             }
             .padding(.top, safeAreaTop())
+            .background(Layout.contentBackground)
+
             roomList
         }
+        .background(Layout.contentBackground)
         .navigationBarBackButtonHidden(true)
         .overlay {
             if showUnBlock {
@@ -320,18 +357,16 @@ struct ProfileMenuView: View {
                     onUnblock: {
                         showUnBlock = false
                         guard let room = selectedRoomForMenu,
-                              let user = room.opponent
-                        else { return }
+                              let user = room.opponent else { return }
                         roomViewModel.unbanUser(from: room, user: user) { success in
                             if success {
                                 if selectedRoomForMenu?.isBlocked == true {
                                     roomViewModel.toggeleBlocked(for: room)
                                 }
                                 selectedRoomForMenu?.isBlocked = false
-                                if let roomIndex = $roomViewModel.blockedRooms.firstIndex(where: { $0.id == room.id }) {
-                                    roomViewModel.blockedRooms.remove(at: roomIndex)
+                                if let idx = $roomViewModel.blockedRooms.firstIndex(where: { $0.id == room.id }) {
+                                    roomViewModel.blockedRooms.remove(at: idx)
                                 }
-                                print("User unbanned successfully")
                             }
                         }
                     },
@@ -339,15 +374,13 @@ struct ProfileMenuView: View {
                 )
             }
         }
-        .onAppear(){
-            roomViewModel.loadRooms()
-        }
+        .onAppear { roomViewModel.loadRooms() }
     }
-    
+
     var roomList: some View {
         ScrollView(showsIndicators: false) {
             let blockedRooms = roomViewModel.blockedRooms
-            
+
             VStack(spacing: 24) {
                 if blockedRooms.isEmpty {
                     Text("No blocked rooms")
@@ -355,7 +388,7 @@ struct ProfileMenuView: View {
                         .foregroundColor(.gray)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .multilineTextAlignment(.center)
-                        .padding(.top, (UIScreen.main.bounds.height / 2) - (120))
+                        .padding(.top, (UIScreen.main.bounds.height / 2) - 120)
                 } else {
                     ForEach(blockedRooms) { room in
                         roomButton(for: room)
@@ -363,27 +396,24 @@ struct ProfileMenuView: View {
                 }
             }
             .padding(.horizontal, 20)
-            .padding(.top, 20)
-            .padding(.bottom, 20)
+            .padding(.vertical, 20)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity) // Ensure it occupies available space
-        .background(Design.Color.tabHighlight.opacity(0.12))
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Layout.contentBackground)
     }
 
     func roomButton(for room: RoomModel) -> some View {
-        GeometryReader { geo in
+        GeometryReader { _ in
             ConversationView(roomModel: room, typingIndicator: "")
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .contentShape(Rectangle())
         }
         .frame(height: 48)
-        .opacity(1.0)
         .onLongPressGesture {
             selectedRoomForMenu = room
             showUnBlock = true
         }
     }
-
 
     private func openAppNotificationSettings() {
         guard let url = URL(string: UIApplication.openNotificationSettingsURLString) else { return }

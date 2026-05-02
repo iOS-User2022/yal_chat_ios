@@ -67,8 +67,12 @@ class OtpViewModel: ObservableObject {
                             deviceId: response.deviceID,
                             accessToken: response.token,
                             refreshToken: response.refreshToken,
-                            matrixUrl: matrixBaseUrl
+                            matrixUrl: matrixBaseUrl,
+                            jitsiToken: response.jitsiToken ?? ""
                         ))
+                        Storage.save(response.token, for: .token, type: .keychain)
+                        Storage.save(response.accessToken, for: .matrixToken, type: .keychain)
+                        completion()
                     case .unsuccess(let apiError):
                         self?.showError = true
                         self?.errorMessage = apiError.localizedDescription
@@ -108,8 +112,8 @@ class OtpViewModel: ObservableObject {
 
     func showAlertForDeniedPermission() {
         alertModel = AlertViewModel(
-            title: "Something Went Wrong",
-            subTitle: "\(self.errorMessage)",
+            title: "\(self.errorMessage)",
+            subTitle: "",
             actions: [
                 AlertActionModel(title: "OK", style: .secondary, action: {})
             ]

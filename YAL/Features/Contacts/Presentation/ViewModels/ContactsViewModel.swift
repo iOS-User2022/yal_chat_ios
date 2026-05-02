@@ -43,6 +43,17 @@ class ContactListViewModel: ObservableObject {
             .sink { [weak self] contactModels in
                 self?.sections = ContactSection.from(contactModels: contactModels)
                 self?.accessStatus = .granted
+                #if DEBUG
+                let summary = contactModels.prefix(20).map { model in
+                    let name = model.fullName ?? model.displayName ?? "Unknown"
+                    let userId = model.userId ?? "nil"
+                    return "\(name) | \(model.phoneNumber) | userId: \(userId)"
+                }.joined(separator: "\n")
+                print("[Contacts] Final contact list response count: \(contactModels.count)")
+                if !summary.isEmpty {
+                    print("[Contacts] Final contact list sample:\n\(summary)")
+                }
+                #endif
             }
             .store(in: &cancellables)
     }
@@ -65,8 +76,8 @@ class ContactListViewModel: ObservableObject {
             title: "Permission Needed",
             subTitle: "Please allow contact access from Settings to display contacts.",
             actions: [
-                AlertActionModel(title: "Cancel", style: .secondary, action: {}),
-                AlertActionModel(title: "Open Settings", style: .primary) {
+                AlertActionModel(title: "Open Settings", style: .secondary, action: {}),
+                AlertActionModel(title: "Cancel", style: .primary) {
                     if let url = URL(string: UIApplication.openSettingsURLString) {
                         UIApplication.shared.open(url)
                     }

@@ -22,6 +22,8 @@ struct FullScreenImageView: View {
     var mediaType: MediaType = .image
     var mediaUrl = ""
     var onForward: (() -> Void)?
+    var onEdit: (() -> Void)?
+    var onShare: (() -> Void)?
     
     @State private var player: AVPlayer?
     
@@ -29,7 +31,7 @@ struct FullScreenImageView: View {
     
     var body: some View {
         ZStack(alignment: .top) {
-            Color.white.ignoresSafeArea()
+            Color(hex: "#0A171F").ignoresSafeArea()
             
             GeometryReader { proxy in
                 let size = proxy.size
@@ -49,6 +51,7 @@ struct FullScreenImageView: View {
                             }
                     } else {
                         Text("Video file not found")
+                            .foregroundColor(.white)
                     }
                 } else {
                     ZoomableImageView(source: source, size: size)
@@ -56,43 +59,59 @@ struct FullScreenImageView: View {
             }
             
             // Top bar
-            VStack {
-                HStack {
+            VStack(spacing: 0) {
+                HStack(spacing: 12) {
+                    // Back button
                     Button(action: {
                         withAnimation(.spring()) {
                             isPresented = false
                         }
                     }) {
-                        Image("back-long")
-                            .foregroundColor(.black)
-                    }
-                    
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(userName)
+                        Image(systemName: "chevron.left")
                             .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(.black)
-                        Text(timeText)
-                            .font(.system(size: 13))
-                            .foregroundColor(.gray)
+                            .foregroundColor(.white)
+                            .frame(width: 20, height: 20)
                     }
-                    .padding(.leading, 4)
                     
-                    Spacer()
-                    
-                    if onForward != nil {
-                        Button(action: { onForward?() }) {
-                            Image("forward")
-                                .foregroundColor(.black)
-                        }
+                    // User info
+                    if !userName.isEmpty {
+                        Text(userName)
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundColor(.white)
+                            .lineLimit(1)
                     }
+                    Spacer().frame(height: 16)
+                    
+                  
+                    Button(action: {
+                        print("Edit button tapped")
+                        onEdit?()
+                    }) {
+                        Image("edit-light")
+                            .resizable()
+                            .renderingMode(.template)
+                            .foregroundColor(.white)
+                            .frame(width: 20, height: 20)
+                    }
+                    Button(action: {
+                        print("Share button tapped")
+                        onShare?()
+                    }) {
+                        Image("share_icon")
+                            .resizable()
+                            .renderingMode(.template)
+                            .foregroundColor(.white)
+                            .frame(width: 20, height: 20)
+                    }
+                  
                 }
-                .padding(.horizontal)
-                .frame(height: 56)
-                .background(Color.white)
-                .shadow(color: Color.black.opacity(0.1), radius: 2, y: 1)
-                
-                Spacer()
+                .padding(.horizontal, 16)
+                .padding(.top, 50)
+                .padding(.bottom, 8)
+                .background(Color(hex: "#0A171F"))
             }
+        }.onAppear(){
+            print("usernmae $0: \(self.userName)")
         }
     }
 }
@@ -110,6 +129,7 @@ struct ZoomableImageView: UIViewRepresentable {
         scrollView.bouncesZoom = true
         scrollView.showsHorizontalScrollIndicator = false
         scrollView.showsVerticalScrollIndicator = false
+        scrollView.backgroundColor = UIColor(red: 0.039, green: 0.090, blue: 0.122, alpha: 1.0)
         
         let imageView: UIImageView
         switch source {

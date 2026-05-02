@@ -15,41 +15,48 @@ struct TabBarItemView: View {
     
     var body: some View {
         Button(action: onTap) {
-            VStack(spacing: 4) {
-                ZStack(alignment: .center) {
-                    if isSelected {
-                        RoundedRectangle(cornerRadius: 8)
-                            .fill(Design.Color.appGradient.opacity(0.1))
-                    } else {
-                        RoundedRectangle(cornerRadius: 8)
-                            .fill(Color.clear)
-                    }
-                    
-                    Image(iconName)
-                        .resizable()
-                        .renderingMode(.original)
-                        .scaledToFit()
-                        .frame(width: 24, height: 24)
-                        .scaleEffect(iconScale)
-                        .padding(8)
-                    
-                    if unreadCount > 0 {
-                        Text(unreadCount > 99 ? "99+" : "\(unreadCount)")
-                            .font(Design.Font.semiBold(10))
-                            .foregroundColor(.white)
-                            .padding(4)
-                            .background(Design.Color.appGradient)
-                            .clipShape(Circle())
-                            .offset(x: 10, y: -5)
-                    }
+            ZStack(alignment: .bottom){
+                if isSelected {
+                    Image("tabGradient")
+                        .frame(width: 100, height: 60)
+                        .ignoresSafeArea(edges: .bottom)
                 }
-                
-                Text(tabLabel)
-                    .font(isSelected ? Design.Font.bold(10) : Design.Font.medium(10))
-                    .foregroundColor(Design.Color.headingText)
+
+                VStack(spacing: 4) {
+                    
+                    ZStack(alignment: .center) {
+                        
+                        Image(iconName)
+                            .resizable()
+                            .renderingMode(.original)
+                            .scaledToFit()
+                            .frame(width: 24, height: 24)
+                            .scaleEffect(iconScale)
+                        //.padding(8)
+                        
+                        if unreadCount > 0 {
+                            Text(unreadCount > 99 ? "99+" : "\(unreadCount)")
+                                .font(Design.Font.semiBold(10))
+                                .foregroundColor(.white)
+                                .padding(4)
+                                .background(Design.Color.appGradient)
+                                .clipShape(Circle())
+                                .offset(x: 10, y: -5)
+                        }
+                    }
+                    
+                    Text(tabLabel)
+                        .font(isSelected ? Design.Font.bold(10) : Design.Font.medium(10))
+                        .foregroundColor(isSelected ? Design.Color.primaryTextColor : Design.Color.secondryTextColor)
+                    
+                    
+                }
+                .frame(maxWidth: .infinity)
+                .frame(height: 40)
+                .padding(.horizontal, 24)
+                .padding(.bottom, 4)
+                .padding(.vertical, 16)
             }
-            .frame(maxWidth: .infinity)
-            .frame(height: 40)
         }
     }
     

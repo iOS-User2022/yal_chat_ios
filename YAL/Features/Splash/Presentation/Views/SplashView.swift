@@ -16,39 +16,16 @@ struct SplashView: View {
     var body: some View {
         ZStack {
             // Background Color
-            Design.Color.appGradient
+            Design.Color.black
                 .ignoresSafeArea()
             
             // Mesh Overlay
-            Image("splash-mesh") // your transparent mesh image
+            Image("Splash1") // your transparent mesh image
                 .resizable()
                 .scaledToFill()
-                .blendMode(.overlay) // overlay blending
                 .ignoresSafeArea()
             
             VStack() {
-                Spacer()
-                
-                // Logo Image (speech bubble or robot icon)
-                Image("yal-logo-white") // your main logo image
-                    .resizable()
-                    .scaledToFill()
-                    .frame(width: 72, height: 70)
-                
-                Spacer().frame(height: 20)
-                
-                // App Title
-                Image("yal-ai") // "YAL.ai" text as image
-                    .resizable()
-                    .scaledToFill()
-                    .frame(width: 148, height: 37)
-                
-                Spacer().frame(height: 8)
-                // Subtitle
-                Text("Your Alternative Life")
-                    .font(Design.Font.regular(16))
-                    .foregroundColor(Color.white)
-                    .frame(height: 16)
                 
                 Spacer()
                 

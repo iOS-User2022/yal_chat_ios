@@ -42,6 +42,8 @@ final class Storage {
         case autoLockOption
         case messagesLoadedFromNetwork
         case notificationContentType
+        case voipToken
+        case token
     }
 
     // MARK: - Save

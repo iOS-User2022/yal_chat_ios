@@ -42,7 +42,7 @@ struct SingleMessageInfoView: View {
                     SenderMessageView(
                         message: message,
                         senderName: "",
-                        onDownloadNeeded: { _ in },
+                        participantCount: 0, onDownloadNeeded: { _ in },
                         onTap: {},
                         onLongPress: {},
                         onScrollToMessage: {_ in },

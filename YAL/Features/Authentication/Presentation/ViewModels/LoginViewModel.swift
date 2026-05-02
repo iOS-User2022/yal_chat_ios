@@ -27,6 +27,23 @@ class LoginViewModel: ObservableObject {
     
     init(authRepository: AuthRepository) {
         self.authRepository = authRepository
+        restoreSavedPhone()
+    }
+    
+    private func restoreSavedPhone() {
+        guard let savedMobile = Storage.get(
+            for: .mobileNumber,
+            type: .userDefaults,
+            as: String.self
+        ) else { return }
+        
+        // Find matching country by dial code
+        if let matchedCountry = Country.allCountries.first(where: {
+            savedMobile.hasPrefix($0.dialCode)
+        }) {
+            selectedCountry = matchedCountry
+            phone = String(savedMobile.dropFirst(matchedCountry.dialCode.count))
+        }
     }
 
     func login(completion: @escaping() -> Void) {

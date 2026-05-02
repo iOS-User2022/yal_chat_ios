@@ -22,8 +22,13 @@ struct LoginView: View {
 
     var body: some View {
         ZStack(alignment: .top) {
+            Design.Color.backgroundColor.ignoresSafeArea()
             VStack(spacing: 0) {
                 Spacer().frame(height: 139)
+                
+                Image("YAL Logo 1").frame(width: 40, height: 40)
+                
+                Spacer().frame(height: 24)
 
                 headerSection()
 
@@ -37,17 +42,15 @@ struct LoginView: View {
 
                 Spacer().frame(height: 48)
 
-                getOtpButton()
+                getOtpButton().padding(.horizontal, 30)
 
                 Spacer()
             }
             .padding(.horizontal, 30)
-            .background(Design.Color.white)
             .ignoresSafeArea(.keyboard, edges: .bottom)
 
             if isCountryDropdownOpen {
                 countryDropdownPopup()
-                    .padding(.horizontal, 52.5)
             }
         }
         .ignoresSafeArea(.all)
@@ -68,89 +71,132 @@ struct LoginView: View {
     @ViewBuilder
     private func headerSection() -> some View {
         VStack(spacing: 12) {
-            Text("Enter your phone number")
+            Text("Please enter your country code and phone no.")
                 .font(Design.Font.heavy(24))
-                .foregroundColor(Design.Color.headingText)
+                .foregroundColor(Design.Color.primaryTextColor)
                 .multilineTextAlignment(.center)
 
-            Text("YAL will send you an SMS message to verify your phone number.")
+            Text("YAL will send you an SMS to verify your phone number.")
                 .font(Design.Font.body)
-                .foregroundColor(Design.Color.headingText.opacity(0.7))
+                .foregroundColor(Design.Color.primaryTextColor.opacity(0.8))
                 .multilineTextAlignment(.center)
         }
     }
 
     @ViewBuilder
     private func countryPickerButton() -> some View {
-        Button(action: {
-            withAnimation(.easeInOut(duration: 0.25)) {
-                isCountryDropdownOpen.toggle()
-            }
-        }) {
-            HStack(spacing: 12) {
-                Spacer()
-                if let imageName = viewModel.selectedCountry?.flag {
-                    Image(imageName)
-                        .resizable()
-                        .frame(width: 20, height: 20)
+        HStack(spacing: 4) {
+
+            // Small minus view
+            Button {
+                withAnimation(.easeInOut(duration: 0.25)) {
+                    isCountryDropdownOpen.toggle()
                 }
-                Text(viewModel.selectedCountry?.name ?? "Select country")
-                    .foregroundColor(Design.Color.primaryText)
-                    .font(Design.Font.body)
-                Image(isCountryDropdownOpen ? "arrow-up" : "arrow-down")
-                    .resizable()
-                    .frame(width: 20, height: 20)
-                Spacer()
+            } label: {
+                let imageName = viewModel.selectedCountry?.flag ?? ""
+                Group {
+                    if imageName.isEmpty {
+                        // Show text when no image
+                        Text("-")
+                            .font(Design.Font.body)
+                            .foregroundColor(Design.Color.secondryTextColor)
+                            .frame(width: 44, height: 44)
+                            .background(Color(hex: "#202D35"))
+                            .cornerRadius(6)
+                    } else {
+                        // Show image when available
+                        Image(imageName) // ← NOT systemName
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 20, height: 20)
+                            .frame(width: 44, height: 44)
+                            .background(Color(hex: "#202D35"))
+                            .cornerRadius(6)
+                    }
+                }
             }
-            .padding(.vertical, 12)
-            .overlay(Rectangle().frame(height: 1).foregroundColor(Design.Color.navy), alignment: .bottom)
+
+            // Country picker button
+            Button {
+                withAnimation(.easeInOut(duration: 0.25)) {
+                    isCountryDropdownOpen.toggle()
+                }
+            } label: {
+                HStack(spacing: 12) {
+                    // Text
+                    Text(viewModel.selectedCountry?.name ?? "Select Country")
+                        .font(Design.Font.body)
+                        .foregroundColor(
+                            viewModel.selectedCountry == nil
+                            ? Design.Color.secondryTextColor
+                            : Design.Color.primaryTextColor
+                        )
+
+                    Spacer()
+
+                    // Chevron
+                    Image(systemName: isCountryDropdownOpen ? "chevron.up" : "chevron.down")
+                        .foregroundColor(.white.opacity(0.8))
+                }
+                .padding(.horizontal, 16)
+                .frame(height: 44)
+                .background(Color(hex: "#202D35"))
+                .cornerRadius(6)
+            }
+            .background(
+                GeometryReader { geo in
+                    Color.clear
+                        .onAppear {
+                            countryPickerFrame = geo.frame(in: .global)
+                        }
+                        .onChange(of: isCountryDropdownOpen) { _ in
+                            countryPickerFrame = geo.frame(in: .global)
+                        }
+                }
+            )
         }
-        .padding(.horizontal, 22.5)
-        .background(
-            GeometryReader { geo in
-                Color.clear
-                    .onAppear {
-                        countryPickerFrame = geo.frame(in: .global)
-                    }
-                    .onChange(of: isCountryDropdownOpen) { _ in
-                        countryPickerFrame = geo.frame(in: .global)
-                    }
-            }
-        )
     }
 
     @ViewBuilder
     private func countryDropdownPopup() -> some View {
-        VStack(spacing: 0) {
+        VStack(alignment: .leading, spacing: 0) {
             Spacer().frame(height: countryPickerFrame.minY) // Exactly aligned below the country picker field
 
-            VStack(spacing: 0) {
+            VStack(alignment: .leading, spacing: 0) {
+                
                 Button(action: {
                     withAnimation(.easeInOut(duration: 0.25)) {
                         isCountryDropdownOpen.toggle()
                     }
                 }) {
-                    HStack(spacing: 12) {
-                        Spacer()
-                        Text("Select country")
-                            .font(Design.Font.body)
-                            .foregroundColor(Design.Color.headingText)
-                        Image("arrow-up")
-                            .resizable()
-                            .frame(width: 20, height: 20)
-                        Spacer()
+                    HStack(spacing: 4) {
+                        Text("")
+                            .frame(width: 44, height: 44)
+                            .background(Color(hex: "#202D35"))
+                            .clipShape(TopRoundedCorners(radius: 6))
+                        HStack(spacing: 12) {
+                            
+                            // Text
+                            Text("Select Country")
+                                .font(Design.Font.body)
+                                .foregroundColor(Design.Color.secondryTextColor)
+                            
+                            Spacer()
+                            
+                            // Chevron
+                            Image(systemName: isCountryDropdownOpen ? "chevron.up" : "chevron.down")
+                                .foregroundColor(.white.opacity(0.8))
+                            
+                        }.frame(height: 44)
+                        .padding(.horizontal, 16)
+                        .background(Color(hex: "#202D35"))
+                        .clipShape(TopRoundedCorners(radius: 6))
                     }
-                    .padding(.vertical, 12)
                 }
-                
-                Rectangle()
-                    .fill(Design.Color.navy.opacity(0.7))
-                    .frame(height: 1)
-                    .padding(.horizontal, 16)
 
                 // Country List
                 ScrollView {
-                    VStack(spacing: 0) {
+                    VStack(alignment: .leading, spacing: 0) {
                         ForEach(Country.allCountries) { country in
                             Button(action: {
                                 viewModel.selectedCountry = country
@@ -158,88 +204,84 @@ struct LoginView: View {
                                     isCountryDropdownOpen = false
                                 }
                             }) {
-                                HStack(spacing: 12) {
-                                    Spacer().frame(width: 32)
-                                    Image(country.flag)
-                                        .resizable()
-                                        .frame(width: 18, height: 18)
+                                HStack(spacing: 4) {
 
-                                    Text(country.name)
-                                        .foregroundColor(Design.Color.primaryText)
-                                        .font(Design.Font.body)
+                                    // Flag column
+                                    ZStack{
+                                        Text(" ")
+                                            .foregroundColor(Design.Color.clear)
+                                            .font(Design.Font.body)
+                                        Image(country.flag)
+                                            .scaledToFit()
+                                            .frame(width: 44)
+                                    }.padding(.vertical, 12)
+                                        .background(Color(hex: "#202D35"))
 
-                                    Text(country.dialCode)
-                                        .foregroundColor(Design.Color.primaryText)
-                                        .font(Design.Font.body)
-                                    Spacer()
+                                    // Text content
+                                    HStack {
+                                        Text(country.name)
+                                            .foregroundColor(Design.Color.primaryTextColor)
+                                            .font(Design.Font.body)
+                                            .frame(maxWidth: .infinity, alignment: .leading)
+                                            .multilineTextAlignment(.leading)
+
+                                        Text(country.dialCode)
+                                            .foregroundColor(Design.Color.primaryTextColor)
+                                            .font(Design.Font.body)
+                                    }
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 12)
+                                    .background(Color(hex: "#202D35"))
                                 }
-                                .padding(.vertical, 12)
-                                .padding(.horizontal, 16)
                             }
-                            
-                            Rectangle()
-                                .fill(Design.Color.navy.opacity(0.1))
-                                .frame(height: 1)
-                                .padding(.horizontal, 16)
                         }
                     }
                 }
                 .frame(maxHeight: 300)
             }
-            .background(
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(.ultraThinMaterial) // Native blurred background
-                    .background(Color.white.opacity(0.3)) // Light white tint
-                    .clipShape(RoundedRectangle(cornerRadius: 16))
-                    .shadow(color: Color.black.opacity(0.1), radius: 12, x: 0, y: 6)
-            )
-            .cornerRadius(16)
+            .background(Design.Color.backgroundColor)
+            .cornerRadius(6)
             .shadow(color: Color.black.opacity(0.15), radius: 12, x: 0, y: 6)
             .transition(.scale.combined(with: .opacity))
-        }
+        }.padding(.horizontal, 30)
     }
 
     @ViewBuilder
     private func phoneInputFields() -> some View {
-        HStack(alignment: .bottom, spacing: 16) {
-            // Country code field
-            VStack(alignment: .center, spacing: 8) {
-                Text(viewModel.selectedCountry?.dialCode ?? "+00")
+        HStack(spacing: 4) {
+
+            // Country code box
+            HStack {
+                Text(viewModel.selectedCountry?.dialCode ?? "-")
                     .font(Design.Font.body)
-                    .foregroundColor(Design.Color.primaryText)
-
-                Rectangle()
-                    .frame(height: 1)
-                    .foregroundColor(Design.Color.navy)
+                    .foregroundColor( viewModel.selectedCountry?.dialCode == nil
+                                      ? Design.Color.secondryTextColor
+                                      : Design.Color.primaryTextColor)
             }
-            .frame(width: 72, height: 38)
+            .frame(width: 44, height: 44)
+            .background(Color(hex: "#202D35"))
+            .cornerRadius(6)
 
-            // Phone number input field
-            VStack(alignment: .center, spacing: 8) {
-                // ONLY text field has padding
+            // Phone number box
+            HStack {
                 TextField(
                     "",
                     text: $viewModel.phone,
-                    prompt: Text("Phone number")
-                        .foregroundColor(Design.Color.secondaryText.opacity(0.7))
+                    prompt: Text("Phone no.")
+                        .foregroundColor(Design.Color.secondryTextColor)
                         .font(Design.Font.body)
                 )
-                .padding(.leading, 8) // padding only inside textfield
                 .keyboardType(.numberPad)
                 .focused($isPhoneFocused)
                 .font(Design.Font.body)
-                .foregroundColor(Design.Color.primaryText)
-
-                // Line without padding
-                Rectangle()
-                    .frame(height: 1)
-                    .foregroundColor(Design.Color.navy)
+                .foregroundColor(Design.Color.primaryTextColor)
             }
-            .frame(height: 38)
+            .padding(.horizontal, 16)
+            .frame(height: 44)
+            .background(Color(hex: "#202D35"))
+            .cornerRadius(6)
         }
-        .padding(.horizontal, 22.5)
     }
-
 
     @ViewBuilder
     private func getOtpButton() -> some View {
@@ -252,17 +294,31 @@ struct LoginView: View {
         }) {
             Text("Get OTP")
                 .font(Design.Font.button)
-                .foregroundColor(.white)
+                .foregroundColor(viewModel.isLoginEnabled ? .white : Design.Color.medium_gray)
                 .frame(maxWidth: .infinity)
                 .frame(height: 60)
-                .cornerRadius(16)
+                .cornerRadius(12)
                 .shadow(color: Color.black.opacity(0.15), radius: 10, x: 0, y: 6)
         }
         .disabled(!viewModel.isLoginEnabled)
         .padding(.horizontal, 12.5)
         .background(
-            viewModel.isLoginEnabled ? Design.Color.appGradient.opacity(1.0) : Design.Color.appGradient.opacity(0.6)
+            viewModel.isLoginEnabled ? Design.Color.appGradient.opacity(1.0) : Design.Color.disabledGradient.opacity(1.0)
         )
-        .cornerRadius(20)
+        .cornerRadius(12)
+    }
+}
+
+struct TopRoundedCorners: Shape {
+    var radius: CGFloat = 6
+
+    func path(in rect: CGRect) -> Path {
+        Path(
+            UIBezierPath(
+                roundedRect: rect,
+                byRoundingCorners: [.topLeft, .topRight],
+                cornerRadii: CGSize(width: radius, height: radius)
+            ).cgPath
+        )
     }
 }

@@ -343,8 +343,7 @@ struct RoomSummaryModel: Equatable, Sendable, Identifiable {
     }
     
     func materializeContact(_ lite: ContactLite) -> ContactModel {
-        
-        return ContactModel(
+        let contactModel = ContactModel(
             fullName: lite.fullName ?? "",
             phoneNumber: lite.phoneNumber,
             emailAddresses: lite.emailAddresses,
@@ -356,6 +355,11 @@ struct RoomSummaryModel: Equatable, Sendable, Identifiable {
             gender: lite.gender,
             profession: lite.profession
         )
+        contactModel.isOnline = lite.isOnline
+        contactModel.lastSeen = lite.lastSeen ?? 0
+        contactModel.avatarURL = lite.avatarURL
+        contactModel.statusMessage = lite.lastSeen == nil ? nil : "Online"
+        return contactModel
     }
     
     static func == (lhs: Self, rhs: Self) -> Bool {
@@ -389,7 +393,7 @@ extension RoomSummaryModel {
             
         let buckets = Self.extractMembershipBuckets(from: allEvents)
         let isLeft = buckets.left.contains(currentUserId) || buckets.invited.contains(currentUserId)
-        let lastMsgEv = tl.first(where: { $0.type == "m.room.message" })
+        let lastMsgEv = tl.first(where: { $0.type == "m.room.message" || $0.type == "m.call.invite"})
         let lastMsg    = lastMsgEv?.content?.body
         let lastSender = lastMsgEv?.sender
         let lastType   = lastMsgEv?.content?.msgType
@@ -465,7 +469,7 @@ extension RoomSummaryModel {
             if let nm = tl.first(where: { $0.type == "m.room.name" })?.content?.name, !nm.isEmpty {
                 name = nm
             }
-            if let lastMsgEv = tl.first(where: { $0.type == "m.room.message" }) {
+            if let lastMsgEv = tl.first(where: { $0.type == "m.room.message" ||  $0.type == "m.call.invite"}) {
                 lastMessage     = lastMsgEv.content?.body
                 lastSender      = lastMsgEv.sender
                 lastMessageType = lastMsgEv.content?.msgType ?? lastMessageType
@@ -724,10 +728,10 @@ extension RoomSummaryModel {
                let opp = participants.first(where: { $0.userId == oppId }) {
                 
                 if name.isEmpty || name == "Chat" {
-                    if let dn = opp.displayName, !dn.isEmpty {
-                        name = dn
-                    } else if let fn = opp.fullName, !fn.isEmpty {
+                    if let fn = opp.fullName, !fn.isEmpty {
                         name = fn
+                    } else if let dn = opp.displayName, !dn.isEmpty {
+                        name = dn
                     } else {
                         name = opp.phoneNumber
                     }

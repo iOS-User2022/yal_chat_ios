@@ -23,18 +23,18 @@ struct MuteView: View {
             VStack(alignment: .leading, spacing: 16) {
                 Text("Mute message notifications")
                     .font(Design.Font.semiBold(16))
-                    .foregroundColor(.black)
+                    .foregroundColor(Design.Color.primaryTextColor)
                 
                 Text("Other members will not see that you muted this chat. You will still be notified if you are mentioned.")
                     .font(Design.Font.regular(14))
-                    .foregroundColor(Design.Color.primaryText.opacity(0.6))
+                    .foregroundColor(Design.Color.primaryTextColor.opacity(0.6))
                     .multilineTextAlignment(.leading)
                 
                 VStack(alignment: .leading, spacing: 12) {
                     ForEach(options, id: \.self) { option in
                         HStack {
                             Image(systemName: selectedOption == option ? "largecircle.fill.circle" : "circle")
-                                .foregroundColor(Design.Color.primaryText.opacity(0.6))
+                                .foregroundColor(Design.Color.primaryTextColor.opacity(0.6))
                                 .onTapGesture { selectedOption = option }
                             
                             Text(option)
@@ -49,7 +49,7 @@ struct MuteView: View {
                         Button(action: { onCancel() }) {
                             Text("Cancel")
                                 .font(Design.Font.regular(14))
-                                .foregroundColor(Design.Color.headingDark)
+                                .foregroundColor(Design.Color.primaryTextColor)
                         }
                         
                         Button(action: {
@@ -58,14 +58,14 @@ struct MuteView: View {
                         }) {
                             Text("Ok")
                                 .font(Design.Font.regular(14))
-                                .foregroundColor(Design.Color.headingDark)
+                                .foregroundColor(Design.Color.primaryTextColor)
                         }
                     }
                 }
 
             }
             .padding()
-            .background(Color.white)
+            .background(Color(Design.Color.darkgrayColor))
             .cornerRadius(12)
             .shadow(radius: 8)
             .padding(.horizontal, 40)

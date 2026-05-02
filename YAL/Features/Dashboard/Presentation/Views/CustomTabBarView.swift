@@ -19,8 +19,15 @@ struct CustomTabBarView: View {
 
     var body: some View {
         HStack {
-            TabBarItemView(tab: .sms, isSelected: selectedTab == .sms, unreadCount: 0, onTap: {
-                selectedTab = .sms
+//            TabBarItemView(tab: .sms, isSelected: selectedTab == .sms, unreadCount: 0, onTap: {
+//                selectedTab = .sms
+//            })
+//            
+//            Spacer()
+            
+
+            TabBarItemView(tab: .contacts, isSelected: selectedTab == .contacts, unreadCount: 0, onTap: {
+                selectedTab = .contacts
             })
             
             Spacer()
@@ -29,20 +36,12 @@ struct CustomTabBarView: View {
                 selectedTab = .chats
             })
             
-//            Spacer()
-//
-//            TabBarItemView(tab: .calls, isSelected: selectedTab == .calls, unreadCount: 0, onTap: {
-//                selectedTab = .calls
-//            })
-            
             Spacer()
 
-            TabBarItemView(tab: .contacts, isSelected: selectedTab == .contacts, unreadCount: 0, onTap: {
-                selectedTab = .contacts
+            TabBarItemView(tab: .calls, isSelected: selectedTab == .calls, unreadCount: 0, onTap: {
+                selectedTab = .calls
             })
         }
-        .padding(.horizontal, 24)
-        .padding(.vertical, 16)
     }
 }
 

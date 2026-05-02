@@ -9,6 +9,16 @@ import Foundation
 import RealmSwift
 import Combine
 
+final class CachedURLPreview: Object {
+    @Persisted(primaryKey: true) var url: String
+    @Persisted var title: String?
+    @Persisted var descText: String?
+    @Persisted var imageURL: String?
+    @Persisted var siteName: String?
+    @Persisted var favicon: String?
+    @Persisted var updatedAt: Date = Date()
+}
+
 struct RoomHydrationPayload {
     let id: String
     let currentUser: String?
@@ -160,6 +170,8 @@ class MessageObject: Object {
     @Persisted           var inReplyTo: String?
     @Persisted           var reactions: List<MessageReactionObject>
     @Persisted           var isRedacted: Bool = false
+    @Persisted           var lifetime: String?
+    @Persisted           var callStatus: String?
 
     convenience init(from model: ChatMessageModel) {
         self.init()
@@ -186,6 +198,8 @@ class MessageObject: Object {
             self.reactions.append(obj)
         }
         self.isRedacted = model.isRedacted
+        self.lifetime = model.lifetime
+        self.callStatus = model.callStatus
     }
 }
 
@@ -285,7 +299,6 @@ final class DBManager: DBManageable {
     // Open, run work, and invalidate. This can throw even if the closure doesn't.
     func withRealm<T>(_ work: (Realm) throws -> T) throws -> T {
         let r = try Realm(configuration: DBManager.config)
-        defer { r.invalidate() }
         return try work(r)
     }
     
@@ -444,7 +457,8 @@ final class DBManager: DBManageable {
             gender: obj.gender,
             profession: obj.profession,
             isBlocked: obj.isBlocked,
-            isSynced: obj.isSynced
+            isSynced: obj.isSynced,
+            lastSeen: obj.lastSeen
         )
         return contactLite
     }
@@ -832,6 +846,26 @@ final class DBManager: DBManageable {
         return rooms
     }
     
+    func fetchRoomById(roomId: String) -> [RoomModel]? {
+        let r = realm
+        let objs = r.objects(RoomSummaryObject.self)
+            .filter("id == %@", roomId)
+        let messagesArray = Array(objs)
+        return objs.map { o in
+            return RoomModel(
+                id: o.id,
+                name: o.name,
+                avatarUrl: o.avatarUrl,
+                lastMessage: o.lastMessage,
+                lastMessageType: o.lastMessageType ?? "m.text",
+                lastSenderName: o.lastSenderName,
+                unreadCount: o.unreadCount,
+                participantsCount: o.numberOfParticipants,
+                serverTimestamp: o.serverTimestamp,
+                lastServerTimestamp: o.lastServerTimestamp
+            )
+        }
+    }
     /// Streams RoomModel in batches so the UI can progressively render rooms without freezing.
     /// - Parameters:
     ///   - batchSize: how many rooms per emission
@@ -1158,7 +1192,6 @@ final class DBManager: DBManageable {
                         newObject.timestamp = reaction.timestamp
                         obj.reactions.append(newObject)
                     }
-                    
                     r.add(obj, update: .modified)
                 }
             }
@@ -1171,6 +1204,7 @@ final class DBManager: DBManageable {
             autoreleasepool {
                 try? r.write {
                     for m in messages {
+                        print("-------------> m.eventId - \(m.eventId) --- \(m.content)")
                         if let existing = r.object(ofType: MessageObject.self, forPrimaryKey: m.eventId) {
                             var needsUpdate = false
                             
@@ -1184,7 +1218,20 @@ final class DBManager: DBManageable {
                                 existing.receipts = newReceiptsData
                                 needsUpdate = true
                             }
-
+                            
+                            if existing.content != m.content {
+                                existing.content = m.content
+                                needsUpdate = true
+                            }
+                            if existing.lifetime != m.lifetime {
+                                existing.lifetime = m.lifetime
+                                needsUpdate = true
+                            }
+                            
+                            if existing.callStatus != m.callStatus {
+                                existing.callStatus = m.callStatus
+                                needsUpdate = true
+                            }
                             existing.reactions.removeAll()
                             for reaction in m.reactions {
                                 let obj = MessageReactionObject()
@@ -1194,12 +1241,14 @@ final class DBManager: DBManageable {
                                 obj.timestamp = reaction.timestamp
                                 existing.reactions.append(obj)
                             }
+
                             needsUpdate = true
                             
                             // Update only if needed
                             if needsUpdate {
                                 r.add(existing, update: .modified)
                             }
+
 
                         } else {
                             // Message doesn't exist, add it
@@ -1246,6 +1295,7 @@ final class DBManager: DBManageable {
                 receipts:  receipts,
                 messageStatus: MessageStatus(rawValue: o.messageStatus ?? "sent") ?? .sent,
                 inReplyTo: nil, // set below
+                callStatus: o.callStatus
             )
             model.reactions = Array(reactionModels)
             modelMap[o.eventId] = model
@@ -1425,6 +1475,8 @@ final class DBManager: DBManageable {
 
     /// Overwrites the message (or inserts if new)
     func updateMessage(message: ChatMessageModel, inRoom roomId: String, inReplyTo replyToEventId: String? = nil) {
+        print("Callmanager -----------DB updateMessage --\(message.eventId)--\(message.callStatus) -- \(message.lifetime)")
+
         let r = self.realm
         autoreleasepool {
             try? r.write {
@@ -1495,6 +1547,56 @@ final class DBManager: DBManageable {
             ]
             for u in sidecars { try? fm.removeItem(at: u) }
         }
+    }
+    
+    
+    func fetchCallLogsMessages() -> [ChatMessageModel] {
+        let r = realm
+        let objs = r.objects(MessageObject.self)
+            .filter("msgType == %@ OR msgType == %@", "m.voiceCall", "m.videoCall")
+            .sorted(byKeyPath: "timestamp", ascending: true)
+        let messagesArray = Array(objs)
+        
+        // Build map from eventId → model
+        var modelMap: [String: ChatMessageModel] = [:]
+        for o in messagesArray {
+            let receipts = (try? JSONDecoder().decode([MessageReadReceipt].self, from: o.receipts ?? Data())) ?? []
+            
+            let reactionModels = o.reactions.map { r in
+                MessageReaction(
+                    eventId: r.eventId,
+                    userId: r.userId,
+                    key: r.key,
+                    timestamp: r.timestamp
+                )
+            }
+            
+            let model = ChatMessageModel(
+                eventId:   o.eventId,
+                sender:    o.sender,
+                content:   o.content,
+                timestamp: o.timestamp,
+                msgType:   o.msgType,
+                mediaUrl:  o.mediaUrl,
+                mediaInfo: o.mediaInfo?.toModel(),
+                userId:    o.currentUserId ?? o.sender,
+                roomId:    o.roomId,
+                receipts:  receipts,
+                messageStatus: MessageStatus(rawValue: o.messageStatus ?? "sent") ?? .sent,
+                inReplyTo: nil, // set below
+            )
+            model.reactions = Array(reactionModels)
+            modelMap[o.eventId] = model
+        }
+        
+        // Second pass: resolve inReplyTo
+        for o in messagesArray {
+            guard let replyEventId = o.inReplyTo, let model = modelMap[o.eventId] else { continue }
+            model.inReplyTo = modelMap[replyEventId]
+        }
+        
+        // Return in original order
+        return messagesArray.compactMap { modelMap[$0.eventId] }
     }
 }
 

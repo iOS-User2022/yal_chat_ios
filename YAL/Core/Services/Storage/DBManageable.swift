@@ -24,6 +24,7 @@ protocol DBManageable {
     func update(contacts: [ContactModel])
     func upsertContactPresence(userId: String, phoneNumber: String?, currentlyActive: Bool?, lastActiveAgoMs: Int?, avatarURL: String?, statusMessage: String?)
     
+    func fetchRoomById(roomId: String) -> [RoomModel]?
     func fetchRooms() -> [RoomSummaryModel]?
     func saveRoomSummary(_ summary: RoomSummaryModel)
     func loadRoomSummary(roomId: String) -> RoomSummaryModel?
@@ -51,6 +52,7 @@ protocol DBManageable {
     
     func streamRoomHydrations(sortKey: String, ascending: Bool, limit: Int?, batchSize: Int, batchDelay: TimeInterval) -> AnyPublisher<[RoomHydrationPayload], Never>
     func clearAllSync(purgeFiles: Bool)
+    func fetchCallLogsMessages() -> [ChatMessageModel]
     
     func fetchFullRoomSummaries(
         ids: [String]?,

@@ -25,7 +25,7 @@ struct HeaderView: View {
             .padding(.horizontal)
             .padding(.top, safeAreaTop())
             .padding(.bottom, 8)
-            .background(Color.white)
+            .background(Color(Design.Color.darkgrayColor))
         }
     }
 

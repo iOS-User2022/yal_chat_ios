@@ -64,12 +64,17 @@ final class DIContainer {
             APNsTokenStore()
         }.inObjectScope(.container)
         
+        container.register(VoIPTokenStore.self) { r in
+            VoIPTokenStore()
+        }.inObjectScope(.container)
+        
         container.register(PushRegistrationCoordinator.self) { r in
             PushRegistrationCoordinator(
                 registerUC: r.resolve(RegisterPusherUseCase.self)!,
                 unregisterUC: r.resolve(UnregisterPusherUseCase.self)!,
                 apnsStore: r.resolve(APNsTokenStore.self)!,
                 tokenProvider: r.resolve(TokenProvider.self)!,
+                voipTokenStore: r.resolve(VoIPTokenStore.self)!,
             )
         }.inObjectScope(.container)
     }
@@ -97,6 +102,10 @@ final class DIContainer {
                 matrixAPIManager: r.resolve(MatrixAPIManagerProtocol.self)!,
                 tokenProvider: r.resolve(TokenProvider.self)!
             )
+        }
+        
+        container.register(CallRepository.self) { r in
+            CallRepository(apiManager: r.resolve(ApiManageable.self)!)
         }
         // Add ChatRepository, SettingsRepository, etc. here later
     }
@@ -216,6 +225,10 @@ final class DIContainer {
         
         container.register(UnregisterPusherUseCase.self) { r in
             UnregisterPusherUseCase(service: r.resolve(MatrixPusherService.self)!)
+        }
+        
+        container.register(CallViewModel.self){ resolver in
+            CallViewModel(roomService: resolver.resolve(RoomServiceProtocol.self)!, callRepository: resolver.resolve(CallRepository.self)!)
         }
     }
 }

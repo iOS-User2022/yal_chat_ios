@@ -20,14 +20,14 @@ final class PushRegistrationRepository: PushRegistrationRepositoryProtocol {
         self.tokenProvider = tokenProvider
     }
 
-    func registerPusher(deviceTokenHex: String) -> AnyPublisher<Void, Error> {
+    func registerPusher(deviceTokenHex: String, type: PusherType) -> AnyPublisher<Void, Error> {
         guard let base64Token = deviceTokenHex.base64FromHex else {
             return Fail(error: PushError.missingAccessToken).eraseToAnyPublisher()
         }
             
         let req = MatrixPusherSetRequest(
             kind: "http",
-            appId: DeviceInfo.bundleIdentifier, // "com.echelonera.yalchat"
+            appId: (type == .apns) ? DeviceInfo.bundleIdentifier : DeviceInfo.bundleIdentifier.appending(".voip"),
             pushkey: base64Token,
             appDisplayName: DeviceInfo.appDisplayName,
             deviceDisplayName: DeviceInfo.deviceDisplayName, // wrap UIDevice.current.name

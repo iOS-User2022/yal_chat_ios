@@ -15,25 +15,43 @@ struct TabFiltersView<Filter: Hashable & RawRepresentable>: View where Filter.Ra
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 16) {
-                ForEach(filters, id: \..self) { filter in
-                    Button(action: {
+            HStack(spacing: 12) {
+                ForEach(filters, id: \.self) { filter in
+                    Button {
                         selectedFilter = filter
-                    }) {
-                        VStack(spacing: 11) {
-                            Text(filter.rawValue)
-                                .font(Design.Font.medium(12))
-                                .foregroundColor(selectedFilter == filter ? Design.Color.headingText : Design.Color.grayText)
-
-                            Capsule()
-                                .fill(selectedFilter == filter ? Design.Color.headingText : Design.Color.clear)
-                                .frame(height: 2)
-                        }
+                    } label: {
+                        Text(filter.rawValue)
+                            .font(Design.Font.medium(13))
+                            .foregroundColor(
+                                selectedFilter == filter
+                                ? Design.Color.headingText
+                                : Design.Color.grayText
+                            )
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 4)
+                            .background(
+                                Capsule()
+                                    .fill(
+                                        selectedFilter == filter
+                                        ? Design.Color.white
+                                        : Color.clear
+                                    )
+                            )
+                            .overlay(
+                                Capsule()
+                                    .stroke(
+                                        Design.Color.white.opacity(
+                                            selectedFilter == filter ? 0 : 0.3
+                                        ),
+                                        lineWidth: 1
+                                    )
+                            )
                     }
                 }
             }
             .padding(.horizontal, 20)
-            .frame(height: 28)
+            .padding(.top, 16)
+            .padding(.bottom, 8)
         }
     }
 }
@@ -66,8 +84,6 @@ enum GroupFilter: String, CaseIterable {
 enum CallFilter: String, CaseIterable {
     case all = "All"
     case missed = "Missed"
-    case incoming = "Incoming"
-    case outgoing = "Outgoing"
 }
 
 enum ContactFilter: String, CaseIterable {
@@ -75,8 +91,4 @@ enum ContactFilter: String, CaseIterable {
     case frequentlyUsed = "Frequent"
     case recent = "Recent"
     case blocked = "Blocked"
-}
-
-#Preview {
-    TabFiltersView(filters: ChatFilter.allCases, selectedFilter: .constant(.all))
 }

@@ -14,6 +14,10 @@ struct ChatHeaderView: View {
     let image: String?
     let color: Color?
     var backAction: (() -> Void)?
+    var videoCallAction: (() -> Void)?
+    var voiceCallAction: (() -> Void)?
+    var menuAction: (() -> Void)?
+
     @State private var downloadedImage: UIImage?
     private let processQ = DispatchQueue(label: "chat.vm.process", qos: .userInitiated)
 
@@ -39,7 +43,7 @@ struct ChatHeaderView: View {
                 } else {
                     Text(getInitials(from: title))
                         .font(.system(size: 16, weight: .bold))
-                        .foregroundColor(Design.Color.primaryText.opacity(0.7))
+                        .foregroundColor(Design.Color.primaryTextColor.opacity(0.7))
                         .frame(width: 48, height: 48)  // Set the circle size
                         .background(color.opacity(0.3))
                         .clipShape(Circle())
@@ -110,22 +114,46 @@ struct ChatHeaderView: View {
             VStack(alignment: .leading, spacing: 8) {
                 Text(title)
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(Design.Color.primaryText)
+                    .foregroundColor(Design.Color.primaryTextColor)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.top,0)
                 Text(subtitle)
                     .font(Design.Font.regular(12))
-                    .foregroundColor(Design.Color.primaryText.opacity(0.4))
+                    .foregroundColor(Design.Color.primaryTextColor.opacity(0.4))
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.top,-8)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             
+            Spacer()
+            
+            Button(action: {
+                videoCallAction?()
+            }) {
+                Image("Rectangle 8")
+                    .resizable()
+                    .frame(width: 20, height: 20)
+            }
             Spacer().frame(width: 12)
+            Button(action: {
+                voiceCallAction?()
+            }) {
+                Image("Rectangle 9")
+                    .resizable()
+                    .frame(width: 20, height: 20)
+            }
+            Spacer().frame(width: 4)
+            Button(action: {
+                menuAction?()
+            }) {
+                Image("marketeq_menu")
+                    .resizable()
+                    .frame(width: 24, height: 24)
+            }
 
         }
         .padding(.horizontal, 20)
         .padding(.bottom, 8)
-        .background(Color.white)
+        .background(Color(Design.Color.darkgrayColor))
     }
 }

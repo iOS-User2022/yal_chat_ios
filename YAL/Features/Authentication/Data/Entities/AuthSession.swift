@@ -14,4 +14,5 @@ struct AuthSession: Codable {
     let accessToken: String
     let refreshToken: String
     let matrixUrl: String
+    let jitsiToken: String
 }

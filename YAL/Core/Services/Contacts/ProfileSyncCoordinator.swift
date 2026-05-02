@@ -89,7 +89,7 @@ final class ProfileSyncCoordinator {
                 let formattedUserId = userId.formattedMatrixUserId
                 if var c = ContactManager.shared.contact(for: formattedUserId) {
                     c.userId = formattedUserId
-                    c.phoneNumber = profile.phone ?? ""
+                    c.phoneNumber = profile.mobile ?? ""
                     c.displayName = profile.name
                     c.emailAddresses = profile.email.map { [$0] } ?? []
                     c.imageURL = profile.profilePic
@@ -103,7 +103,7 @@ final class ProfileSyncCoordinator {
                     let contact = ContactLite(
                         userId: formattedUserId,
                         fullName: "",
-                        phoneNumber: profile.phone ?? "",
+                        phoneNumber: profile.mobile ?? "",
                         emailAddresses: profile.email.map { [$0] } ?? [],
                         imageURL: profile.mxcProfile,
                         avatarURL: profile.mxcProfile,

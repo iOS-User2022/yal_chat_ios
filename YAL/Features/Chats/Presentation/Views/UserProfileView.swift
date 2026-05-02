@@ -7,6 +7,7 @@
 
 
 import SwiftUI
+import AVFoundation
 import UniformTypeIdentifiers
 
 struct UserProfileView: View {
@@ -21,11 +22,16 @@ struct UserProfileView: View {
     let roomModel: RoomModel
     @Binding var navPath: NavigationPath
     @State var sharedMedia: [ChatMessageModel]?
+    @StateObject private var chatViewModel: ChatViewModel
+    @State private var navigateToCallScreen = false
+    @EnvironmentObject var callManager: CallManager
     
     @State private var showBlock = false
     @State private var showUnBlock = false
     @State private var showDelete = false
     @State private var showCopiedToast = false
+    @State private var showClearChat = false
+    @State private var showClearChatSucccussToast: Bool = false
 
     init(user: ContactModel,
          room: RoomModel,
@@ -38,6 +44,10 @@ struct UserProfileView: View {
          onClearChat: @escaping () -> Void) {
         let vm = DIContainer.shared.container.resolve(UserProfileViewModel.self, arguments: user, room)!
         _viewModel = StateObject(wrappedValue: vm)
+        
+        let chatVM = DIContainer.shared.container.resolve(ChatViewModel.self)!
+        _chatViewModel = StateObject(wrappedValue: chatVM)
+        
         self.roomModel = room
         self.sharedMedia = sharedMediaPayload
         self._navPath = navPath
@@ -101,6 +111,23 @@ struct UserProfileView: View {
                         onCancel: { showDelete = false },
                         isGroup: roomModel.isGroup
                     )
+                }
+                
+                if showClearChat {
+                    ClearChatView(
+                        onClear: {
+                            onClearChat()
+                            showClearChat = false
+                            viewModel.showAlertForSuccess()
+                            showClearChatSucccussToast = true
+                        },
+                        onCancel: { showClearChat = false }
+                    )
+                }
+                if showClearChatSucccussToast, let alertModel = viewModel.alertModel {
+                    AlertView(model: alertModel) {
+                        showClearChatSucccussToast = false
+                    }
                 }
             }
             .overlay{
@@ -188,20 +215,78 @@ struct UserProfileView: View {
                         .frame(maxWidth: .infinity, alignment: .center)
                 }
                 Spacer().frame(height: 20)
+                
                 HStack {
+                    var eventId = UUID().uuidString
+                    
+                    Button {
+                        chatViewModel.currentRoomId = roomModel.id
+                        chatViewModel.sendCallMessage(
+                            callState: .outgoing,
+                            isVideo: false,
+                            eventId: eventId
+                        ) { result in
+                            switch result {
+                                case .success(let newEventId):
+                                    print("Message sent successfully: \(newEventId)")
+                                    eventId = newEventId
+                                    CallManager.shared.eventId = newEventId
+                                    CallManager.shared.updateCallStatus()
+
+                                    //chatViewModel.becomeActiveCallMessageHandler(eventID: newEventId)
+                                case .failure(let error):
+                                    print("Failed to send call message:", error.localizedDescription)
+                            }
+                        }
+                        CallManager.shared.presentCall(for: roomModel)
+                        CallManager.shared.isVideoCall = false
+//                        $navPath.wrappedValue.append(NavigationTarget.callManager(room: roomModel, autoAccept: false))
+                    } label: {
+                        Image("detail_audiocall")
+                    }
+                    .disabled(CallManager.shared.isCallInProgress())
+
+                    Button {
+                        chatViewModel.currentRoomId = roomModel.id
+                        chatViewModel.sendCallMessage(
+                            callState: .outgoing,
+                            isVideo: true,
+                            eventId: eventId
+                        ) { result in
+                            switch result {
+                                case .success(let newEventId):
+                                    print("Message sent successfully: \(newEventId)")
+                                    eventId = newEventId
+                                    //chatViewModel.becomeActiveCallMessageHandler(eventID: newEventId)
+                                    CallManager.shared.eventId = newEventId
+                                    CallManager.shared.updateCallStatus()
+
+                                case .failure(let error):
+                                    print("Failed to send call message:", error.localizedDescription)
+                            }
+                        }
+                        CallManager.shared.presentCall(for: roomModel)
+                        CallManager.shared.isVideoCall = true
+//                        $navPath.wrappedValue.append(NavigationTarget.callManager(room: roomModel, autoAccept: false))
+                    } label: {
+                        Image("detail_videocall")
+                    }.padding(.horizontal, 40)
+                    .disabled(CallManager.shared.isCallInProgress())
+
+                    
                     Button(action: {
-                        // Pop UserProfileView to return to ChatView and trigger search
+                        
                         NotificationCenter.default.post(
-                                name: Notification.Name("ChatSearchTapped"),
-                                object: nil
-                            )
+                            name: Notification.Name("ChatSearchTapped"),
+                            object: nil
+                        )
                         navPath.removeLast()
-                        // Note: ChatView will handle isSearching via onReturnFromProfile
+                        
                     }) {
-                        Image("Search")
+                        Image("detail_search")
                             .resizable()
                             .scaledToFit()
-                            .frame(width: 40, height: 40)
+                            .frame(width: 46, height: 46)
                     }
                     .buttonStyle(PlainButtonStyle())
                 }
@@ -229,7 +314,7 @@ struct UserProfileView: View {
         }
         .ignoresSafeArea(.all)
         .frame(maxWidth: .infinity, alignment: .topLeading)
-        .background(Design.Color.white)
+        .background(Design.Color.backgroundColor)
         .overlay(alignment: .top) {
             if showCopiedToast {
                 ToastView(message: "Copied!")
@@ -242,16 +327,16 @@ struct UserProfileView: View {
         VStack(alignment: .leading, spacing: 8) {
             Text("About")
                 .font(Design.Font.medium(12))
-                .foregroundColor(Design.Color.primaryText)
+                .foregroundColor(Design.Color.primaryTextColor)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
             Text(viewModel.userDetails?.statusMessage ?? "No about info available")
                 .font(Design.Font.regular(14))
-                .foregroundColor(Design.Color.primaryText)
+                .foregroundColor(Design.Color.primaryTextColor)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 20)
-        .background(Design.Color.white.opacity(0.6))
+        .background(Color(Design.Color.darkgrayColor))
         .cornerRadius(10)
     }
 
@@ -259,24 +344,128 @@ struct UserProfileView: View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Shared Media")
                 .font(Design.Font.medium(12))
-                .foregroundColor(Design.Color.primaryText)
+                .foregroundColor(Design.Color.primaryTextColor)
 
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 4) {
-                    if let media = sharedMedia {
-                        ForEach(media, id: \.self) { image in
-                            ImageOverlayView(url: image.mediaUrl)
+                HStack(spacing: 6) {
+
+                    if let media = sharedMedia, !media.isEmpty {
+
+                        ForEach(media, id: \.self) { item in
+                            SharedMediaThumbnailView(message: item)
+                                .onTapGesture {
+                                    openFullPreview(for: item)
+                                }
                         }
+
                     } else {
-                        Text("no media is shared")
+                        Text("No shared media")
+                            .font(Design.Font.regular(14))
+                            .foregroundColor(Design.Color.primaryTextColor)
                     }
+
                 }
             }
         }
         .padding(.vertical, 20)
         .padding(.horizontal, 16)
-        .background(Design.Color.white.opacity(0.6))
+        .background(Color(Design.Color.darkgrayColor))
         .cornerRadius(10)
+    }
+    
+    func openFullPreview(for item: ChatMessageModel) {
+        let messageId = item.id
+        onBack()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+            NotificationCenter.default.post(
+                name: .deepLinkScrollToMessage,
+                object: nil,
+                userInfo: ["messageId": messageId]
+            )
+        }
+    }
+    
+    struct SharedMediaThumbnailView: View {
+        let message: ChatMessageModel
+
+        @StateObject private var loader = MediaLoader()
+        @State private var thumbnail: UIImage?
+
+        var body: some View {
+            Group {
+                switch MediaType(rawValue: message.msgType)! {
+                case .image, .gif:
+                    if let img = loader.image {
+                        Image(uiImage: img)
+                            .resizable()
+                            .scaledToFill()
+                    } else {
+                        Rectangle().fill(.gray.opacity(0.2))
+                    }
+
+                case .video:
+
+                    if let url = loader.localURL {
+                        ZStack {
+                            if let thumb = thumbnail {
+                                Image(uiImage: thumb).resizable().scaledToFit()
+                            } else {
+                                Rectangle().fill(Color.black.opacity(0.1)).frame(height: 200)
+                            }
+                            Image(systemName: "play.circle.fill")
+                                .font(.system(size: 50)).foregroundColor(.white)
+                        }
+                        .onAppear {
+                            if thumbnail == nil { generateVideoThumbnail(for: url) }
+                        }
+                    } else {
+                        ZStack {
+                            Rectangle().fill(.black.opacity(0.2))
+                            Image(systemName: "play.circle.fill")
+                                .font(.system(size: 28))
+                                .foregroundColor(.white)
+                        }
+                    }
+
+                case .audio:
+                    ZStack {
+                        Rectangle()
+                            .fill(.blue.opacity(0.15))
+                        Image(systemName: "waveform")
+                            .font(.system(size: 24))
+                            .foregroundColor(.blue)
+                    }
+
+                case .document:
+                    ZStack {
+                        Rectangle()
+                            .fill(.gray.opacity(0.15))
+                        Image(systemName: "doc.text")
+                            .font(.system(size: 24))
+                            .foregroundColor(.gray)
+                    }
+                }
+            }
+            .frame(width: 80, height: 80)
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .onAppear {
+                loader.load(remoteURL: message.mediaUrl ?? "",
+                            type: MediaType(rawValue: message.msgType)!)
+                
+            }
+        }
+
+        private func generateVideoThumbnail(for url: URL) {
+            let asset = AVAsset(url: url)
+            let gen = AVAssetImageGenerator(asset: asset)
+            gen.appliesPreferredTrackTransform = true
+            let t = CMTime(seconds: 1, preferredTimescale: 60)
+            DispatchQueue.global().async {
+                if let cg = try? gen.copyCGImage(at: t, actualTime: nil) {
+                    DispatchQueue.main.async { thumbnail = UIImage(cgImage: cg) }
+                }
+            }
+        }
     }
 
     struct ImageOverlayView: View {
@@ -406,7 +595,7 @@ struct UserProfileView: View {
         VStack(alignment: .leading, spacing: 8) {
             Text("\(viewModel.sharedGroups.count) Group\(viewModel.sharedGroups.count == 1 ? "" : "s") in common")
                 .font(Design.Font.medium(12))
-                .foregroundColor(Design.Color.primaryText)
+                .foregroundColor(Design.Color.primaryTextColor)
             
             ForEach(viewModel.sharedGroups.prefix(3), id: \.id) { group in
                 HStack(spacing: 12) {
@@ -414,10 +603,10 @@ struct UserProfileView: View {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(group.name)
                             .font(Design.Font.regular(14))
-                            .foregroundColor(Design.Color.primaryText)
+                            .foregroundColor(Design.Color.primaryTextColor)
                         Text(group.participants.map { $0.firstNameOrFallback }.joined(separator: ", "))
                             .font(Design.Font.regular(12))
-                            .foregroundColor(Design.Color.primaryText.opacity(0.7))
+                            .foregroundColor(Design.Color.primaryTextColor.opacity(0.7))
                             .lineLimit(1)
                     }
                 }
@@ -434,7 +623,7 @@ struct UserProfileView: View {
                         
                         Text("Create new Group with \(firstName)")
                             .font(Design.Font.semiBold(14))
-                            .foregroundColor(Design.Color.primaryText)
+                            .foregroundColor(Design.Color.primaryTextColor)
                     }
                     .padding(.vertical, 8)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -442,7 +631,7 @@ struct UserProfileView: View {
             }
         }
         .padding()
-        .background(Design.Color.white.opacity(0.6))
+        .background(Color(Design.Color.darkgrayColor))
         .cornerRadius(10)
     }
 
@@ -454,10 +643,13 @@ struct UserProfileView: View {
             }) {
                 HStack(alignment: .bottom, spacing: 12) {
                     Image(roomModel.isMuted ? "notification-unmute" : "notification-mute")
+                        .renderingMode(.template)
+                        .resizable()
+                        .foregroundColor(.white)
                         .frame(width: 16, height: 16)
                     Text("Notifications")
                         .font(Design.Font.regular(14))
-                        .foregroundColor(Design.Color.primaryText.opacity(0.6))
+                        .foregroundColor(Design.Color.primaryTextColor.opacity(0.6))
                     Spacer()
                 }
                 .padding(.horizontal, 32)
@@ -470,10 +662,13 @@ struct UserProfileView: View {
             }) {
                 HStack(alignment: .bottom, spacing: 12) {
                     Image(viewModel.isFavorite ? "un-favorite" : "favorite")
+                        .resizable()
+                        .renderingMode(.template)
+                        .foregroundColor(.white)
                         .frame(width: 16, height: 16)
                     Text(viewModel.isFavorite ? "Remove from favorites" : "Add to favorites")
                         .font(Design.Font.regular(14))
-                        .foregroundColor(Design.Color.primaryText.opacity(0.6))
+                        .foregroundColor(Design.Color.primaryTextColor.opacity(0.6))
                     Spacer()
                 }
                 .padding(.horizontal, 32)
@@ -482,15 +677,18 @@ struct UserProfileView: View {
             Divider()
 
             Button(action: {
-                onClearChat()
+               showClearChat = true
             }) {
                 HStack(alignment: .bottom, spacing: 12) {
                     Image("broom")
+                        .resizable()
+                        .renderingMode(.template)
+                        .foregroundColor(.white)
                         .frame(width: 16, height: 16)
                     
                     Text("Clear Chat")
                         .font(Design.Font.regular(14))
-                        .foregroundColor(Design.Color.primaryText.opacity(0.6))
+                        .foregroundColor(Design.Color.primaryTextColor.opacity(0.6))
                     Spacer()
                 }
                 .padding(.horizontal, 32)
@@ -506,7 +704,7 @@ struct UserProfileView: View {
                                    .frame(width: 16, height: 16)
                                Text("Unblock")
                                    .font(Design.Font.regular(14))
-                                   .foregroundColor(Design.Color.primaryText.opacity(0.6))
+                                   .foregroundColor(Design.Color.primaryTextColor.opacity(0.6))
                                Spacer()
                            }
                            .padding(.horizontal, 32)
@@ -544,8 +742,12 @@ struct UserProfileView: View {
                 .padding(.horizontal, 32)
                 .padding(.vertical, 12)
             }
-            .background(Design.Color.lightGrayBackground)
+            .background(Color(Design.Color.darkgrayColor))
             .cornerRadius(8)
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(Design.Color.destructiveRed, lineWidth: 1)
+            )
         }
         .padding(.top, 16)
         .padding(.bottom, 24)
@@ -581,7 +783,7 @@ private struct UserImageView: View {
             } else {
                 Text(getInitials(from: roomModel.name))
                     .font(.system(size: 16, weight: .bold))
-                    .foregroundColor(Design.Color.primaryText.opacity(0.7))
+                    .foregroundColor(Design.Color.primaryTextColor.opacity(0.7))
                     .frame(width: 48, height: 48)  // Set the circle size
                     .background(roomModel.randomeProfileColor.opacity(0.3))
                     .clipShape(Circle())
@@ -744,7 +946,7 @@ struct NotificationSettingsView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Notifications")
                     .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(.black)
+                    .foregroundColor(Design.Color.primaryTextColor)
             }
             .padding(.leading, 4)
             
@@ -760,7 +962,7 @@ struct NotificationSettingsView: View {
         HStack {
             Text("Mute")
                 .font(.body)
-                .foregroundColor(selectedMuteDuration == nil ? .gray : .black)
+                .foregroundColor(!isMuted ? .gray : .white)
             
             Spacer()
             
@@ -770,18 +972,21 @@ struct NotificationSettingsView: View {
             .toggleStyle(SwitchToggleStyle(tint: Design.Color.blue))
             .labelsHidden()
             .frame(width: 40)
-            .disabled(selectedMuteDuration == nil)
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 6)
-        .background(Color.gray.opacity(0.1))
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(Color(Design.Color.darkgrayColor))
+        )
+        .padding(.horizontal)
     }
 
     var muteDurationOptionsSection: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text("Duration Options")
                 .font(.subheadline)
-                .foregroundColor(selectedMuteDuration == nil ? .gray : .black)
+                .foregroundColor(!isMuted ? .gray : .white)
                 .padding([.leading, .top], 20)
 
             VStack(alignment: .leading, spacing: 0) {
@@ -800,10 +1005,14 @@ struct NotificationSettingsView: View {
                         .padding(.leading, 20)
                         .padding(.vertical, 6)
                     }
-                    .foregroundColor(selectedMuteDuration == nil ? .gray : .black)
+                    .foregroundColor(!isMuted ? .gray : .white)
                 }
             }.padding(.bottom, 20)
-        }.background(Color.gray.opacity(0.1))
+        }.background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(Color(Design.Color.darkgrayColor))
+        )
+        .padding(.horizontal)
     }
 }
 struct HapticFeedback {

@@ -15,15 +15,17 @@ enum AppScreen: Hashable {
 }
 
 struct TabContainerView: View {
-    @State private var selectedTab: Tab = .sms
+    @State private var selectedTab: Tab = .contacts
     @State private var navPath = NavigationPath()
     @State private var showProfileMenu = false
     @StateObject private var viewModel: TabBarViewModel
     @StateObject private var profileViewModel: ProfileViewModel
     @StateObject private var keyboard = KeyboardResponder()
+    @StateObject private var callStateManager = CallStateManager.shared
     @EnvironmentObject var router: Router
     @EnvironmentObject var appSettings: AppSettings
-    
+    @EnvironmentObject var callManager: CallManager
+
     private func safeAreaTop() -> CGFloat {
         UIApplication.shared.topSafeAreaInset
     }
@@ -38,7 +40,7 @@ struct TabContainerView: View {
     
     var body: some View {
         GeometryReader { geometry in
-            ZStack {
+            ZStack(alignment: .leading) {
                 NavigationStack(path: $navPath) {
                     BaseScreenContainer(
                         onMenuTap: {
@@ -53,15 +55,17 @@ struct TabContainerView: View {
                             Group {
                                 if keyboard.currentHeight == 0 {
                                     VStack(spacing: 0) {
-                                        Divider()
-                                            .frame(height: 1)
-                                            .background(Design.Color.mediumGray)
+//                                        Divider()
+//                                            .frame(height: 1)
+//                                            .background(Design.Color.mediumGray)
 
                                         CustomTabBarView(selectedTab: $selectedTab)
-                                            .background(Design.Color.white.opacity(0.95))
+                                            .background(Color(Design.Color.darkgrayColor))
                                     }
-                                    .padding(.bottom, geometry.safeAreaInsets.bottom + 10)
-                                    .background(Design.Color.white)
+                                    .background(
+                                        Color(Design.Color.darkgrayColor)
+                                            .ignoresSafeArea(edges: [.bottom, .leading, .trailing])
+                                    )
                                     .transition(.move(edge: .bottom).combined(with: .opacity))
                                 }
                             }
@@ -95,13 +99,24 @@ struct TabContainerView: View {
                 //.ignoresSafeArea(.all, edges: .top)
                 
                 if showProfileMenu {
-                    // Slide-in drawer from the left
+
+                    // Background dim
+                    Color.black.opacity(0.4)
+                        .ignoresSafeArea()
+                        .onTapGesture {
+                            withAnimation {
+                                showProfileMenu = false
+                            }
+                        }
+                        .zIndex(0)
+
+                    // Drawer
                     ProfileMenuView(closeAction: {
                         withAnimation {
                             showProfileMenu = false
                         }
                     })
-                    //.ignoresSafeArea(.all, edges: .top)
+                    .frame(width: geometry.size.width * 0.85)
                     .offset(x: showProfileMenu ? 0 : -geometry.size.width)
                     .transition(.move(edge: .leading))
                     .animation(.easeInOut(duration: 0.3), value: showProfileMenu)

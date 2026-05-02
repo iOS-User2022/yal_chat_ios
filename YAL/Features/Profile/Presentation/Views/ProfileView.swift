@@ -40,92 +40,112 @@ struct ProfileView: View {
     var body: some View {
         ZStack(alignment: .topLeading) {
             // Base Background
-            VStack(spacing: 0) {
-                Color.white
-                    .frame(height: 226)
+            VStack(spacing: UIConstants.NavBar.zeroSpacing) {
+                Color(hex: "#0A171F")
+                    .frame(height: UIConstants.Layout.ProfileView.topBackgroundHeight)
                     .edgesIgnoringSafeArea(.horizontal)
-                Design.Color.appGradient
+                Color(hex: "#202D35CC")
                     .edgesIgnoringSafeArea([.horizontal, .bottom])
             }
-            
+            .ignoresSafeArea()
             // MARK: Profile Contents
-            VStack(spacing: 0) {
-                Spacer(minLength: 80)
-                
+            VStack(spacing: UIConstants.NavBar.zeroSpacing) {
+                Spacer(minLength: UIConstants.Layout.ProfileView.topBackgroundHeight / 3)
                 // Profile image
                 ZStack(alignment: .bottomTrailing) {
                     profileImageSection()
                     
                     Button(action: { isImagePickerPresented = true }) {
+                        
                         Circle()
-                            .fill(Design.Color.appGradient)
-                            .frame(width: 52, height: 52)
+                            .frame(
+                                width: UIConstants.Layout.ProfileView.CameraButton.size,
+                                height: UIConstants.Layout.ProfileView.CameraButton.size
+                            )
                             .overlay(
-                                Image("edit-light")
+                                Image(.editCamera)
                                     .resizable()
                                     .scaledToFit()
-                                    .frame(width: 20, height: 20)
-                                    .foregroundColor(.white)
+                                    .frame(
+                                        width: UIConstants.Layout.ProfileView.CameraButton.size,
+                                        height: UIConstants.Layout.ProfileView.CameraButton.size
+                                    )
                             )
-                            .overlay(Circle().stroke(Color.white, lineWidth: 2))
-                            .shadow(radius: 4)
-                            .offset(x: -6, y: -6)
+                            .overlay(Circle().stroke(Color.white, lineWidth:                                     UIConstants.Layout.ProfileView.CameraButton.strokeWidth))
+                            .shadow(radius: UIConstants.Layout.ProfileView.CameraButton.shadowRadius)
+                            .offset(
+                                x: -UIConstants.Layout.ProfileView.CameraButton.offset,
+                                y: -UIConstants.Layout.ProfileView.CameraButton.offset
+                            )
                     }
                 }
-                .padding(.top, 80)
+                .padding(.top, UIConstants.Layout.ProfileView.ProfileImage.topPadding)
                 .onAppear(perform: downloadProfileImage)
                 
-                ScrollView {
-                    VStack(spacing: 24) {
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: UIConstants.Layout.ProfileView.scrollContentSpacing) {
                         aboutSection()
-                        profileField(icon: "user-light", title: "Name", value: viewModel.originalProfile?.name ?? "")
-                        profileField(icon: "call-light", title: "Mobile", value: viewModel.originalProfile?.mobile ?? "")
-                        profileField(icon: "sms-light", title: "Email", value: viewModel.originalProfile?.email ?? "")
-                        profileField(icon: "calendar-light", title: "D.O.B.", value: viewModel.originalProfile?.dob ?? "")
-                        profileField(icon: "briefcase-light", title: "Profession", value: viewModel.originalProfile?.profession ?? "")
+                            .padding(.horizontal, UIConstants.Layout.ProfileView.sectionHPadding)
+                            .padding(.top, UIConstants.Layout.ProfileView.aboutTopPadding)
                         
-                        Button(action: { isEditSheetPresented = true }) {
-                            HStack {
-                                Image("edit")
-                                Spacer().frame(width: 8)
-                                Text("Edit Profile")
-                                    .font(Design.Font.regular(14))
-                                    .foregroundColor(Design.Color.headingText)
-                            }
-                            .frame(maxWidth: .infinity)
-                            .padding()
-                            .background(Design.Color.lightGrayBackground)
-                            .cornerRadius(8)
-                            .shadow(radius: 2)
+                        VStack(spacing: UIConstants.Layout.ProfileView.fieldGroupSpacing) {
+                            
+                            profileField(icon: "edit_user", title: Constants.name.localized, value: viewModel.originalProfile?.name ?? "")
+                            profileField(icon: "call_gray", title: Constants.mobile.localized, value: viewModel.originalProfile?.mobile ?? "")
+                            profileField(icon: "mail", title: Constants.email.localized, value: viewModel.originalProfile?.email ?? "")
+                            profileField(icon: "calender_icon", title: Constants.dob.localized, value: viewModel.originalProfile?.dob ?? "")
+                            profileField(icon: "job", title:Constants.profession1.localized, value: viewModel.originalProfile?.profession ?? "")
                         }
+                        .padding(.horizontal, UIConstants.Layout.ProfileView.sectionHPadding)
+                        
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.bottom, 40)
-                    .padding(.top, 20)
+                    .padding(.horizontal, UIConstants.Layout.ProfileView.sectionHPadding)
+                    
+                    Button(action: { isEditSheetPresented = true }) {
+                        HStack {
+                            Text(Constants.editProfile.localized)
+                                .font(Design.Font.semiBold(14))
+                                .foregroundColor(Design.Color.white)
+                        }
+                        .frame(
+                            width: UIConstants.Layout.ProfileView.EditButton.width,
+                            height: UIConstants.Layout.ProfileView.EditButton.height
+                        )                        .padding()
+                            .background(Design.Color.appGradient)
+                            .cornerRadius(UIConstants.Layout.ProfileView.EditButton.cornerRadius)
+                            .shadow(radius: UIConstants.Layout.ProfileView.EditButton.shadowRadius)
+                    }
+                    .padding(.horizontal, UIConstants.Layout.ProfileView.EditButton.hPadding)
+                    .padding(.bottom, UIConstants.Layout.ProfileView.EditButton.bottomPadding)
+                    .padding(.top, UIConstants.Layout.ProfileView.EditButton.topPadding)
                 }
             }
             .safeAreaInset(edge: .top) {
-                Color.clear.frame(height: 0)
+                Color.clear.frame(height: UIConstants.NavBar.zeroSpacing)
             }
-
+            
             // MARK: Custom Back Button (Top Left)
             Button(action: {
                 if !navPath.isEmpty {
                     navPath.removeLast()
                 }
             }) {
-                HStack(spacing: 10) {
-                    Image("back")
-                        .resizable()
-                        .frame(width: 20, height: 20)
-                    Text("Profile")
-                        .font(Design.Font.bold(16))
-                        .foregroundColor(Design.Color.primaryText)
+                HStack(spacing: UIConstants.Layout.ProfileView.BackButton.hSpacing) {
+                    Image(.chevronLeft)
+                        .font(.system(
+                            size: UIConstants.Layout.ProfileView.BackButton.iconSize,
+                            weight: .semibold
+                        ))
+                        .foregroundColor(Design.Color.white)
+                    
+                    Text(Constants.profile.localized)
+                        .font(Design.TextStyle.profileNavTitle)
+                        .foregroundColor(Design.Color.white)
                 }
-                .padding(.vertical, 10)
+                .padding(.vertical, UIConstants.Layout.verticalPadding)
             }
-            .padding(.top, safeAreaTop() + 10)
-            .padding(.leading, 10)
+            .padding(.top, safeAreaTop() + UIConstants.Layout.ProfileView.backButtonTopOffset)
+            .padding(.leading, UIConstants.Layout.ProfileView.backButtonLeading)
             .zIndex(2)
             
             // MARK: Alerts
@@ -148,6 +168,8 @@ struct ProfileView: View {
         .onAppear {
             viewModel.loadProfile()
             downloadProfileImage()
+            print("user name is 1234 : \( viewModel.originalProfile?.name ?? "") ")
+
         }
         .sheet(isPresented: $isImagePickerPresented) {
             ImagePicker { url, fileName, mimeType, filesize in
@@ -166,7 +188,31 @@ struct ProfileView: View {
             }
         }
     }
-
+    // MARK: - Header Section
+    @ViewBuilder
+    private func headerSection() -> some View {
+        HStack(spacing: UIConstants.Layout.internalPadding) {
+            Button(action: {
+                if !navPath.isEmpty {
+                    navPath.removeLast()
+                }
+            }) {
+                HStack(spacing: UIConstants.Layout.ProfileView.BackButton.hSpacing) {
+                    Image(.chevronLeft)
+                        .font(.system(
+                            size: UIConstants.Layout.ProfileView.BackButton.iconSize,
+                            weight: .semibold
+                        ))
+                    Text(Constants.profile.localized)
+                        .font(Design.TextStyle.profileNavTitleLg)
+                }
+                .foregroundColor(.white)
+            }
+            Spacer()
+        }
+        .padding(.horizontal, UIConstants.Layout.ProfileView.sectionHPadding)
+        .padding(.bottom, UIConstants.Layout.smallBottomPadding)
+    }
     // MARK: - Helpers
 
     private func downloadProfileImage() {
@@ -239,13 +285,13 @@ struct ProfileView: View {
                                 }
                                 
                             } catch {
-                                print("❌ Media decode error — \(error.localizedDescription) | \(localURL.path)")
+                                print("Media decode error — \(error.localizedDescription) | \(localURL.path)")
                             }
                         }
                     }
                     
                 case .failure(let error):
-                    print("❌ Failed to download media: \(error)")
+                    print("Failed to download media: \(error)")
                 }
             }
         )
@@ -280,15 +326,18 @@ struct ProfileView: View {
             Image(uiImage: selectedImage)
                 .resizable()
                 .scaledToFill()
-                .frame(width: 200, height: 200)
+                .frame(
+                    width: UIConstants.Layout.ProfileView.ProfileImage.size,
+                    height: UIConstants.Layout.ProfileView.ProfileImage.size
+                )
                 .clipShape(Circle())
-                .overlay(Circle().stroke(Color.white, lineWidth: 4))
-                .shadow(radius: 6)
+                .shadow(radius: UIConstants.Layout.ProfileView.ProfileImage.shadowRadius)
+            
                 .onTapGesture { showFullScreen = true }
                 .fullScreenCover(isPresented: $showFullScreen) {
                     FullScreenImageView(
                         source: .uiImage(selectedImage),
-                        userName: "",
+                        userName: viewModel.originalProfile?.name ?? "",
                         timeText: "",
                         isPresented: $showFullScreen
                     )
@@ -297,10 +346,13 @@ struct ProfileView: View {
             Image(uiImage: image)
                 .resizable()
                 .scaledToFill()
-                .frame(width: 200, height: 200)
+                .frame(
+                    width: UIConstants.Layout.ProfileView.ProfileImage.size,
+                    height: UIConstants.Layout.ProfileView.ProfileImage.size
+                )
                 .clipShape(Circle())
-                .overlay(Circle().stroke(Color.white, lineWidth: 4))
-                .shadow(radius: 6)
+                .shadow(radius: UIConstants.Layout.ProfileView.ProfileImage.shadowRadius)
+            
                 .onTapGesture {
                     fullScreenUIImage = downloadedImage
                     showFullScreen = true
@@ -309,52 +361,64 @@ struct ProfileView: View {
                     if let fullScreenUIImage = self.fullScreenUIImage {
                         FullScreenImageView(
                             source: .uiImage(fullScreenUIImage),
-                            userName: "",
+                            userName: viewModel.originalProfile?.name ?? "",
                             timeText: "",
                             isPresented: $showFullScreen
                         )
                     }
                 }
         } else {
-            Image("profile-icon")
+            Image(.profileIcon)
                 .resizable()
                 .scaledToFill()
-                .frame(width: 200, height: 200)
+                .frame(
+                    width: UIConstants.Layout.ProfileView.ProfileImage.size,
+                    height: UIConstants.Layout.ProfileView.ProfileImage.size
+                )
                 .clipShape(Circle())
-                .overlay(Circle().stroke(Color.white, lineWidth: 4))
-                .shadow(radius: 6)
+                .shadow(radius: UIConstants.Layout.ProfileView.ProfileImage.shadowRadius)
         }
     }
-
+    
     @ViewBuilder
     private func profileField(icon: String, title: String, value: String) -> some View {
-        HStack(alignment: .center, spacing: 16) {
-            Image(icon)
-                .scaledToFit()
-                .frame(width: 20, height: 20)
-            VStack(alignment: .leading, spacing: 8) {
+        HStack(spacing: UIConstants.Layout.ProfileView.ProfileField.hSpacing) {
+            // Icon
+            ZStack {
+                Image( icon)
+                    .font(.system(size: UIConstants.Layout.ProfileView.ProfileField.iconSize))
+                    .foregroundColor(.white.opacity(UIConstants.Layout.ProfileView.iconOpacity))
+            }
+            
+            // Text Content
+            VStack(alignment: .leading, spacing: UIConstants.Layout.ProfileView.ProfileField.textSpacing) {
+                
+                Text(value.isEmpty ? Constants.notSet.localized : value)
+                    .font(Design.TextStyle.profileFieldValue)
+                    .foregroundColor(
+                        value.isEmpty
+                        ? .white.opacity(UIConstants.Layout.ProfileView.ProfileField.emptyOpacity)
+                        : .white
+                    )
                 Text(title)
-                    .font(Design.Font.regular(12))
-                    .foregroundColor(Design.Color.white.opacity(0.6))
-                Text(value)
-                    .font(Design.Font.bold(14))
-                    .foregroundColor(.white)
+                    .font(Design.TextStyle.profileFieldTitle)
+                    .foregroundColor(.white.opacity(UIConstants.Layout.ProfileView.subtitleOpacity))
             }
             Spacer()
         }
     }
-
+    
     @ViewBuilder
     private func aboutSection() -> some View {
         HStack(alignment: .top) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("About")
-                    .font(Design.Font.regular(12))
-                    .foregroundColor(Design.Color.white.opacity(0.6))
+            VStack(alignment: .leading, spacing: UIConstants.Layout.ProfileView.AboutSection.textSpacing) {
+                Text(Constants.about.localized)
+                    .font(Design.TextStyle.profileAboutLabel)
+                    .foregroundColor(Design.Color.white.opacity(UIConstants.Layout.ProfileView.AboutSection.labelOpacity))
                 
                 if let about = viewModel.originalProfile?.about, !about.isEmpty {
                     Text(about)
-                        .font(Design.Font.regular(12))
+                        .font(Design.TextStyle.profileAboutText)
                         .foregroundColor(Design.Color.white)
                 } else {
                     Text("")
@@ -365,13 +429,9 @@ struct ProfileView: View {
                 editedAboutText = viewModel.editableProfile?.about ?? ""
                 isEditingAbout = true
             } label: {
-                Image("edit-light")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 16, height: 16)
             }
         }
-        .padding(.horizontal, 12)
+        .padding(.horizontal, UIConstants.Layout.ProfileView.AboutSection.hPadding)
         .sheet(isPresented: $isEditingAbout, onDismiss: {
             viewModel.editableProfile?.about = editedAboutText
             viewModel.updateProfileIfNeeded { success in
@@ -384,24 +444,28 @@ struct ProfileView: View {
                 VStack {
                     TextEditor(text: $editedAboutText)
                         .padding()
-                        .frame(height: 200)
-                        .background(Design.Color.white.opacity(0.7))
-                        .foregroundColor(Design.Color.black.opacity(0.7))
+                        .frame(height: UIConstants.Layout.ProfileView.AboutSection.editorHeight)
+                        .background(
+                            Design.Color.white.opacity(UIConstants.Layout.ProfileView.AboutSection.editorOpacity)
+                        )
+                        .foregroundColor(
+                            Design.Color.black.opacity(UIConstants.Layout.ProfileView.AboutSection.editorOpacity)
+                        )
                         .scrollContentBackground(.hidden)
-                        .cornerRadius(8)
+                        .cornerRadius(UIConstants.Layout.ProfileView.AboutSection.cornerRadius)
                         .padding()
                     Spacer()
                 }
                 .background(Design.Color.white)
-                .navigationTitle("Edit About")
+                .navigationTitle(Constants.editAbout.localized)
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
-                        Button("Cancel") { isEditingAbout = false }
+                        Button(Constants.cancel.localized) { isEditingAbout = false }
                             .foregroundColor(Design.Color.navy)
                     }
                     ToolbarItem(placement: .confirmationAction) {
-                        Button("Save") { isEditingAbout = false }
+                        Button(Constants.save.localized) { isEditingAbout = false }
                             .foregroundColor(Design.Color.navy)
                     }
                 }

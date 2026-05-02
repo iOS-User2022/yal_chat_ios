@@ -17,10 +17,10 @@ struct CheckboxToggleStyle: ToggleStyle {
                     .resizable()
                     .frame(width: 16, height: 16)
                     .cornerRadius(2)
-                    .border(Design.Color.navy, width: 1)
+                    .border(Design.Color.white, width: 1)
 
                 configuration.label
-                    .foregroundColor(Design.Color.grayText) // or your secondary text color
+                    .foregroundColor(Design.Color.primaryTextColor) // or your secondary text color
                     .font(Design.Font.regular(16))
             }
         }

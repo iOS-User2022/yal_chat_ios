@@ -20,21 +20,25 @@ struct GetStartedView: View {
 
     var body: some View {
         ZStack(alignment: .topLeading) {
+            Design.Color.backgroundColor.ignoresSafeArea()
+
             VStack(spacing: 0) {
                 Spacer().frame(height: 139)
-                
+                Image("YAL Logo 1").frame(width: 40, height: 40)
+                Spacer().frame(height: 24)
+
                 // Title
-                Text("Enter your Full Name")
+                Text("Enter your Name")
                     .font(Design.Font.heavy(24))
-                    .foregroundColor(Design.Color.headingText)
+                    .foregroundColor(Design.Color.primaryTextColor)
                     .multilineTextAlignment(.center)
                 
                 Spacer().frame(height: 12)
                 
                 // Subtitle
-                Text("This will be used as your display name.")
+                Text("This will be your display name")
                     .font(Design.Font.body)
-                    .foregroundColor(Design.Color.secondaryText.opacity(0.8))
+                    .foregroundColor(Design.Color.secondryTextColor)
                     .multilineTextAlignment(.center)
                 
                 Spacer().frame(height: 32)
@@ -43,14 +47,15 @@ struct GetStartedView: View {
                 TextField(
                     "",
                     text: $viewModel.name,
-                    prompt: Text("Enter your name")
-                        .foregroundColor(Design.Color.secondaryText.opacity(0.7))
+                    prompt: Text("Name")
+                        .foregroundColor(Design.Color.primaryTextColor.opacity(0.7))
                         .font(Design.Font.body)
                 )
-                .padding()
-                .background(Design.Color.white)
+                .padding(.horizontal)
+                .padding(.vertical, 12)
+                .background(Color(hex: "#202D35"))
                 .cornerRadius(8)
-                .foregroundColor(Design.Color.primaryText) // 👉 Typed text color
+                .foregroundColor(Design.Color.primaryTextColor) // 👉 Typed text color
                 .overlay(
                     RoundedRectangle(cornerRadius: 8)
                         .stroke(Design.Color.navy.opacity(0.6), lineWidth: 1)
@@ -58,7 +63,7 @@ struct GetStartedView: View {
                 )
 
                 
-                Spacer().frame(height: 124)
+                Spacer().frame(height: 24)
                 
                 // Let's Chat Button
                 Button(action: {
@@ -66,18 +71,18 @@ struct GetStartedView: View {
                 }) {
                     Text("Let’s Chat")
                         .font(Design.Font.bold(16))
-                        .foregroundColor(.white)
+                        .foregroundColor((!viewModel.name.isEmpty) ? .white : Design.Color.medium_gray)
                         .frame(maxWidth: .infinity)
                         .frame(height: 60)
-                        .background(Design.Color.appGradient)
-                        .cornerRadius(20)
+                        .background((!viewModel.name.isEmpty) ? Design.Color.appGradient : Design.Color.disabledGradient)
+                        .cornerRadius(12)
                 }
-                .padding(.horizontal, 12.5)
+                .padding(.horizontal, 22)
+                .disabled(viewModel.name.isEmpty)
                 
                 Spacer()
             }
             .padding(.horizontal, 30)
-            .background(Design.Color.white)
             .onAppear {
                 viewModel.onStepChange = {
                     authViewModel.completeAuth()

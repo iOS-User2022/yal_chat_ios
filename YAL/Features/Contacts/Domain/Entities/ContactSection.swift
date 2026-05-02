@@ -9,7 +9,7 @@ import SwiftUI
 import Contacts
 
 struct ContactSection: Identifiable {
-    var id: String { letter }
+    let id = UUID() // or use letter as id if unique
     let letter: String
     let contacts: [ContactLite]
     

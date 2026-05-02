@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import AVFoundation
 import UniformTypeIdentifiers
 
 struct GroupDetailsView: View {
@@ -22,7 +23,11 @@ struct GroupDetailsView: View {
     @StateObject private var chatViewModel: ChatViewModel
     @State private var showFullScreen = false
     @State var sharedMedia: [ChatMessageModel]?
-
+    @State private var eventId = UUID().uuidString
+    
+    @State private var selectedMember: ContactModel?
+    @State private var showMemberDetails = false
+    
     let roomModel: RoomModel
     let currentUser: ContactModel?
     let onAddMemberTap: (() -> Void)?
@@ -38,7 +43,12 @@ struct GroupDetailsView: View {
     @State private var isEditingName = false
     @State private var editedGroupName = ""
     @State private var shouldShowAlert: Bool = false
+    @State private var showClearChat = false
+    @State private var showDelete = false
+    @State private var exitGroup = false
+
     @Binding var navPath: NavigationPath
+    @EnvironmentObject var callManager: CallManager
 
     private var admins: [ContactModel] {
         roomModel.admins.sorted { lhs, rhs in
@@ -128,8 +138,10 @@ struct GroupDetailsView: View {
     
     var body: some View {
         ZStack {
+            Design.Color.backgroundColor
+                    .ignoresSafeArea()
             VStack(spacing: 0) {
-                headerView
+                headerView.background(Design.Color.backgroundColor)
                 separatorView()
                 ScrollView {
                     VStack(alignment: .leading, spacing: 16) {
@@ -147,7 +159,7 @@ struct GroupDetailsView: View {
                             if !leftMembers.isEmpty {
                                 Text("Left Members")
                                     .font(Design.Font.semiBold(14))
-                                    .foregroundColor(Design.Color.primaryText.opacity(0.7))
+                                    .foregroundColor(Design.Color.primaryTextColor.opacity(0.7))
                                     .padding(.top, 28)
                                     .padding(.bottom, 8)
                                 
@@ -163,7 +175,7 @@ struct GroupDetailsView: View {
 
             }
             .ignoresSafeArea(.all)
-            .background(Design.Color.white)
+            .background(Design.Color.backgroundColor)
             .navigationBarHidden(true)
             .sheet(isPresented: $showAddMemberSheet) {
                 NewGroupContactSelectorView(
@@ -224,6 +236,141 @@ struct GroupDetailsView: View {
                         roomDetailsViewModel.alertModel = nil
                     }
                 }
+
+                if showClearChat {
+                    ClearChatView(
+                        onClear: {
+                            showClearChat = false
+                            onClearChat?()
+                            roomDetailsViewModel.makeConfirmClearChatAlert {
+                                onClearChat?()
+                            }
+                        },
+                        onCancel: { showClearChat = false }
+                    )
+                }
+                
+                if showDelete {
+                    DeleteChatView(
+                        onDelete: {
+                            showDelete = false
+                            roomDetailsViewModel.deleteRoom { [weak roomListViewModel] result in
+                                if case .success = result {
+                                    onDeleteGroup?()
+                                }
+                            }
+                        },
+                        onCancel: { showDelete = false },
+                        isGroup: roomModel.isGroup
+                    )
+                }
+                
+                if exitGroup {
+                    ExitGroupView(
+                        onExit: {
+                            exitGroup = false
+                            roomDetailsViewModel.leaveRoom { _ in }
+                        },
+                        onExitAndClearChat: {
+                            exitGroup = false
+                            roomDetailsViewModel.makeConfirmClearChatAlert {
+                                onClearChat?()
+                            }
+                            roomDetailsViewModel.leaveRoom { _ in }
+                        },
+                        onCancel: { exitGroup = false },
+                        groupName: roomModel.name
+                    )
+                }
+
+            }
+        }
+        .onAppear {
+            print("GroupDetailsView appeared for room: \(roomModel.name)")
+            print("Room ID: \(roomModel.id)")
+            print("Participants: \(roomModel.participants.count)")
+        }
+    }
+    
+    struct SharedMediaThumbnailView: View {
+        let message: ChatMessageModel
+
+        @StateObject private var loader = MediaLoader()
+        @State private var thumbnail: UIImage?
+
+        var body: some View {
+            Group {
+                switch MediaType(rawValue: message.msgType)! {
+                case .image, .gif:
+                    if let img = loader.image {
+                        Image(uiImage: img)
+                            .resizable()
+                            .scaledToFill()
+                    } else {
+                        Rectangle().fill(.gray.opacity(0.2))
+                    }
+
+                case .video:
+
+                    if let url = loader.localURL {
+                        ZStack {
+                            if let thumb = thumbnail {
+                                Image(uiImage: thumb).resizable().scaledToFit()
+                            } else {
+                                Rectangle().fill(Color.black.opacity(0.1)).frame(height: 200)
+                            }
+                            Image(systemName: "play.circle.fill")
+                                .font(.system(size: 50)).foregroundColor(.white)
+                        }
+                        .onAppear {
+                            if thumbnail == nil { generateVideoThumbnail(for: url) }
+                        }
+                    } else {
+                        ZStack {
+                            Rectangle().fill(.black.opacity(0.2))
+                            Image(systemName: "play.circle.fill")
+                                .font(.system(size: 28))
+                                .foregroundColor(.white)
+                        }
+                    }
+
+                case .audio:
+                    ZStack {
+                        Rectangle()
+                            .fill(.blue.opacity(0.15))
+                        Image(systemName: "waveform")
+                            .font(.system(size: 24))
+                            .foregroundColor(.blue)
+                    }
+
+                case .document:
+                    ZStack {
+                        Rectangle()
+                            .fill(.gray.opacity(0.15))
+                        Image(systemName: "doc.text")
+                            .font(.system(size: 24))
+                            .foregroundColor(.gray)
+                    }
+                }
+            }
+            .frame(width: 80, height: 80)
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .onAppear {
+                loader.load(remoteURL: message.mediaUrl ?? "",
+                            type: MediaType(rawValue: message.msgType)!)
+                
+            }
+        }
+
+        private func generateVideoThumbnail(for url: URL) {
+            let asset = AVAsset(url: url)
+            let gen = AVAssetImageGenerator(asset: asset)
+            gen.appliesPreferredTrackTransform = true
+            let t = CMTime(seconds: 1, preferredTimescale: 60)
+            DispatchQueue.global().async {
+                if let cg = try? gen.copyCGImage(at: t, actualTime: nil) {
+                    DispatchQueue.main.async { thumbnail = UIImage(cgImage: cg) }
+                }
             }
         }
     }
@@ -238,6 +385,7 @@ struct GroupDetailsView: View {
                         .padding(.horizontal, 20)
                 }
                 .zIndex(1)
+                .background(Design.Color.backgroundColor)
                 
                 VStack(spacing: 8) {
                     avatarView
@@ -247,7 +395,7 @@ struct GroupDetailsView: View {
                             if isEditingName {
                                 TextField("Group Name", text: $editedGroupName)
                                     .font(Design.Font.semiBold(16))
-                                    .foregroundColor(Design.Color.primaryText)
+                                    .foregroundColor(Design.Color.primaryTextColor)
                                     .background(Design.Color.clear)
                                     .cornerRadius(8)
                                     .transition(.opacity)
@@ -275,7 +423,7 @@ struct GroupDetailsView: View {
                             } else {
                                 Text(roomModel.name)
                                     .font(Design.Font.semiBold(16))
-                                    .foregroundColor(Design.Color.primaryText)
+                                    .foregroundColor(Design.Color.primaryTextColor)
                                     .padding(.leading, 12)
                                     .padding(.vertical, 12)
                                 
@@ -306,35 +454,88 @@ struct GroupDetailsView: View {
                     
                     Text("\(roomModel.participants.count) Members")
                         .font(Design.Font.medium(12))
-                        .foregroundColor(Design.Color.primaryText.opacity(0.4))
-                    
-                    
+                        .foregroundColor(Design.Color.primaryTextColor.opacity(0.4))
+                                        
                     let creatorInfo = createdByText()
                     if !creatorInfo.isEmpty {
                         Text(creatorInfo)
                             .font(Design.Font.medium(12))
-                            .foregroundColor(Design.Color.primaryText.opacity(0.4))
+                            .foregroundColor(Design.Color.primaryTextColor.opacity(0.4))
                     }
+
                     HStack {
+                        Button {
+                            chatViewModel.currentRoomId = roomModel.id
+                            chatViewModel.sendCallMessage(
+                                callState: .outgoing,
+                                isVideo: false,
+                                eventId: eventId
+                            ) { result in
+                                switch result {
+                                    case .success(let newEventId):
+                                        print("livekit Message sent successfully: \(newEventId)")
+                                        eventId = newEventId
+                                        CallManager.shared.eventId = newEventId
+                                        CallManager.shared.updateCallStatus()
+                                        //                                        chatViewModel.becomeActiveCallMessageHandler(eventID: newEventId)
+                                    case .failure(let error):
+                                        print("Failed to send call message:", error.localizedDescription)
+                                }
+                            }
+                            CallManager.shared.presentCall(for: roomModel)
+                            CallManager.shared.isVideoCall = false
+                        } label: {
+                            Image("detail_audiocall")
+                        }
+                        .disabled(CallManager.shared.isCallInProgress())
+
+                        
+                        Button {
+                            chatViewModel.currentRoomId = roomModel.id
+                            chatViewModel.sendCallMessage(
+                                callState: .outgoing,
+                                isVideo: true,
+                                eventId: eventId
+                            ) { result in
+                                switch result {
+                                    case .success(let newEventId):
+                                        print("livekit Message sent successfully: \(newEventId)")
+                                        eventId = newEventId
+                                        //chatViewModel.becomeActiveCallMessageHandler(eventID: newEventId)
+                                        CallManager.shared.eventId = newEventId
+                                        CallManager.shared.updateCallStatus()
+                                    case .failure(let error):
+                                        print("Failed to send call message:", error.localizedDescription)
+                                }
+                            }
+                            CallManager.shared.presentCall(for: roomModel)
+                            CallManager.shared.isVideoCall = true
+                        } label: {
+                            Image("detail_videocall")
+                        }.padding(.horizontal, 40)
+                        .disabled(CallManager.shared.isCallInProgress())
+
+                        
                         Button(action: {
                             
                             NotificationCenter.default.post(
-                                    name: Notification.Name("ChatSearchTapped"),
-                                    object: nil
-                                )
+                                name: Notification.Name("ChatSearchTapped"),
+                                object: nil
+                            )
                             navPath.removeLast()
                             
                         }) {
-                            Image("Search")
+                            Image("detail_search")
                                 .resizable()
                                 .scaledToFit()
-                                .frame(width: 40, height: 40)
+                                .frame(width: 46, height: 46)
                         }
                         .buttonStyle(PlainButtonStyle())
                     }
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.bottom, 20)
+                .background(Design.Color.backgroundColor)
             }
             if roomModel.isLeft {
                 HStack {
@@ -352,6 +553,7 @@ struct GroupDetailsView: View {
             }
         }
         .padding(.top, 64)
+        .background(Design.Color.backgroundColor)
     }
 
     // MARK: - Helper
@@ -550,16 +752,16 @@ struct GroupDetailsView: View {
         VStack(alignment: .leading, spacing: 8) {
             Text("About")
                 .font(Design.Font.medium(12))
-                .foregroundColor(Design.Color.primaryText)
+                .foregroundColor(Design.Color.primaryTextColor)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
             Text("No about info available")
                 .font(Design.Font.regular(14))
-                .foregroundColor(Design.Color.primaryText)
+                .foregroundColor(Design.Color.primaryTextColor)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 20)
-        .background(Design.Color.white.opacity(0.6))
+        .background(Color(Design.Color.darkgrayColor))
         .cornerRadius(10)
     }
     
@@ -567,26 +769,45 @@ struct GroupDetailsView: View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Shared Media")
                 .font(Design.Font.medium(12))
-                .foregroundColor(Design.Color.primaryText)
+                .foregroundColor(Design.Color.primaryTextColor)
 
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 4) {
-                    if let media = sharedMedia {
-                        ForEach(media, id: \.self) { image in
-                            ImageOverlayView(url: image.mediaUrl)
+                HStack(spacing: 6) {
+
+                    if let media = sharedMedia, !media.isEmpty {
+
+                        ForEach(media, id: \.self) { item in
+                            SharedMediaThumbnailView(message: item)
+                                .onTapGesture {
+                                    openFullPreview(for: item)
+                                }
                         }
+
                     } else {
-                        Text("No about info available")
+                        Text("No shared media")
                             .font(Design.Font.regular(14))
-                            .foregroundColor(Design.Color.primaryText)
+                            .foregroundColor(Design.Color.primaryTextColor)
                     }
+
                 }
             }
         }
         .padding(.vertical, 20)
         .padding(.horizontal, 16)
-        .background(Design.Color.white.opacity(0.6))
+        .background(Color(Design.Color.darkgrayColor))
         .cornerRadius(10)
+    }
+    
+    func openFullPreview(for item: ChatMessageModel) {
+        let messageId = item.id
+        dismiss()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+            NotificationCenter.default.post(
+                name: .deepLinkScrollToMessage,
+                object: nil,
+                userInfo: ["messageId": messageId]
+            )
+        }
     }
     
     struct ImageOverlayView: View {
@@ -719,7 +940,7 @@ struct GroupDetailsView: View {
         HStack {
             Text("\(roomModel.participants.count) Members")
                 .font(Design.Font.semiBold(14))
-                .foregroundColor(Design.Color.primaryText)
+                .foregroundColor(Design.Color.primaryTextColor)
             Spacer()
             Button(action: {
                 isSearching.toggle()
@@ -745,8 +966,8 @@ struct GroupDetailsView: View {
                 .padding(.trailing, 20)
                 .padding(.vertical, 12)
         }
-        .background(Design.Color.lightWhiteBackground)
-        .cornerRadius(10)        
+        .background(Color(Design.Color.darkgrayColor))
+        .cornerRadius(10)
     }
 
     private var addMemberButton: some View {
@@ -762,7 +983,7 @@ struct GroupDetailsView: View {
                 
                 Text("Add Member")
                     .font(Design.Font.semiBold(14))
-                    .foregroundColor(Design.Color.primaryText)
+                    .foregroundColor(Design.Color.primaryTextColor)
             }
             .padding(.vertical, 8)
         }
@@ -783,9 +1004,43 @@ struct GroupDetailsView: View {
                     ) {
                         present(roomDetailsViewModel.makeConfirmKickAlert(for: member))
                     } onTap: { tappedMember in
-                        self.redirectToUserDetail(member: tappedMember)
+                        // Show bottom sheet instead of navigating
+                        selectedMember = tappedMember
+                        showMemberDetails = true
                     }
                 }
+            }
+        }
+        .sheet(isPresented: $showMemberDetails) {
+            if let member = selectedMember {
+                MemberDetailsBottomSheet(
+                    member: member,
+                    currentUser: currentUser,
+                    isAdmin: isAdmin(userId: member.userId ?? ""),
+                    canMakeAdmin:  {
+                        guard let currentUserId = currentUser?.userId else { return false }
+                        return isAdmin(userId: currentUserId)
+                    }(),
+                    onMessage: {
+                        showMemberDetails = false
+                        redirectToUserChat(member: member)
+                    },
+                    onMakeAdmin: {
+                        // Handle make admin action
+                        print("Make admin tapped for: \(member.fullName ?? "")")
+                        showMemberDetails = false
+                    },
+                    onRemove: {
+                        showMemberDetails = false
+                        present(roomDetailsViewModel.makeConfirmKickAlert(for: member))
+                    },
+                    onDismiss: {
+                        showMemberDetails = false
+                        selectedMember = nil
+                    }
+                )
+                .presentationDetents([.height(420)])
+                .presentationDragIndicator(.hidden)
             }
         }
     }
@@ -852,7 +1107,9 @@ struct GroupDetailsView: View {
                         isCurrentUser: userId == currentUserId,
                         onRemove: nil,
                         onTap: { tappedMember in
-                            self.redirectToUserDetail(member: tappedMember)
+                            // Show bottom sheet for left members too
+                            selectedMember = tappedMember
+                            showMemberDetails = true
                         }
                     )
                 }
@@ -868,10 +1125,13 @@ struct GroupDetailsView: View {
             }) {
                 HStack(alignment: .bottom, spacing: 12) {
                     Image(roomModel.isMuted ? "notification-unmute" : "notification-mute")
+                        .resizable()
+                        .renderingMode(.template)
+                        .foregroundColor(.white)
                         .frame(width: 16, height: 16)
                     Text("Notifications")
                         .font(Design.Font.regular(14))
-                        .foregroundColor(Design.Color.primaryText.opacity(0.6))
+                        .foregroundColor(Design.Color.primaryTextColor.opacity(0.6))
                     Spacer()
                 }
                 .padding(.horizontal, 32)
@@ -881,12 +1141,17 @@ struct GroupDetailsView: View {
             
             Button(action: {
                 roomModel.isFavorite.toggle()
+                roomDetailsViewModel.toggeleFavorite(for: roomModel)
             }) {
                 HStack(spacing: 12) {
-                    Image(roomDetailsViewModel.isFavorite ? "un-favorite" : "favorite")
-                    Text(roomDetailsViewModel.isFavorite ? "Remove from favorites" : "Add to favorites")
+                    Image(roomModel.isFavorite ? "un-favorite" : "favorite")
+                        .resizable()
+                        .renderingMode(.template)
+                        .foregroundColor(.white)
+                        .frame(width: 16, height: 16)
+                    Text(roomModel.isFavorite ? "Remove from favorites" : "Add to favorites")
                         .font(Design.Font.regular(14))
-                        .foregroundColor(Design.Color.primaryText.opacity(0.6))
+                        .foregroundColor(Design.Color.primaryTextColor.opacity(0.6))
                     Spacer()
                 }
                 .foregroundColor(.primary)
@@ -896,17 +1161,18 @@ struct GroupDetailsView: View {
             Divider()
             
             Button(action: {
-                present(roomDetailsViewModel.makeConfirmClearChatAlert(onConfirm: {
-                    onClearChat?()
-                }))
+                showClearChat = true
             }) {
                 HStack(alignment: .bottom, spacing: 12) {
                     Image("broom")
+                        .resizable()
+                        .renderingMode(.template)
+                        .foregroundColor(.white)
                         .frame(width: 16, height: 16)
                     
                     Text("Clear Chat")
                         .font(Design.Font.regular(14))
-                        .foregroundColor(Design.Color.primaryText.opacity(0.6))
+                        .foregroundColor(Design.Color.primaryTextColor.opacity(0.6))
                     Spacer()
                 }
                 .padding(.horizontal, 32)
@@ -918,9 +1184,7 @@ struct GroupDetailsView: View {
 
             if roomModel.isLeft {
                 Button {
-                    present(roomDetailsViewModel.makeConfirmDeleteGroupAlert(onSuccess: {
-                        onDeleteGroup?()
-                    }))
+                    showDelete = true
                 } label: {
                     HStack(spacing: 8) {
                         Spacer()
@@ -933,11 +1197,16 @@ struct GroupDetailsView: View {
                     .padding(.horizontal, 32)
                     .padding(.vertical, 12)
                 }
+                .background(Color(Design.Color.darkgrayColor))
+                .cornerRadius(8)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(Design.Color.destructiveRed, lineWidth: 1)
+                )
+                .padding(.horizontal, 32)
             } else if let currentUserId = currentUser?.userId, isAdmin(userId: currentUserId) {
                 Button(action: {
-                    present(roomDetailsViewModel.makeConfirmDeleteGroupAlert(onSuccess: {
-                        onDeleteGroup?()
-                    }))
+                    showDelete = true
                 }) {
                     HStack(alignment: .bottom, spacing: 8) {
                         Spacer()
@@ -950,13 +1219,16 @@ struct GroupDetailsView: View {
                     }
                     .padding(.horizontal, 32)
                     .padding(.vertical, 12)
-                }
-                .background(Design.Color.lightGrayBackground)
-                .cornerRadius(8)
-                .padding(.horizontal, 32)
+                }.background(Color(Design.Color.darkgrayColor))
+                    .cornerRadius(8)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(Design.Color.destructiveRed, lineWidth: 1)
+                    )
+                    .padding(.horizontal, 32)
             } else {
                 Button(action: {
-                    present(roomDetailsViewModel.makeConfirmLeaveGroupAlert())
+                    exitGroup = true
                 }) {
                     HStack(alignment: .bottom, spacing: 8) {
                         Spacer()
@@ -970,8 +1242,12 @@ struct GroupDetailsView: View {
                     .padding(.horizontal, 32)
                     .padding(.vertical, 12)
                 }
-                .background(Design.Color.lightGrayBackground)
+                .background(Color(Design.Color.darkgrayColor))
                 .cornerRadius(8)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(Design.Color.destructiveRed.opacity(0.6), lineWidth: 1)
+                )
                 .padding(.horizontal, 32)
             }
         }
@@ -985,7 +1261,7 @@ struct GroupDetailsView: View {
             radius: 16,
             roundedCorners: [.topRight, .topLeft]
         )
-        .fill(Design.Color.white)
+        .fill(Design.Color.backgroundColor)
     }
     
     @ViewBuilder
@@ -1029,11 +1305,11 @@ struct GroupMemberRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(memberName)
                     .font(Design.Font.semiBold(14))
-                    .foregroundColor(Design.Color.primaryText)
+                    .foregroundColor(Design.Color.primaryTextColor)
                 
                 Text(member.phoneNumber)
                     .font(Design.Font.regular(14))
-                    .foregroundColor(Design.Color.primaryText.opacity(0.4))
+                    .foregroundColor(Design.Color.primaryTextColor.opacity(0.4))
             }
                
             Spacer()
@@ -1043,7 +1319,7 @@ struct GroupMemberRow: View {
 
                 Text("Group Admin")
                     .font(Design.Font.medium(12))
-                    .foregroundColor(Design.Color.primaryText)
+                    .foregroundColor(Design.Color.primaryTextColor)
                     .padding(.horizontal, 4)
                     .padding(.vertical, 4)
                     .background(Design.Color.tabHighlight.opacity(0.2))
@@ -1153,13 +1429,13 @@ struct GroupMemberRow: View {
                                         DispatchQueue.main.async { downloadedImage = img }
                                         
                                     } catch {
-                                        print("❌ Media decode error — \(error.localizedDescription) | \(fileURL.path)")
+                                        print("Media decode error — \(error.localizedDescription) | \(fileURL.path)")
                                     }
                                 }
                             }
                             
                         case .failure(let error):
-                            print("❌ Failed to download media: \(error)")
+                            print("Failed to download media: \(error)")
                         }
                     }
                 )
@@ -1179,4 +1455,279 @@ struct GroupMemberRow: View {
             .clipShape(Circle())
     }
 }
+// MARK: - Member Details Bottom Sheet
+struct MemberDetailsBottomSheet: View {
+    let member: ContactModel
+    let currentUser: ContactModel?
+    let isAdmin: Bool
+    let canMakeAdmin: Bool
+    let onMessage: () -> Void
+    let onMakeAdmin: () -> Void
+    let onRemove: () -> Void
+    let onDismiss: () -> Void
+    
+    @State private var downloadedImage: UIImage?
+    @State private var downloadProgress: Double = 0.0
+    
+    var body: some View {
+        ZStack(alignment: .topTrailing) {
+            VStack(spacing: 0) {
+              
+                // Avatar
+                avatarView
+                    .padding(.top, 32)
+                
+                // Name
+                Text(memberName)
+                    .font(Design.Font.semiBold(14))
+                    .foregroundColor(Design.Color.primaryTextColor)
+                    .padding(.top, 12)
+                
+                // Phone Number
+                Text(member.phoneNumber)
+                    .font(Design.Font.regular(12))
+                    .foregroundColor(Design.Color.primaryTextColor.opacity(0.6))
+                    .padding(.top, 2)
+                
+                // Action Buttons
+                actionButtons
+                    .padding(.top, 20)
+                
+                // Admin Actions
+                adminActions
+                    .padding(.top, 8)
+                Spacer()
+            }
+            .frame(maxWidth: .infinity)
+            .background(Color(Design.Color.darkgrayColor))
+            .clipShape(TopCornersRounded(radius: 20))
+            .edgesIgnoringSafeArea(.bottom)
+        }
+        .onAppear {
+            loadAvatar()
+        }
+    }
+    struct TopCornersRounded: Shape {
+        var radius: CGFloat = 20
 
+        func path(in rect: CGRect) -> Path {
+            let path = UIBezierPath(
+                roundedRect: rect,
+                byRoundingCorners: [.topLeft, .topRight],
+                cornerRadii: CGSize(width: radius, height: radius)
+            )
+            return Path(path.cgPath)
+        }
+    }
+
+    
+    private var memberName: String {
+        if let fullName = member.fullName, !fullName.isEmpty {
+            return fullName
+        } else if let displayName = member.displayName, !displayName.isEmpty {
+            return displayName
+        } else {
+            return member.phoneNumber
+        }
+    }
+    
+    private var avatarView: some View {
+        Group {
+            if let image = downloadedImage {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: 77, height: 77)
+                    .clipShape(Circle())
+            } else {
+                Text(getInitials(from: member.fullName ?? ""))
+                    .font(.system(size: 32, weight: .semibold))
+                    .foregroundColor(.white)
+                    .frame(width: 80, height: 80)
+                    .background(member.randomeProfileColor.opacity(0.3))
+                    .clipShape(Circle())
+            }
+        }
+    }
+    
+    private var actionButtons: some View {
+        HStack(spacing: 60) {
+            // Message Button
+            actionButton(
+                imageName: "group_messages",
+                label: "",
+                action: onMessage
+            )
+            
+            // Audio Call Button
+            actionButton(
+                imageName: "call_icon",
+                label: "",
+                action: {
+                    // Handle audio call
+                }
+            )
+            
+            // Video Call Button
+            actionButton(
+                imageName: "video_icon",
+                label: "",
+                action: {
+                    // Handle video call
+                }
+            )
+        }
+        .frame(height: 80)
+    }
+    
+    private func actionButton(imageName: String, label: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(spacing: 8) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(Design.Color.appGradient)
+                        .frame(width: 56, height: 56)
+                    
+                    Image(imageName)
+                        .resizable()
+                        .renderingMode(.template)
+                        .foregroundColor(.white)
+                        .frame(width: 24, height: 24)
+                }
+                if !label.isEmpty { // Only show if label exists
+                    
+                    Text(label)
+                        .font(Design.Font.regular(12))
+                        .foregroundColor(Design.Color.primaryTextColor)
+                }
+            }
+        }
+    }
+    
+    @ViewBuilder
+    private var adminActions: some View {
+        VStack(spacing: 10) {
+            Button(action: onMakeAdmin) {
+                HStack(spacing: 20) {
+                    Image("admin_user")
+                        .resizable()
+                        .renderingMode(.template)
+                        .foregroundColor(Design.Color.primaryTextColor)
+                        .frame(width: 20, height: 20)
+                    
+                    Text("Make group admin")
+                        .font(Design.Font.regular(14))
+                        .foregroundColor(Design.Color.primaryTextColor)
+                    
+                    Spacer()
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.vertical, 16)
+                .background(Color(Design.Color.darkgrayColor))
+            }
+            .buttonStyle(PlainButtonStyle())
+            Button(action: onRemove) {
+                HStack(spacing: 16) {
+                    Image("remove_user")
+                        .resizable()
+                        .renderingMode(.template)
+                        .foregroundColor(Design.Color.destructiveRed)
+                        .frame(width: 20, height: 20)
+                    
+                    Text("Remove from group")
+                        .font(Design.Font.regular(14))
+                        .foregroundColor(Design.Color.destructiveRed)
+                    
+                    Spacer()
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.vertical, 16)
+                .background(Color(Design.Color.darkgrayColor))
+            }
+            .buttonStyle(PlainButtonStyle())
+            
+        }
+        .padding(.horizontal, 60)
+    }
+    
+    private func loadAvatar() {
+        guard downloadedImage == nil else { return }
+        guard let httpUrl = member.avatarURL, !httpUrl.isEmpty else { return }
+        
+        MediaCacheManager.shared.getMedia(
+            url: httpUrl,
+            type: .image,
+            progressHandler: { progress in
+                downloadProgress = progress
+            },
+            completion: { result in
+                switch result {
+                case .success(let imagePath):
+                    let fileURL: URL
+                    if let u = URL(string: imagePath), u.scheme == "file" {
+                        fileURL = u
+                    } else {
+                        fileURL = URL(fileURLWithPath: imagePath)
+                    }
+                    
+                    DispatchQueue.global(qos: .userInitiated).async {
+                        autoreleasepool {
+                            do {
+                                var isDir: ObjCBool = false
+                                guard FileManager.default.fileExists(atPath: fileURL.path, isDirectory: &isDir),
+                                      !isDir.boolValue else {
+                                    return
+                                }
+                                
+                                if let ut = UTType(filenameExtension: fileURL.pathExtension),
+                                   !ut.conforms(to: .image) {
+                                    return
+                                }
+                                
+                                let srcOpts: [CFString: Any] = [kCGImageSourceShouldCache: false]
+                                var ui: UIImage? = nil
+                                
+                                if let src = CGImageSourceCreateWithURL(fileURL as CFURL, srcOpts as CFDictionary) {
+                                    let opts: [CFString: Any] = [
+                                        kCGImageSourceCreateThumbnailFromImageAlways: true,
+                                        kCGImageSourceShouldCacheImmediately: true,
+                                        kCGImageSourceCreateThumbnailWithTransform: true,
+                                        kCGImageSourceThumbnailMaxPixelSize: 1536
+                                    ]
+                                    if let cg = CGImageSourceCreateThumbnailAtIndex(src, 0, opts as CFDictionary) {
+                                        ui = UIImage(cgImage: cg)
+                                    }
+                                }
+                                
+                                if ui == nil {
+                                    ui = UIImage(contentsOfFile: fileURL.path)
+                                }
+                                
+                                if ui == nil {
+                                    let data = try Data(contentsOf: fileURL, options: [.mappedIfSafe])
+                                    ui = UIImage(data: data)
+                                }
+                                
+                                guard var img = ui else { return }
+                                
+                                if #available(iOS 15.0, *), let prepped = img.preparingForDisplay() {
+                                    img = prepped
+                                }
+                                
+                                DispatchQueue.main.async {
+                                    downloadedImage = img
+                                }
+                                
+                            } catch {
+                                print("Media decode error — \(error.localizedDescription)")
+                            }
+                        }
+                    }
+                    
+                case .failure(let error):
+                    print("Failed to download media: \(error)")
+                }
+            }
+        )
+    }
+}

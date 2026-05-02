@@ -7,6 +7,7 @@
 
 import Foundation
 import SwiftUI
+import RealmSwift
 
 // MARK: - URL Preview Model
 struct URLPreviewData: Codable, Identifiable {
@@ -298,20 +299,202 @@ extension ChatMessageModel {
 }
 
 // MARK: - URL Preview Cache Manager
-class URLPreviewCache {
+final class URLPreviewCache {
+    private struct PreviewRow {
+        let url: String
+        let title: String?
+        let descText: String?
+        let imageURL: String?
+        let siteName: String?
+        let favicon: String?
+        let updatedAt: Date
+    }
+    
     static let shared = URLPreviewCache()
-    private var cache: [String: URLPreviewData] = [:]
+
+    // MARK: Policy
+    private let ttl: TimeInterval = 7 * 24 * 60 * 60   // 7 days
+    private let maxEntries = 2000
+
+    private var memory: [String: URLPreviewData] = [:]
+    private let q = DispatchQueue(label: "yal.urlpreview.cache", qos: .userInitiated, attributes: .concurrent)
     
-    func getPreview(for url: String) -> URLPreviewData? {
-        return cache[url]
+    private init() {}
+
+    // MARK: Public API
+
+    func getPreview(for rawURL: String, allowStale: Bool = false) -> URLPreviewData? {
+        let key = canonical(rawURL)
+
+        if let mem = q.sync(execute: { memory[key] }) { return mem }
+
+        guard let row = realmGetSnapshot(url: key) else { return nil }
+
+        let isFresh = Date().timeIntervalSince(row.updatedAt) < ttl
+        if !isFresh && !allowStale { return nil }
+
+        let dto = URLPreviewData(
+            url: row.url,
+            title: row.title,
+            description: row.descText,
+            imageURL: row.imageURL,
+            siteName: row.siteName,
+            favicon: row.favicon
+        )
+        q.async(flags: .barrier) { self.memory[key] = dto }
+        return dto
+    }
+
+    func setPreview(_ preview: URLPreviewData, for rawURL: String) {
+        let key = canonical(rawURL)
+        q.async(flags: .barrier) { self.memory[key] = preview }
+        realmUpsert(dto: preview, urlKey: key)
+        enforceCapacity()
+    }
+
+    func clearAll() {
+        q.async(flags: .barrier) { self.memory.removeAll() }
+        realmDeleteAll()
+    }
+
+    func warmMemory(limit: Int? = 200) {
+        let effectiveLimit: Int? = (limit ?? 0) > 0 ? limit : nil
+        let recents = realmFetchRecentSnapshots(limit: effectiveLimit)
+
+        let snapshot: [String: URLPreviewData] = Dictionary(uniqueKeysWithValues:
+            recents.map { r in
+                (r.url, URLPreviewData(
+                    url: r.url,
+                    title: r.title,
+                    description: r.descText,
+                    imageURL: r.imageURL,
+                    siteName: r.siteName,
+                    favicon: r.favicon
+                ))
+            }
+        )
+
+        q.async(flags: .barrier) { [weak self] in
+            self?.memory.merge(snapshot) { _, new in new }
+        }
+    }
+
+    // MARK: Internal
+
+    private func canonical(_ url: String) -> String {
+        guard var comps = URLComponents(string: url.trimmingCharacters(in: .whitespacesAndNewlines)) else {
+            return url.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        comps.scheme = comps.scheme?.lowercased()
+        comps.host = comps.host?.lowercased()
+        return comps.string ?? url
+    }
+
+    // MARK: Realm helpers
+    private func realmGetSnapshot(url: String) -> PreviewRow? {
+        do {
+            return try DBManager.shared.withRealm { r in
+                guard let e = r.object(ofType: CachedURLPreview.self, forPrimaryKey: url) else { return nil }
+                return PreviewRow(
+                    url: e.url,
+                    title: e.title,
+                    descText: e.descText,
+                    imageURL: e.imageURL,
+                    siteName: e.siteName,
+                    favicon: e.favicon,
+                    updatedAt: e.updatedAt
+                )
+            }
+        } catch {
+            return nil
+        }
     }
     
-    func setPreview(_ preview: URLPreviewData, for url: String) {
-        cache[url] = preview
+    private func realmUpsert(dto: URLPreviewData, urlKey: String) {
+        do {
+            try DBManager.shared.write { r in
+                if let obj = r.object(ofType: CachedURLPreview.self, forPrimaryKey: urlKey) {
+                    obj.title = dto.title
+                    obj.descText = dto.description
+                    obj.imageURL = dto.imageURL
+                    obj.siteName = dto.siteName
+                    obj.favicon = dto.favicon
+                    obj.updatedAt = Date()
+                    r.add(obj, update: .modified)
+                } else {
+                    let obj = CachedURLPreview()
+                    obj.url = urlKey
+                    obj.title = dto.title
+                    obj.descText = dto.description
+                    obj.imageURL = dto.imageURL
+                    obj.siteName = dto.siteName
+                    obj.favicon = dto.favicon
+                    obj.updatedAt = Date()
+                    r.add(obj)
+                }
+            }
+        } catch {
+            print("[URLPreviewCache] upsert error: \(error)")
+        }
+    }
+
+    private func realmFetchRecentSnapshots(limit: Int? = nil) -> [PreviewRow] {
+        do {
+            return try DBManager.shared.withRealm { r in
+                let results = r.objects(CachedURLPreview.self)
+                    .sorted(byKeyPath: "updatedAt", ascending: false)
+                
+                let slice: AnySequence<CachedURLPreview> = {
+                    if let limit, limit > 0 {
+                        return AnySequence(results.prefix(limit))
+                    } else {
+                        return AnySequence(results)
+                    }
+                }()
+                
+                // Detach everything while still inside the realm block
+                return slice.map {
+                    PreviewRow(
+                        url: $0.url,
+                        title: $0.title,
+                        descText: $0.descText,
+                        imageURL: $0.imageURL,
+                        siteName: $0.siteName,
+                        favicon: $0.favicon,
+                        updatedAt: $0.updatedAt
+                    )
+                }
+            }
+        } catch {
+            print("[URLPreviewCache] fetchRecent error: \(error)")
+            return []
+        }
     }
     
-    func clearCache() {
-        cache.removeAll()
+    private func enforceCapacity() {
+        // trim oldest beyond maxEntries (off-main)
+        DispatchQueue.global(qos: .utility).async {
+            do {
+                try DBManager.shared.write { r in
+                    let all = r.objects(CachedURLPreview.self)
+                        .sorted(byKeyPath: "updatedAt", ascending: false)
+                    let overflow = max(0, all.count - self.maxEntries)
+                    guard overflow > 0 else { return }
+                    let victims = all.suffix(overflow)
+                    r.delete(victims)
+                }
+            } catch {
+                print("[URLPreviewCache] enforceCapacity error: \(error)")
+            }
+        }
+    }
+
+    private func realmDeleteAll() {
+        do {
+            try DBManager.shared.write { r in
+                r.delete(r.objects(CachedURLPreview.self))
+            }
+        } catch { print("[URLPreviewCache] clear error: \(error)") }
     }
 }
 

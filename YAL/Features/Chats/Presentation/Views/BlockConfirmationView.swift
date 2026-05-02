@@ -18,58 +18,66 @@ struct BlockConfirmationView: View {
                 .ignoresSafeArea()
                 .onTapGesture { onCancel() }
             
-            VStack(spacing: 16) {
+            VStack(spacing: 20) {
                 
                 // Top icon
-                Image(systemName: "nosign")
+                Image("no_sign")
                     .resizable()
                     .scaledToFit()
-                    .frame(width: 36, height: 36)
+                    .frame(width: 32, height: 32)
                     .foregroundColor(.red)
                 
                 // Heading
                 Text("Block \(userName)?")
                     .font(Design.Font.semiBold(16))
-                    .foregroundColor(Design.Color.primaryText)
+                    .foregroundColor(Design.Color.primaryTextColor)
                     .multilineTextAlignment(.center)
                 
                 // Subtitle
-                Text("You won’t receive messages or calls from this user.\nThey won’t be notified that you blocked them.")
+                Text("You won't receive messages or calls from this user.\nThey won't be notified that you blocked them.")
                     .font(Design.Font.regular(14))
-                    .foregroundColor(Design.Color.primaryText.opacity(0.6))
+                    .foregroundColor(Design.Color.primaryTextColor.opacity(0.7))
                     .multilineTextAlignment(.center)
+                    .lineSpacing(3)
+                    .padding(.bottom, 4)
                 
-                // Block button
-                Button(action: {
-                    onBlock()
-                }) {
-                    Text("Block")
-                        .font(Design.Font.semiBold(16))
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
-                        .background(Design.Color.appGradient)
-                        .cornerRadius(8)
-                }
-                
-                // Cancel button
-                Button(action: {
-                    onCancel()
-                }) {
-                    Text("Cancel")
-                        .font(Design.Font.semiBold(16))
-                        .foregroundColor(Design.Color.primaryText)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
-                        .background(Color.gray.opacity(0.1))
-                        .cornerRadius(8)
+                HStack(spacing: 12) {
+                    // Cancel button
+                    Button(action: {
+                        onCancel()
+                    }) {
+                        Text("Cancel")
+                            .font(Design.Font.semiBold(15))
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 44)
+                            .background(Design.Color.appGradient)
+                            .cornerRadius(6)
+                    }
+                    
+                    // Block button
+                    Button(action: {
+                        onBlock()
+                    }) {
+                        Text("Block")
+                            .font(Design.Font.semiBold(15))
+                            .foregroundColor(Design.Color.mediumGray.opacity(0.8))
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 44)
+                            .background(Color.gray.opacity(0))
+                            .cornerRadius(6)
+                            .overlay(
+                                       RoundedRectangle(cornerRadius: 10)
+                                           .stroke(Color.gray.opacity(0.5), lineWidth: 2)
+                                   )
+                    }
                 }
             }
-            .padding()
-            .background(Color.white)
+            .padding(24)
+            .background(Color(Design.Color.darkgrayColor))
             .cornerRadius(16)
-            .shadow(radius: 8)
-            .padding(.horizontal, 32)
+            .shadow(color: Color.black.opacity(0.3), radius: 12, x: 0, y: 4)
+            .padding(.horizontal, 40)
         }
     }
 }
@@ -88,29 +96,39 @@ struct UnblockConfirmationView: View {
             
             VStack(spacing: 16) {
                 
+                // Top icon
+                Image("no_sign")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 32, height: 32)
+                    .foregroundColor(.red)
+                    .padding([.top, .leading], 4)
+                
                 // Heading
                 Text("Unblock \(userName)?")
                     .font(Design.Font.semiBold(16))
-                    .foregroundColor(Design.Color.primaryText)
+                    .foregroundColor(Design.Color.primaryTextColor)
                     .multilineTextAlignment(.center)
+                    .padding([.top, .leading], 4)
                 
                 // Subtitle
-                Text("They will be able to message and call you again.")
+                Text("They will be able to message and call\nyou again.")
                     .font(Design.Font.regular(14))
-                    .foregroundColor(Design.Color.primaryText.opacity(0.6))
+                    .foregroundColor(Design.Color.primaryTextColor.opacity(0.7))
                     .multilineTextAlignment(.center)
-                
+                    .lineSpacing(3)
+                    .padding(.horizontal, 8)
+                    .padding(.bottom, 8)
                 // Unblock button
                 Button(action: {
                     onUnblock()
                 }) {
                     Text("Unblock")
-                        .font(Design.Font.semiBold(16))
+                        .font(Design.Font.semiBold(15))
                         .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
+                        .frame(width: 113, height: 44)  // Fixed width and height
                         .background(Design.Color.appGradient)
-                        .cornerRadius(8)
+                        .cornerRadius(6)
                 }
                 
                 // Cancel button
@@ -118,19 +136,25 @@ struct UnblockConfirmationView: View {
                     onCancel()
                 }) {
                     Text("Cancel")
-                        .font(Design.Font.semiBold(16))
-                        .foregroundColor(Design.Color.primaryText)
+                        .font(Design.Font.semiBold(15))
+                        .foregroundColor(Design.Color.mediumGray.opacity(0.8))
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
-                        .background(Color.gray.opacity(0.1))
-                        .cornerRadius(8)
+                        .frame(width: 104, height: 44)  // Fixed width and height
+                        .background(Color.gray.opacity(0))
+                        .cornerRadius(6)
+                        .overlay(
+                                   RoundedRectangle(cornerRadius: 10)
+                                       .stroke(Color.gray.opacity(0.5), lineWidth: 1)
+                               )
                 }
+                .padding(.bottom, 6)
+                
             }
-            .padding()
-            .background(Color.white)
+            .padding(.horizontal, 35)
+            .padding(.vertical, 20)
+            .background(Color(Design.Color.darkgrayColor))
             .cornerRadius(16)
-            .shadow(radius: 8)
-            .padding(.horizontal, 32)
+            .shadow(color: Color.black.opacity(0.3), radius: 12, x: 0, y: 4)
         }
     }
 }

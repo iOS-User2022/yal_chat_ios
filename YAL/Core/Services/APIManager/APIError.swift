@@ -54,6 +54,7 @@ enum APIError: Error {
     case tooManyRequests
     case custom(String)
     case timeout
+    case networkUnavailable
 }
 
 extension APIError {
@@ -103,6 +104,8 @@ extension APIError {
             return message
         case .timeout:
             return "Request timed out"
+        case .networkUnavailable:
+            return "Please check your internet connection."
         }
     }
 }

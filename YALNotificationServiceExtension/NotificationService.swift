@@ -70,7 +70,7 @@ final class NotificationService: UNNotificationServiceExtension {
             content.title = senderDisplayName
             content.body = ""
         } else {
-            content.title = "\(content.title): \(senderDisplayName)"
+            content.title = "\(content.title)"
             content.body = body
         }
         

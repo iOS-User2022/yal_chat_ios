@@ -252,7 +252,7 @@ final class RoomService: RoomServiceProtocol {
                                         let contactLite = ContactLite(
                                             userId: uid,
                                             fullName: "",
-                                            phoneNumber: p.phone ?? "",
+                                            phoneNumber: p.mobile ?? "",
                                             emailAddresses: p.email.map { [$0] } ?? [],
                                             imageURL: p.mxcProfile,
                                             avatarURL: p.mxcProfile,
@@ -344,6 +344,10 @@ final class RoomService: RoomServiceProtocol {
     }
     
     func sendReadMarker(roomId: String, fullyReadEventId: String?, readEventId: String?, readPrivateEventId: String?) -> AnyPublisher<APIResult<MatrixEmptyResponse>, APIError> {
+        chatRepository.sendReadMarker(roomId: roomId, fullyReadEventId: fullyReadEventId, readEventId: readEventId, readPrivateEventId: readPrivateEventId)
+    }
+    
+    func sendCallStatusUpdate(roomId: String, fullyReadEventId: String?, readEventId: String?, readPrivateEventId: String?) -> AnyPublisher<APIResult<MatrixEmptyResponse>, APIError> {
         chatRepository.sendReadMarker(roomId: roomId, fullyReadEventId: fullyReadEventId, readEventId: readEventId, readPrivateEventId: readPrivateEventId)
     }
     
@@ -613,7 +617,7 @@ final class RoomService: RoomServiceProtocol {
                                             let contactLite = ContactLite(
                                                 userId: uid,
                                                 fullName: "",
-                                                phoneNumber: p.phone ?? "",
+                                                phoneNumber: p.mobile ?? "",
                                                 emailAddresses: p.email.map { [$0] } ?? [],
                                                 imageURL: p.mxcProfile,
                                                 avatarURL: p.mxcProfile,
@@ -837,7 +841,7 @@ final class RoomService: RoomServiceProtocol {
                                 let contactLite = ContactLite(
                                     userId: uid,
                                     fullName: "",
-                                    phoneNumber: p.phone ?? "",
+                                    phoneNumber: p.mobile ?? "",
                                     emailAddresses: p.email.map { [$0] } ?? [],
                                     imageURL: p.mxcProfile,
                                     avatarURL: p.mxcProfile,

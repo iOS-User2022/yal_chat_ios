@@ -28,7 +28,7 @@ struct ProfileResponse: Codable {
     let dob: String?
     let profession: String?
     let email: String?
-    let phone: String?
+    let mobile: String?
     let profilePic: String?
     let mxcProfile: String?
 }

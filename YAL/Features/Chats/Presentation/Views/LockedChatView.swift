@@ -29,11 +29,11 @@ struct LockedChatView: View {
                     headerSection
                     roomList
                 }
-                .background(Design.Color.chatBackground)
+                .background(Design.Color.backgroundColor)
                 floatingButton
                     .position(
-                        x: geometry.size.width - 20 - 22,
-                        y: geometry.size.height - 12 - 55
+                        x: geometry.size.width - UIConstants.Layout.screenPadding - UIConstants.Layout.floatingButtonX,
+                        y: geometry.size.height - UIConstants.Layout.internalPadding - UIConstants.Layout.floatingButtonY
                     )
             }
             .onChange(of: scenePhase) { newPhase in
@@ -54,17 +54,17 @@ struct LockedChatView: View {
     
     var roomList: some View {
         ScrollView(showsIndicators: false) {
-            VStack(spacing: 24) {
+            VStack(spacing: UIConstants.Layout.menuIconWidth) {
                 ForEach(rooms) { room in
                     roomButton(for: room)
                 }
             }
-            .padding(.horizontal, 20)
-            .padding(.top, 20)
-            .padding(.bottom, 20)
+            .padding(.horizontal, UIConstants.Layout.screenPadding)
+            .padding(.top, UIConstants.Layout.screenPadding)
+            .padding(.bottom, UIConstants.Layout.screenPadding)
         }
         .frame(maxWidth: .infinity)
-        .background(Design.Color.tabHighlight.opacity(0.12))
+        .background(Design.Color.tabHighlight.opacity(UIConstants.Opacity.low))
     }
     
     func toggleUnblock(for room: RoomModel) {
@@ -88,8 +88,8 @@ struct LockedChatView: View {
                     toggleUnblock(for: room)
                 }
         }
-        .frame(height: 48)
-        .opacity((unblockRooms.contains(where: { $0.id == room.id }) || unblockRooms.count == 0) ? 1.0 : 0.5)
+        .frame(height: UIConstants.Layout.Height.chatRowHeight)
+        .opacity((unblockRooms.contains(where: { $0.id == room.id }) || unblockRooms.count == 0) ? UIConstants.Opacity.highest : UIConstants.Opacity.medium)
     }
     
     private func safeAreaTop() -> CGFloat {
@@ -103,25 +103,25 @@ struct LockedChatView: View {
                     Button(action: {
                         navPath.removeLast()
                     }) {
-                        Image("back-long")
+                        Image(UIConstants.Symbols.backIcon)
                             .resizable()
                             .aspectRatio(contentMode: .fit)
-                            .frame(width: 20, height: 20)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 10)
+                            .frame(width: UIConstants.Layout.screenPadding, height: UIConstants.Layout.screenPadding)
+                            .padding(.horizontal, UIConstants.Layout.verticalPadding)
+                            .padding(.vertical, UIConstants.Layout.verticalPadding)
                     }
-                    .padding(.leading, 10)
-                    .frame(width: 40, height: 40)
+                    .padding(.leading, UIConstants.Layout.verticalPadding)
+                    .frame(width: UIConstants.Layout.Height.iconMedium, height: UIConstants.Layout.Height.iconMedium)
                 }
-                Text("Locked Chats")
-                    .font(Design.Font.semiBold(16.0))
+                Text(Constants.lockedChats.localized)
+                    .font(Design.Font.semiBold(UIConstants.Layout.elementPadding))
                     .frame(maxWidth: .infinity, alignment: .leading)
                 Spacer()
                 if unblockRooms.count > 0 {
-                    Text("Remove")
-                        .font(Design.Font.semiBold(14.0))
+                    Text(Constants.remove.localized)
+                        .font(Design.Font.semiBold(UIConstants.Layout.Height.iconSmallest))
                         .frame(alignment: .leading)
-                        .padding(.trailing, 10)
+                        .padding(.trailing, UIConstants.Layout.verticalPadding)
                         .onTapGesture {
                             unblockRooms.forEach{ room in
                                 self.rooms.removeAll { $0.id == room.id }
@@ -133,7 +133,7 @@ struct LockedChatView: View {
         }
         .frame(maxWidth: .infinity, alignment: .topLeading)
         .padding(.top, safeAreaTop())
-        .background(Design.Color.white)
+        .background(Color(Design.Color.darkgrayColor))
     }
     
     var floatingButton: some View {
@@ -141,17 +141,17 @@ struct LockedChatView: View {
             navPath.append(NavigationTarget.manageLockedChats)
         }) {
             ZStack {
-                CustomRoundedCornersShape(radius: 12, roundedCorners: [.topLeft, .topRight, .bottomLeft])
+                CustomRoundedCornersShape(radius: UIConstants.Layout.internalPadding, roundedCorners: [.topLeft, .topRight, .bottomLeft])
                     .fill(Design.Color.appGradient)
-                    .frame(width: 44, height: 44)
+                    .frame(width: UIConstants.Layout.Height.tapTarget, height: UIConstants.Layout.Height.tapTarget)
                 
-                Image("call-add")
+                Image(UIConstants.Symbols.callAdd)
                     .resizable()
                     .scaledToFit()
-                    .frame(width: 20, height: 20)
+                    .frame(width: UIConstants.Layout.screenPadding, height: UIConstants.Layout.screenPadding)
             }
         }
-        .shadow(radius: 10)
+        .shadow(radius: UIConstants.Layout.verticalPadding)
     }
 }
 
@@ -180,22 +180,22 @@ struct ManageLockedChatsView: View {
             headerSection
 
             ScrollView(showsIndicators: false) {
-                VStack(spacing: 12) {
+                VStack(spacing: UIConstants.Layout.internalPadding) {
                     enableToggleSection
                     
                     Group {
                         lockSecuritySection
                     }
                     .disabled(!isLockedChatsEnabled)
-                    .opacity(isLockedChatsEnabled ? 1.0 : 0.6)
+                    .opacity(isLockedChatsEnabled ? UIConstants.Opacity.highest : UIConstants.Opacity.medium)
 
                 }
-                .padding(.top, 8)
+                .padding(.top, UIConstants.Layout.EditProfile.Field.labelSpacing)
             }
 
             Spacer()
         }
-        .background(Design.Color.white.ignoresSafeArea())
+        .background(Design.Color.backgroundColor)
         .navigationBarBackButtonHidden(true)
         .navigationBarHidden(true)
         .sheet(isPresented: $showSetPinView) {
@@ -216,7 +216,7 @@ struct ManageLockedChatsView: View {
 // MARK: - Header
 private extension ManageLockedChatsView {
     var headerSection: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: UIConstants.Layout.EditProfile.Field.labelSpacing) {
             Button(action: {
                 if !navPath.isEmpty {
                     navPath.removeLast()
@@ -224,21 +224,21 @@ private extension ManageLockedChatsView {
                     onBack()
                 }
             }) {
-                Image("back-long")
+                Image(UIConstants.Symbols.backIcon)
                     .resizable()
                     .aspectRatio(contentMode: .fit)
-                    .frame(width: 20, height: 20)
+                    .frame(width: UIConstants.Layout.screenPadding, height: UIConstants.Layout.screenPadding)
             }
 
-            Text("Manage Locked Chats")
-                .font(Design.Font.semiBold(16))
-                .foregroundColor(Design.Color.primaryText)
+            Text(Constants.manageLockedChats.localized)
+                .font(Design.Font.semiBold(UIConstants.Layout.elementPadding))
+                .foregroundColor(Design.Color.primaryTextColor)
 
             Spacer()
         }
-        .padding(.horizontal, 20)
-        .padding(.top, safeAreaTop() + 12)
-        .padding(.bottom, 8)
+        .padding(.horizontal, UIConstants.Layout.screenPadding)
+        .padding(.top, safeAreaTop() + UIConstants.Layout.internalPadding)
+        .padding(.bottom, UIConstants.Layout.EditProfile.Field.labelSpacing)
     }
 
     private func safeAreaTop() -> CGFloat {
@@ -250,9 +250,9 @@ private extension ManageLockedChatsView {
 private extension ManageLockedChatsView {
     var enableToggleSection: some View {
         HStack {
-            Text("Enable Locked Chats")
+            Text(Constants.enableLockedChats.localized)
                 .font(Design.Font.regular(15))
-                .foregroundColor(Design.Color.primaryText)
+                .foregroundColor(Design.Color.primaryTextColor)
 
             Spacer()
 
@@ -260,18 +260,18 @@ private extension ManageLockedChatsView {
                 .labelsHidden()
                 .toggleStyle(SwitchToggleStyle(tint: Design.Color.blue))
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 14)
-        .background(Color.gray.opacity(0.1))
+        .padding(.horizontal, UIConstants.Layout.screenPadding)
+        .padding(.vertical, UIConstants.Layout.Height.iconSmallest)
+        .background(Color.gray.opacity(UIConstants.Opacity.low))
     }
 
     var lockSecuritySection: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("Lock chat security")
-                .font(Design.Font.semiBold(14))
-                .foregroundColor(Design.Color.primaryText)
-                .padding(.horizontal, 20)
-                .padding(.vertical, 12)
+            Text(Constants.lockChatSecurity.localized)
+                .font(Design.Font.semiBold(UIConstants.Layout.Height.iconSmallest))
+                .foregroundColor(Design.Color.primaryTextColor)
+                .padding(.horizontal, UIConstants.Layout.screenPadding)
+                .padding(.vertical, UIConstants.Layout.internalPadding)
 
             ForEach(LockSecurityOption.allCases, id: \.self) { option in
                 Button(action: {
@@ -280,30 +280,32 @@ private extension ManageLockedChatsView {
                         showSetPinView = true
                     }
                 }) {
-                    HStack(spacing: 10) {
-                        Image(systemName: selectedSecurityOption == option ? "circle.inset.filled" : "circle")
-                            .foregroundColor(.black)
-                            .font(.system(size: 16, weight: .semibold))
+                    HStack(spacing: UIConstants.Layout.verticalPadding) {
+                        Image(systemName: selectedSecurityOption == option ?
+                              UIConstants.Symbols.checkBoxCircleFilled :
+                                UIConstants.Symbols.checkBoxCircle)
+                            .foregroundColor(.white)
+                            .font(.system(size: UIConstants.Layout.elementPadding, weight: .semibold))
 
                         Text(option.label)
-                            .font(Design.Font.regular(14))
-                            .foregroundColor(Design.Color.primaryText)
+                            .font(Design.Font.regular(UIConstants.Layout.Height.iconSmallest))
+                            .foregroundColor(Design.Color.primaryTextColor)
 
                         Spacer()
 
                         if option == .pin {
-                            Text("Set PIN")
-                                .font(Design.Font.semiBold(14))
-                                .foregroundColor(.black)
-                                .underline(true, color: .black)
+                            Text(Constants.setPinTitle.localized)
+                                .font(Design.Font.semiBold(UIConstants.Layout.Height.iconSmallest))
+                                .foregroundColor(.white)
+                                .underline(true, color: .white)
                         }
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 10)
+                    .padding(.horizontal, UIConstants.Layout.screenPadding)
+                    .padding(.vertical, UIConstants.Layout.verticalPadding)
                 }
             }
         }
-        .background(Color.gray.opacity(0.1))
+        .background(Color.gray.opacity(UIConstants.Opacity.low))
     }
 }
 
@@ -317,11 +319,11 @@ enum LockSecurityOption: String, CaseIterable {
     var label: String {
         switch self {
         case .biometric:
-            return "Biometric – use system default"
+            return Constants.biometricSystemDefault.localized
         case .faceID:
-            return "Face ID – use system default"
+            return Constants.faceIdSystemDefault.localized
         case .pin:
-            return "PIN"
+            return Constants.pin.localized
         }
     }
 }
@@ -345,34 +347,34 @@ struct SetPinView: View {
     var isConfirmMode: Bool = false
 
     private var isPinComplete: Bool {
-        pinDigits.joined().count == 6
+        pinDigits.joined().count == UIConstants.pinDigits
     }
 
     var body: some View {
         ZStack(alignment: .topLeading) {
             VStack(spacing: 0) {
-                Spacer().frame(height: 120)
+                Spacer().frame(height: UIConstants.Layout.spacing120)
                 
-                Text(isConfirmMode ? "Verify PIN" : "Set PIN")
-                    .font(Design.Font.bold(24))
-                    .foregroundColor(Design.Color.headingText)
+                Text(isConfirmMode ? Constants.verifyPin.localized : Constants.setPinTitle.localized)
+                    .font(Design.Font.bold(UIConstants.Layout.menuIconWidth))
+                    .foregroundColor(Design.Color.primaryTextColor)
                     .multilineTextAlignment(.center)
-                    .padding(.bottom, 30)
+                    .padding(.bottom, UIConstants.Layout.sectionBottomPadding)
                 
                 subHeadingSection()
-                Spacer().frame(height: 24)
+                Spacer().frame(height: UIConstants.Layout.menuIconWidth)
                 
                 // Reuse the same OTP-style input
                 otpInputFields()
                 
-                Spacer().frame(height: 48)
+                Spacer().frame(height: UIConstants.Layout.Height.chatRowHeight)
                 
                 verifyButton()
                 
                 Spacer()
             }
-            .padding(.horizontal, 30)
-            .background(Color.white)
+            .padding(.horizontal, UIConstants.Layout.sectionBottomPadding)
+            .background(Design.Color.backgroundColor)
             
             backButton()
         }
@@ -382,8 +384,9 @@ struct SetPinView: View {
     @ViewBuilder
     private func subHeadingSection() -> some View {
         (
-            Text(!isConfirmMode ? "Set your 6-digit PIN to secure your chats." : "Enter the 6-digit PIN you set earlier to unlock your chat.")
-                .foregroundColor(Design.Color.headingText.opacity(0.7))
+            Text(!isConfirmMode ? Constants.setPinDesc.localized :
+                    Constants.verifyPinDesc.localized)
+            .foregroundColor(Design.Color.primaryTextColor.opacity(UIConstants.Opacity.medium))
                 .font(Design.Font.body)
         )
         .multilineTextAlignment(.center)
@@ -394,8 +397,8 @@ struct SetPinView: View {
     private func otpInputFields() -> some View {
         ZStack {
             hiddenTextField()
-            HStack(spacing: 16) {
-                ForEach(0..<6, id: \.self) { index in
+            HStack(spacing: UIConstants.Layout.elementPadding) {
+                ForEach(0..<UIConstants.pinDigits, id: \.self) { index in
                     otpBox(index: index)
                 }
             }
@@ -421,8 +424,9 @@ struct SetPinView: View {
             }
         ))
         .keyboardType(.numberPad)
-        .frame(width: 1, height: 1)
-        .opacity(0.001)
+        .frame(width: UIConstants.Layout.deleteButtonBorderWidth,
+               height: UIConstants.Layout.deleteButtonBorderWidth)
+        .opacity(UIConstants.Opacity.lowest)
         .focused($focusedIndex, equals: 0)
     }
 
@@ -431,13 +435,13 @@ struct SetPinView: View {
         VStack(spacing: 2) {
             Spacer()
             Text(pinDigits[index])
-                .font(Design.Font.regular(16))
-                .foregroundColor(Design.Color.primaryText.opacity(0.7))
+                .font(Design.Font.regular(UIConstants.Layout.elementPadding))
+                .foregroundColor(Design.Color.primaryTextColor.opacity(UIConstants.Opacity.medium))
             if pinDigits[index].isEmpty {
                 Rectangle()
-                    .frame(width: 11, height: 1)
-                    .foregroundColor(Design.Color.primaryText.opacity(0.7))
-                    .padding(.horizontal, 8)
+                    .frame(width: 11, height: UIConstants.Layout.deleteButtonBorderWidth)
+                    .foregroundColor(Design.Color.primaryTextColor.opacity(UIConstants.Opacity.medium))
+                    .padding(.horizontal, UIConstants.Layout.EditProfile.Field.labelSpacing)
                 Spacer().frame(height: 3)
             }
         }
@@ -446,7 +450,8 @@ struct SetPinView: View {
         .overlay(
             RoundedRectangle(cornerRadius: 4)
                 .inset(by: 0.5)
-                .stroke(Design.Color.navy, lineWidth: 1)
+                .stroke(Design.Color.white,
+                        lineWidth: UIConstants.Layout.deleteButtonBorderWidth)
         )
     }
 
@@ -459,24 +464,25 @@ struct SetPinView: View {
                 dismiss()
             }
         }) {
-            HStack(spacing: 12) {
+            HStack(spacing: UIConstants.Layout.internalPadding) {
                 Spacer()
-                Text(isConfirmMode ? "Verify" : "Save")
-                Image("arrow-right-white")
+                Text(isConfirmMode ? Constants.verify.localized : Constants.save.localized)
+                Image(UIConstants.Symbols.arrowRightWhite)
                     .resizable()
-                    .frame(width: 20, height: 20)
+                    .frame(width: UIConstants.Layout.screenPadding,
+                           height: UIConstants.Layout.screenPadding)
                 Spacer()
             }
             .font(Design.Font.button)
             .foregroundColor(.white)
             .padding()
-            .frame(height: 60)
+            .frame(height: UIConstants.Layout.ActionButton.height)
             .background(
-                isPinComplete ? Design.Color.appGradient.opacity(1.0)
-                              : Design.Color.appGradient.opacity(0.6)
+                isPinComplete ? Design.Color.appGradient.opacity(UIConstants.Opacity.highest)
+                              : Design.Color.appGradient.opacity(UIConstants.Opacity.medium)
             )
-            .cornerRadius(20)
-            .shadow(color: Color.black.opacity(0.2), radius: 10, x: 0, y: 5)
+            .cornerRadius(UIConstants.Layout.screenPadding)
+            .shadow(color: Color.black.opacity(0.2), radius: UIConstants.Layout.verticalPadding, x: 0, y: 5)
         }
         .padding(.horizontal, 12.5)
         .disabled(!isPinComplete)
@@ -486,11 +492,14 @@ struct SetPinView: View {
     @ViewBuilder
     private func backButton() -> some View {
         Button(action: { dismiss() }) {
-            Image("cross-black")
+            Image(UIConstants.Symbols.crossBlack)
+                .renderingMode(.template)
                 .resizable()
-                .frame(width: 24, height: 24)
+                .foregroundColor(.white)
+                .frame(width: UIConstants.Layout.menuIconWidth,
+                       height: UIConstants.Layout.menuIconWidth)
         }
-        .padding(.top, 50)
-        .padding(.leading, UIScreen.main.bounds.width - 44)
+        .padding(.top, UIConstants.Layout.backButtonPadding)
+        .padding(.leading, UIScreen.main.bounds.width - UIConstants.Layout.Height.tapTarget)
     }
 }

@@ -63,7 +63,7 @@ final class UserRepository {
                             dob: p.dob,
                             profession: p.profession,
                             email: p.email,
-                            phone: p.phone,
+                            mobile: p.mobile,
                             profilePic: p.profilePic,
                             mxcProfile: p.mxcProfile
                         )

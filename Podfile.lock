@@ -1,4 +1,22 @@
 PODS:
+  - Giphy (2.2.12):
+    - libwebp
+  - JitsiMeetSDK (11.4.0):
+    - Giphy (= 2.2.12)
+    - JitsiWebRTC (~> 124.0)
+  - JitsiWebRTC (124.0.2)
+  - libwebp (1.5.0):
+    - libwebp/demux (= 1.5.0)
+    - libwebp/mux (= 1.5.0)
+    - libwebp/sharpyuv (= 1.5.0)
+    - libwebp/webp (= 1.5.0)
+  - libwebp/demux (1.5.0):
+    - libwebp/webp
+  - libwebp/mux (1.5.0):
+    - libwebp/demux
+  - libwebp/sharpyuv (1.5.0)
+  - libwebp/webp (1.5.0):
+    - libwebp/sharpyuv
   - netfox (1.21.0)
   - TensorFlowLiteC (2.17.0):
     - TensorFlowLiteC/Core (= 2.17.0)
@@ -11,20 +29,29 @@ PODS:
   - TensorFlowLiteSwift/Privacy (2.17.0)
 
 DEPENDENCIES:
+  - JitsiMeetSDK
   - netfox
   - TensorFlowLiteSwift (~> 2.12)
 
 SPEC REPOS:
   trunk:
+    - Giphy
+    - JitsiMeetSDK
+    - JitsiWebRTC
+    - libwebp
     - netfox
     - TensorFlowLiteC
     - TensorFlowLiteSwift
 
 SPEC CHECKSUMS:
+  Giphy: 83628960ed04e1c3428ff1b4fb2b027f65e82f50
+  JitsiMeetSDK: 7d779172ac5b2fd7790ce8959f1e0dc71cd85b32
+  JitsiWebRTC: b47805ab5668be38e7ee60e2258f49badfe8e1d0
+  libwebp: 02b23773aedb6ff1fd38cec7a77b81414c6842a8
   netfox: 9d5cc727fe7576c4c7688a2504618a156b7d44b7
   TensorFlowLiteC: eac6d689a8d391d1b202dc59e3d9165ba64aaf73
   TensorFlowLiteSwift: 723fe42222815e72490c79feeff05305530de393
 
-PODFILE CHECKSUM: 7c794681305c2fb94e567a2b42d6c6408ada260f
+PODFILE CHECKSUM: 26fa7c7c68833ae781b9a1fcb4522dd7dc58241a
 
 COCOAPODS: 1.16.2

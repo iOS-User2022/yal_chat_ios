@@ -118,6 +118,11 @@ final class ApiManager: ApiManageable {
         )
             
     }
+    func getLKAccessToken(roomName: String, participantName: String, participantId: String, avatarUrl: String) -> AnyPublisher<APIResult<LKTokenResponse>, APIError> {
+        performPost(Endpoint.getLKToken.path,
+                    LKTokenRequest(roomName: roomName, participantName: participantName, participantId: participantId, avatarUrl: avatarUrl),
+                    expecting: LKTokenResponse.self)
+    }
 }
 
 private extension ApiManager {

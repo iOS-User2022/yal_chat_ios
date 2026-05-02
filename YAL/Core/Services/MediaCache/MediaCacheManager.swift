@@ -102,53 +102,79 @@ final class MediaCacheManager: ObservableObject {
         progressHandler: @escaping (Double) -> Void,
         completion: @escaping (Result<String, Error>) -> Void
     ) {
-        if let path = stateRead({ memoryCache[url] }),
-           fileManager.fileExists(atPath: path) {
-            DispatchQueue.main.async { completion(.success(path)) }
-            persist(url: url, type: type, state: .downloaded, path: path, progress: 1.0, force: true)
-            return
-        }
+        stateReadAsync({ [self] in memoryCache[url] }) { [weak self] cachedPath in
+            guard let self = self else { return }
 
-        ioQ.async { [weak self] in
-            guard let self else { return }
-
-            if let cached = self.realmGetCachedMedia(url: url) {
-                let full = self.resolveFullURL(from: cached.fileName)
-                if self.fileManager.fileExists(atPath: full.path),
-                   cached.state == .downloaded {
-                    let path = full.path
-                    self.stateWrite { self.memoryCache[url] = path }
-                    DispatchQueue.main.async { completion(.success(path)) }
-                    self.persist(url: url, type: type, state: .downloaded, path: path, progress: 1.0, force: true)
-                    return
-                }
+            if let path = cachedPath, self.fileManager.fileExists(atPath: path) {
+                DispatchQueue.main.async { completion(.success(path)) }
+                self.persist(url: url, type: type, state: .downloaded, path: path, progress: 1.0, force: true)
+                return
             }
 
-            let shouldStart: Bool = self.stateWriteSync {
-                if var s = self.downloadTasks[url] {
-                    s.progressHandlers.append(progressHandler)
-                    s.completionHandlers.append(completion)
-                    self.downloadTasks[url] = s
-                    return false
-                } else {
-                    self.downloadTasks[url] = TaskState(
-                        progressHandlers: [progressHandler],
-                        completionHandlers: [completion],
-                        cancellable: nil,
-                        lastEmit: 0,
-                        lastValue: -1
-                    )
-                    return true
-                }
-            }
+            self.ioQ.async { [weak self] in
+                guard let self = self else { return }
 
-            if shouldStart {
-                self.persist(url: url, type: type, state: .downloading, path: "", progress: 0.0, force: true)
-                self.startDownload(url: url, type: type)
+                if let cached = self.realmGetCachedMedia(url: url) {
+                    let full = self.resolveFullURL(from: cached.fileName)
+                    if self.fileManager.fileExists(atPath: full.path),
+                       cached.state == .downloaded {
+                        let path = full.path
+                        self.stateWrite { self.memoryCache[url] = path }
+                        DispatchQueue.main.async { completion(.success(path)) }
+                        self.persist(url: url, type: type, state: .downloaded, path: path, progress: 1.0, force: true)
+                        return
+                    }
+                }
+
+                let shouldStart: Bool = self.stateWriteSync {
+                    if var s = self.downloadTasks[url] {
+                        s.progressHandlers.append(progressHandler)
+                        s.completionHandlers.append(completion)
+                        self.downloadTasks[url] = s
+                        return false
+                    } else {
+                        self.downloadTasks[url] = TaskState(
+                            progressHandlers: [progressHandler],
+                            completionHandlers: [completion],
+                            cancellable: nil,
+                            lastEmit: 0,
+                            lastValue: -1
+                        )
+                        return true
+                    }
+                }
+
+                if shouldStart {
+                    self.persist(url: url, type: type, state: .downloading, path: "", progress: 0.0, force: true)
+                    self.startDownload(url: url, type: type)
+                }
             }
         }
     }
 
+    func peekCachedPath(url: String, completion: @escaping (String?) -> Void) {
+        stateReadAsync({ self.memoryCache[url] }) { [weak self] mem in
+            guard let self = self else { completion(nil); return }
+            if let path = mem, self.fileManager.fileExists(atPath: path) {
+                completion(path)
+                return
+            }
+            self.ioQ.async { [weak self] in
+                guard let self = self else { completion(nil); return }
+                if let cached = self.realmGetCachedMedia(url: url) {
+                    let full = self.resolveFullURL(from: cached.fileName)
+                    if self.fileManager.fileExists(atPath: full.path),
+                       cached.state == .downloaded {
+                        self.stateWrite { self.memoryCache[url] = full.path } // warm memory
+                        completion(full.path)
+                        return
+                    }
+                }
+                completion(nil)
+            }
+        }
+    }
+    
     func clearOldCache(maxItems: Int = 1000) {
         ioQ.async { [weak self] in
             guard let self else { return }
@@ -476,6 +502,10 @@ final class MediaCacheManager: ObservableObject {
         stateQ.sync(execute: block)
     }
 
+    func stateReadAsync<T>(_ block: @escaping () -> T, _ done: @escaping (T) -> Void) {
+        stateQ.async { done(block()) }
+    }
+    
     /// Synchronous barrier write (fixes `shouldStart` race).
     @inline(__always)
     private func stateWriteSync<T>(_ block: () -> T) -> T {

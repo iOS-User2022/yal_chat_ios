@@ -17,6 +17,7 @@ final class UserProfileViewModel: ObservableObject {
     @Published var sharedGroups: [RoomModel] = []
     private var cancellables = Set<AnyCancellable>()
     @Published var isFavorite: Bool = false
+    @Published var alertModel: AlertViewModel? = nil
 
     init(user: ContactModel, currentRoom: RoomModel, roomService: RoomServiceProtocol) {
         self.user = user
@@ -26,9 +27,24 @@ final class UserProfileViewModel: ObservableObject {
 
         fetchCommonGroups()
     }
+    
+    func showAlertForSuccess() {
+        alertModel = AlertViewModel(
+            title: Constants.chatClearedTitle.localized,
+            subTitle: Constants.chatClearedMessage.localized,
+            imageName: UIConstants.Symbols.tickCircleGreen,
+            actions: [
+                AlertActionModel(
+                    title: Constants.okButton.localized,
+                    style: .secondary,
+                    action: {}
+                )
+            ]
+        )
+    }
 
     func fetchCommonGroups() {
-        guard let userId = user.userId else {
+        guard let userId = roomDetails.opponent?.userId else {
             return
         }
         roomService.getCommonGroups(with: userId)

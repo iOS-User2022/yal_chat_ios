@@ -5,11 +5,8 @@
 //  Created by Vishal Bhadade on 10/04/25.
 //
 
-
 import SwiftUI
 import PhotosUI
-
-import SwiftUI
 
 struct EditProfileView: View {
     @Environment(\.dismiss) private var dismiss
@@ -17,8 +14,8 @@ struct EditProfileView: View {
 
     @State private var showDatePicker = false
     @State private var selectedDate: Date = ISO8601DateFormatter().date(from: "1992-03-10T00:00:00Z") ?? Date()
-
-    private let genders = ["Male", "Female", "Other"]
+    
+    private let genders = [Constants.male.localized, Constants.female.localized, Constants.other.localized]
     @ObservedObject var viewModel: ProfileViewModel
 
     @Binding var showSuccessPopup: Bool
@@ -30,98 +27,120 @@ struct EditProfileView: View {
     }
     
     var body: some View {
-        VStack(spacing: 0) {
-            Spacer().frame(height: 10)
-
+        VStack(spacing: UIConstants.NavBar.zeroSpacing) {
             // Drag Handle
             Capsule()
-                .fill(Design.Color.black.opacity(0.2))
-                .frame(width: 60, height: 4)
-                .cornerRadius(2)
+                .fill(Color.white.opacity(UIConstants.Opacity.medium))
+                .frame(width: UIConstants.Layout.EditProfile.DragHandle.width, height: UIConstants.Layout.EditProfile.DragHandle.height)
+                .padding(.top, UIConstants.Layout.EditProfile.DragHandle.topPadding)
             
-            Spacer().frame(height: 10)
-
-            Spacer().frame(height: 20)
-
-            // Title
-            Text("Edit Profile")
-                .font(Design.Font.bold(16))
-                .foregroundColor(Design.Color.primaryText)
-
-            Spacer().frame(height: 20)
-
-            // Form Fields
-            Group {
-                editTextField(
-                    title: "Name",
-                    text: Binding(
-                        get: { viewModel.editableProfile?.name ?? "" },
-                        set: { viewModel.editableProfile?.name = $0 }
-                    )
-                )
+            Spacer().frame(height: UIConstants.Layout.EditProfile.Spacing.headerTopPadding)
+            
+            // Header with close button
+            HStack {
+                Spacer()
                 
-                Spacer().frame(height: 12)
+                Text(Constants.editProfileTitle.localized)
+                    .font(Design.TextStyle.editProfileTitle)
+                    .foregroundColor(.white)
                 
-                genderPicker(
-                    title: "Gender",
-                    selection: Binding(
-                        get: { viewModel.editableProfile?.gender ?? "" },
-                        set: { viewModel.editableProfile?.gender = $0 }
-                    )
-                )
+                Spacer()
                 
-                Spacer().frame(height: 12)
-                
-                editTextField(
-                    title: "Email",
-                    text: Binding(
-                        get: { viewModel.editableProfile?.email ?? "" },
-                        set: { viewModel.editableProfile?.email = $0 }
-                    )
-                )
-                
-                Spacer().frame(height: 12)
-                
-                datePickerField(
-                    title: "D.O.B.",
-                    selectedDate: $selectedDate,
-                    dateString: Binding(
-                        get: { viewModel.editableProfile?.dob ?? "" },
-                        set: { viewModel.editableProfile?.dob = $0 }
-                    ),
-                    showPicker: $showDatePicker
-                )
-                
-                Spacer().frame(height: 12)
-                
-                editTextField(
-                    title: "Profession",
-                    text: Binding(
-                        get: { viewModel.editableProfile?.profession ?? "" },
-                        set: { viewModel.editableProfile?.profession = $0 }
-                    )
-                )
-                
-                Spacer().frame(height: 24)
-            }
-
-            Spacer().frame(height: 20)
-
-            // Action Buttons
-            HStack(spacing: 24) {
                 Button(action: {
                     dismiss()
                 }) {
-                    Text("Cancel")
-                        .frame(maxWidth: .infinity)
-                        .padding()  // Let padding handle button height automatically
-                        .background(Design.Color.lightGrayBackground)
-                        .foregroundColor(.black)
-                        .cornerRadius(12)
-                        .minimumScaleFactor(0.5)  // Ensures text scales down to fit if needed
-                        .lineLimit(1)  // Prevents text wrapping
+                    Image(.close)
+                        .font(Design.TextStyle.editProfileCloseIcon)
+                        .foregroundColor(.white)
+                        .frame(
+                            width: UIConstants.Layout.EditProfile.CloseIcon.size,
+                            height: UIConstants.Layout.EditProfile.CloseIcon.size
+                        )
                 }
-
+                .padding(.trailing, UIConstants.NavBar.zeroSpacing)
+            }
+            .padding(.horizontal, UIConstants.Layout.EditProfile.Spacing.headerHPadding)
+            
+            Spacer().frame(height: UIConstants.Layout.EditProfile.Spacing.belowHeader)
+            
+            // Scrollable form content
+            ScrollView(showsIndicators: false) {
+                VStack(spacing:  UIConstants.Layout.EditProfile.Spacing.sectionGap) {
+                    editTextField(
+                        title: Constants.about.localized,
+                        text: Binding(
+                            get: { viewModel.editableProfile?.about ?? "" },
+                            set: { viewModel.editableProfile?.about = $0 }
+                        )
+                    )
+                    
+                    editTextField(
+                        title: Constants.name.localized,
+                        text: Binding(
+                            get: { viewModel.editableProfile?.name ?? "" },
+                            set: { viewModel.editableProfile?.name = $0 }
+                        )
+                    )
+                    
+                    genderPicker(
+                        title: Constants.gender.localized,
+                        selection: Binding(
+                            get: { viewModel.editableProfile?.gender ?? "" },
+                            set: { viewModel.editableProfile?.gender = $0 }
+                        )
+                    )
+                    
+                    editTextField(
+                        title: Constants.email.localized,
+                        text: Binding(
+                            get: { viewModel.editableProfile?.email ?? "" },
+                            set: { viewModel.editableProfile?.email = $0 }
+                        )
+                    )
+                    
+                    datePickerField(
+                        title: Constants.dateOfBirth.localized,
+                        selectedDate: $selectedDate,
+                        dateString: Binding(
+                            get: { viewModel.editableProfile?.dob ?? "" },
+                            set: { viewModel.editableProfile?.dob = $0 }
+                        ),
+                        showPicker: $showDatePicker
+                    )
+                    
+                    editTextField(
+                        title: Constants.profession.localized,
+                        text: Binding(
+                            get: { viewModel.editableProfile?.profession ?? "" },
+                            set: { viewModel.editableProfile?.profession = $0 }
+                        )
+                    )
+                }
+                .padding(.horizontal, UIConstants.Layout.screenPadding)
+                .padding(.bottom, UIConstants.Layout.screenPadding)
+            }
+            
+            Spacer().frame(height: UIConstants.Layout.EditProfile.Spacing.belowHeader)
+            
+            // Action Buttons
+            HStack(spacing: UIConstants.Layout.EditProfile.Button.horizontalGap) {
+                Button(action: {
+                    dismiss()
+                }) {
+                    Text(Constants.editProfileCancelButton.localized)
+                        .font(Design.TextStyle.editProfileButton)
+                        .foregroundColor(Design.Color.mediumGray)
+                        .frame(
+                            width: UIConstants.Layout.EditProfile.Button.width,
+                            height: UIConstants.Layout.EditProfile.Button.height
+                        )
+                        .background(Color.clear)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: UIConstants.Layout.EditProfile.Button.cornerRadius)
+                                .stroke(Design.Color.medium_gray, lineWidth: UIConstants.Layout.EditProfile.Button.borderWidth)
+                        )
+                }
+                
                 Button(action: {
                     viewModel.updateProfileIfNeeded() { success in
                         showSuccessPopup = true
@@ -130,103 +149,117 @@ struct EditProfileView: View {
                     }
                     dismiss()
                 }) {
-                    Text("Save Changes")
-                        .frame(maxWidth: .infinity)
-                        .padding()  // Let padding handle button height automatically
-                        .background(Design.Color.appGradient)
+                    Text(Constants.editProfileSaveButton.localized)
+                        .font(Design.TextStyle.editProfileButton)
                         .foregroundColor(.white)
-                        .cornerRadius(12)
-                        .minimumScaleFactor(0.5)  // Ensures text scales down to fit if needed
-                        .lineLimit(1)  // Prevents text wrapping
+                        .frame(
+                            width: UIConstants.Layout.EditProfile.Button.width,
+                            height: UIConstants.Layout.EditProfile.Button.height
+                        )
+                        .background(Design.Color.appGradient)
+                        .cornerRadius(UIConstants.Layout.EditProfile.Button.cornerRadius)
                 }
             }
-            .padding(.horizontal, 20)
-            
-            Spacer()
+            Spacer().frame(height: UIConstants.Layout.EditProfile.Spacing.sheetBottomPadding)
+                .padding(.horizontal, UIConstants.Layout.EditProfile.Spacing.headerHPadding)
+                .padding(.bottom, -UIConstants.Layout.EditProfile.Button.height / 2)
         }
-        .padding(.horizontal, 20)
-        .background(Design.Color.white.opacity(0.6))
-        .clipShape(RoundedRectangle(cornerRadius: 24))
-        .ignoresSafeArea(.all)
+        .frame(maxWidth: .infinity)
+        .background(Color(hex: UIConstants.Layout.EditProfile.backgroundColor))
+        .shadow(color: Color.black.opacity(UIConstants.Opacity.medium / 2), radius: 20, x: 0, y: -5)
+        .ignoresSafeArea(.keyboard)
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.hidden)
     }
-
+    
     // MARK: - Reusable Fields
-
+    
     @ViewBuilder
     private func editTextField(title: String, text: Binding<String>) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: UIConstants.Layout.EditProfile.Field.labelSpacing) {
             Text(title)
-                .font(Design.Font.regular(12))
-                .foregroundColor(Design.Color.primaryText.opacity(0.6))
-            TextField("", text: text)
-                .padding()
-                .foregroundColor(Design.Color.headingText.opacity(0.7))
-                .font(Design.Font.regular(16))
-                .background(Design.Color.white)
-                .cornerRadius(8)
-                .overlay(RoundedRectangle(cornerRadius: 8).stroke(Design.Color.navy, lineWidth: 1))
+                .font(Design.TextStyle.editProfileFieldLabel)
+                .foregroundColor(Design.Color.primaryTextColor)
+            
+            TextField(Constants.editProfileInputPlaceholder.localized, text: text)
+                .font(Design.TextStyle.editProfileFieldText)
+                .foregroundColor(Design.Color.secondryTextColor)
+                .frame(width: UIConstants.Layout.EditProfile.Field.width,
+                       height: UIConstants.Layout.EditProfile.Field.height)
+                .padding(.horizontal, UIConstants.Layout.EditProfile.Field.horizontalPadding)
+                .background(Design.Color.backgroundColor)
+                .cornerRadius(UIConstants.Layout.Radius.small)
         }
-        .padding(.horizontal, 30)
     }
-
+    
     @ViewBuilder
     private func genderPicker(title: String, selection: Binding<String>) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: UIConstants.Layout.EditProfile.Field.labelSpacing) {
             Text(title)
                 .font(Design.Font.regular(12))
-                .foregroundColor(Design.Color.primaryText.opacity(0.6))
+                .foregroundColor(Design.Color.primaryTextColor)
+            
             Menu {
                 ForEach(genders, id: \.self) { gender in
                     Button(gender) { selection.wrappedValue = gender }
                 }
             } label: {
                 HStack {
-                    Text(selection.wrappedValue.isEmpty ? "Select Gender" : selection.wrappedValue)
-                        .foregroundColor(Design.Color.headingText.opacity(0.7))
-                        .font(Design.Font.regular(16))
+                    Text(selection.wrappedValue.isEmpty ? Constants.selectGender.localized : selection.wrappedValue)
+                        .font(Design.TextStyle.editProfileChevronIcon)
+                        .foregroundColor(Design.Color.secondryTextColor)
                     
                     Spacer()
                     
-                    Image("arrow-down")
-                        .scaledToFit()
+                    Image(systemName: UIConstants.Symbols.chevronDown)
+                        .font(Design.TextStyle.editProfileChevronIcon)
+                        .foregroundColor(.white.opacity(UIConstants.Opacity.medium))
                 }
-                .padding()
-                .background(Design.Color.white)
-                .cornerRadius(8)
-                .overlay(RoundedRectangle(cornerRadius: 8).stroke(Design.Color.navy, lineWidth: 1))
+                .frame(
+                    width: UIConstants.Layout.EditProfile.Field.width,
+                    height: UIConstants.Layout.EditProfile.Field.height
+                )
+                .padding(.horizontal, UIConstants.Layout.EditProfile.Field.horizontalPadding)
+                .background(Color(hex: UIConstants.Layout.EditProfile.genderBackgroundColor))
+                .cornerRadius(UIConstants.Layout.Radius.small)
             }
         }
-        .padding(.horizontal, 30)
     }
 
     @ViewBuilder
     private func datePickerField(title: String, selectedDate: Binding<Date>, dateString: Binding<String>, showPicker: Binding<Bool>) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: UIConstants.Layout.EditProfile.Field.labelSpacing) {
             Text(title)
-                .font(Design.Font.regular(12))
-                .foregroundColor(Design.Color.primaryText.opacity(0.6))
+                .font(Design.TextStyle.editProfileFieldLabel)
+                .foregroundColor(Design.Color.primaryTextColor)
 
             Button {
                 showPicker.wrappedValue = true
             } label: {
                 HStack {
                     Text(dateString.wrappedValue.formattedDateFromISO())
-                        .foregroundColor(Design.Color.headingText.opacity(0.7))
-                        .font(Design.Font.regular(16))
+                        .font(Design.Font.regular(14))
+                        .foregroundColor(Design.Color.secondryTextColor)
+                    
                     Spacer()
-                    Image("calendar")
-                        .foregroundColor(.gray)
+                    
+                    Image(systemName: "calendar")
+                        .font(Design.TextStyle.editProfileCalendarIcon)
+                        .foregroundColor(.white.opacity(UIConstants.Opacity.medium))
                 }
-                .padding()
-                .background(Design.Color.white)
-                .cornerRadius(8)
-                .overlay(RoundedRectangle(cornerRadius: 8).stroke(Design.Color.navy, lineWidth: 1))
+                .frame(
+                    width: UIConstants.Layout.EditProfile.Field.width,
+                    height: UIConstants.Layout.EditProfile.Field.height
+                )
+                .padding(.horizontal, UIConstants.Layout.EditProfile.Field.horizontalPadding)
+                .background(Design.Color.backgroundColor)
+                .cornerRadius(UIConstants.Layout.Radius.small)
             }
             .sheet(isPresented: showPicker) {
                 VStack {
                     let today = Date()
                     let hundredYearsAgo = Calendar.current.date(byAdding: .year, value: -100, to: today)!
-                    DatePicker("Select Date",
+                    DatePicker(Constants.editProfileDatePlaceholder.localized,
                                selection: selectedDate,
                                in: hundredYearsAgo...today,
                                displayedComponents: .date)
@@ -234,7 +267,7 @@ struct EditProfileView: View {
                         .labelsHidden()
                         .padding()
 
-                    Button("Done") {
+                    Button(Constants.editProfileDoneButton.localized) {
                         // Format for showing nicely on UI
                         dateString.wrappedValue = dateString.wrappedValue.formattedDateFromISO()
 
@@ -253,10 +286,5 @@ struct EditProfileView: View {
                 .presentationDetents([.medium])
             }
         }
-        .padding(.horizontal, 30)
     }
-
 }
-
-
-

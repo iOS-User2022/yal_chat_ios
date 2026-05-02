@@ -14,11 +14,23 @@ struct MessageRequest: Request {
     let url: String?
     let filename: String?
     let info: MediaInfoRequest?
-    let relatesTo: RelatesToRequest?
-
+    var relatesTo: RelatesToRequest?
+    let newContent: NewContentRequest?
+    var callId: String?
+    var lifetime: String?
+    var invitee: String?
+    var offer: Offer?
+    var partyId: String?
+    var sdpStreamMetadata: [StreamMetadata]?
+    var version: Int64 = 0
+    
     enum CodingKeys: String, CodingKey {
-        case body, msgtype, url, filename, info
+        case body, msgtype, url, filename, info, lifetime, invitee
         case relatesTo = "m.relates_to"
+        case newContent = "m.new_content"
+        case callId = "call_id"
+        case partyId = "party_id"
+        case sdpStreamMetadata = "sdp_stream_metadata"
     }
 
     init(
@@ -27,7 +39,15 @@ struct MessageRequest: Request {
         url: String? = nil,
         filename: String? = nil,
         info: MediaInfoRequest? = nil,
-        replyToEventId: String? = nil
+        replyToEventId: String? = nil,
+        newContent: NewContentRequest? = nil,
+        callId: String? = nil,
+        lifetime: String? = nil,
+        invitee: String? = nil,
+        offer: Offer? = nil,
+        partyId: String? = nil,
+        sdpStreamMetadata: [StreamMetadata]? = nil,
+        version: Int64 = 0
     ) {
         self.body = body
         self.msgtype = msgtype.rawValue
@@ -39,20 +59,49 @@ struct MessageRequest: Request {
         } else {
             self.relatesTo = nil
         }
+        if let replyToEventId = replyToEventId, msgtype == .videoCall || msgtype == .voiceCall  {
+            self.newContent = NewContentRequest(msgtype: msgtype.rawValue, body: body)
+            self.relatesTo = RelatesToRequest(relType: "m.replace", eventId: replyToEventId)
+        } else {
+            self.newContent = nil
+        }
+        self.callId = callId
+        self.lifetime = lifetime
+        self.invitee = invitee
+        self.offer = offer
+        self.partyId = partyId
+        self.sdpStreamMetadata = sdpStreamMetadata
+        self.version = 0
+        
     }
 
-    init(fromText body: String, replyToEventId: String? = nil) {
-        self.init(body: body, msgtype: .text, replyToEventId: replyToEventId)
+    init(fromText body: String, replyToEventId: String? = nil, msgtype: MessageType) {
+        self.init(body: body, msgtype: msgtype, replyToEventId: replyToEventId)
     }
 
     init?(from message: ChatMessageModel) {
         let msgType = MessageType(rawValue: message.msgType) ?? .file
 
-        if msgType == .text {
-            self.init(fromText: message.content, replyToEventId: message.inReplyTo?.eventId)
+        if msgType == .text{
+            self.init(fromText: message.content, replyToEventId: message.inReplyTo?.eventId, msgtype: msgType)
             return
         }
 
+        if msgType == .voiceCall || msgType == .videoCall{
+            self.init(
+                body: message.content,
+                msgtype: msgType,
+                replyToEventId: (message.callId == "changeStatus") ? message.eventId : nil,
+                callId: message.callId,
+                lifetime: message.lifetime,
+                invitee: message.invitee,
+                offer: message.offer,
+                partyId: message.partyId,
+                sdpStreamMetadata: message.sdpStreamMetadata,
+                version: 0
+            )
+            return
+        }
         guard
             let url = message.mediaUrl,
             let mediaInfo = message.mediaInfo,
@@ -190,5 +239,22 @@ struct InReplyToRequest: Codable {
         self.eventId = eventId
         self.key = key
         self.relationType = relationType
+    }
+}
+
+// MARK: - Reply Structs
+
+struct NewContentRequest: Codable {
+    let msgtype: String?
+    let body: String?
+    
+    enum CodingKeys: String, CodingKey {
+        case msgtype
+        case body
+    }
+    
+    init(msgtype: String? = nil, body: String? = nil) {
+        self.msgtype = msgtype
+        self.body = body
     }
 }

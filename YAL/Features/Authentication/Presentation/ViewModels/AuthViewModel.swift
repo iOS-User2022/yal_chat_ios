@@ -73,10 +73,10 @@ class AuthViewModel: ObservableObject {
     }
 
     func checkLoginStatus() {
-        if let session = sessionProvider.session, !session.accessToken.isEmpty {
-            isLoggedIn = true
-            router.currentRoute = .dashboard
-        } else {
+       if let session = sessionProvider.session, !session.accessToken.isEmpty {
+           isLoggedIn = true
+           router.currentRoute = .dashboard
+       } else {
             isLoggedIn = false
             router.currentRoute = .onboarding
         }

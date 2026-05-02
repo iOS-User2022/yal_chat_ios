@@ -16,6 +16,7 @@ struct ReceiverMessageView: View {
     @State private var downloadRequested = false
     @State private var isVideoPlayerPresented = false
     @State private var downloadedImage: UIImage?
+    @State private var isVisible = false
 
     var isForwarding: Bool? = false
 
@@ -23,6 +24,7 @@ struct ReceiverMessageView: View {
     let senderName: String?
     let senderAvatarURL: String?
     let showSenderInfo: Bool // Set this to `false` if previous message was from the same user
+    let participantCount: Int
     let onAvatarTap: (() -> Void)?
     var onDownloadNeeded: ((ChatMessageModel) -> Void)?
     var onTap: (() -> Void)?
@@ -30,6 +32,7 @@ struct ReceiverMessageView: View {
     var onMessageRead: (() -> Void)?
     var onScrollToMessage: ((String) -> Void)?
     var onEmoji: (() -> Void)?
+    var onCallBack: (() -> Void)?
     var onToggleChange: (() -> Void)?
     var onURLTapped: ((String) -> Void)?
     let selectedEventId: String?
@@ -43,12 +46,14 @@ struct ReceiverMessageView: View {
         senderName: String? = nil,
         senderAvatarURL: String? = nil,
         showSenderInfo: Bool = false,
+        participantCount: Int = 0,
         onAvatarTap: (() -> Void)? = nil,
         onDownloadNeeded: ((ChatMessageModel) -> Void)? = nil,
         onTap: (() -> Void)? = nil,
         onLongPress: (() -> Void)? = nil,
         onMessageRead: (() -> Void)? = nil,
         onScrollToMessage: ((String) -> Void)? = nil,
+        onCallBack: (() -> Void)? = nil,
         onURLTapped: ((String) -> Void)? = nil,
         onToggleChange: (() -> Void)? = nil,
         selectedEventId: String? = nil,
@@ -62,12 +67,14 @@ struct ReceiverMessageView: View {
         self.senderName = senderName
         self.senderAvatarURL = senderAvatarURL
         self.showSenderInfo = showSenderInfo
+        self.participantCount = participantCount
         self.onAvatarTap = onAvatarTap
         self.onDownloadNeeded = onDownloadNeeded
         self.onTap = onTap
         self.onLongPress = onLongPress
         self.onMessageRead = onMessageRead
         self.onScrollToMessage = onScrollToMessage
+        self.onCallBack = onCallBack
         self.selectedEventId = selectedEventId
         self.searchText = searchText
         self.isForwarding = isForwarding
@@ -93,7 +100,7 @@ struct ReceiverMessageView: View {
                         Spacer(minLength: 35.0)
                     }
 
-                    HStack(alignment: .top) {
+                    HStack(alignment: .top, spacing: 10) {
                         avatarView
                             .opacity(showSenderInfo ? 1.0 : 0.0)
                             .onTapGesture { onAvatarTap?() }
@@ -105,24 +112,42 @@ struct ReceiverMessageView: View {
               Spacer()
             }
         }
-        .padding(.leading, 20)
+        .padding(.leading, 30)
         .onAppear {
-            triggerDownloadIfNeeded()
-            if message.messageStatus != .read {
-                message.messageStatus = .read
-                onMessageRead?()
+            isVisible = true
+            // Defer expensive work slightly to allow scroll to settle
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                guard isVisible else { return }
+                triggerDownloadIfNeeded()
+                if message.messageStatus != .read {
+                    message.messageStatus = .read
+                    onMessageRead?()
+                }
+                downLoadAvatarIfNeeded()
             }
-            downLoadAvatarIfNeeded()
         }
-        .onChange(of: message.mediaUrl) { _ in triggerDownloadIfNeeded() }
+        .onDisappear {
+            isVisible = false
+        }
+        .onChange(of: message.mediaUrl) { newURL in
+            guard isVisible, newURL != nil else { return }
+            triggerDownloadIfNeeded()
+        }
     }
 
     // MARK: - Media Section
     private var hasMedia: Bool {
         if let type = MessageType(rawValue: message.msgType) {
-            return type != .text
+            return type != .text && type != .voiceCall && type != .videoCall
         }
         return false
+    }
+    
+    // MARK: - Text Content Check
+    private var hasTextContent: Bool {
+        // Check if there's actual text content (not empty or just whitespace)
+        let textToCheck = message.containsURL ? message.contentWithoutURLs : message.content
+        return !textToCheck.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
     private func openURL(_ urlString: String) {
         if let onURLTapped = onURLTapped {
@@ -137,6 +162,10 @@ struct ReceiverMessageView: View {
     @ViewBuilder
     private var mediaSection: some View {
         let mediaType = MediaType(rawValue: message.msgType) ?? .image
+        // Add leading padding for images when there's no avatar column (non-group chat)
+        // In group chats, the HStack with avatar provides spacing even if avatar is invisible
+       // let needsLeadingPadding = (mediaType == .image || mediaType == .gif) && !isGroupChat
+        
         MediaView(
             mediaURL: message.mediaUrl ?? "",
             userName: senderName,
@@ -149,14 +178,10 @@ struct ReceiverMessageView: View {
             senderImage: "",
             localURLOverride: nil
         )
-        .id(message.eventId)
-        .frame(width: mediaType == .audio ? 260 : 220,
-               height: (mediaType == .image || mediaType == .video || mediaType == .gif) ? 215: 56)
-        .fixedSize(horizontal: mediaType != .audio, vertical: false)
-
+        .id(message.mediaUrl ?? UUID().uuidString)
         .padding(.horizontal, 4)
         .padding(.top, 4)
-        .clipShape(CustomRoundedCornersShape(radius: 8, roundedCorners: [.topRight, .bottomLeft, .bottomRight]))
+        .clipShape(CustomRoundedCornersShape(radius: 8, roundedCorners: [.topRight, .topLeft, .bottomRight]))
     }
     
     var errorView: some View {
@@ -176,14 +201,13 @@ struct ReceiverMessageView: View {
     // MARK: - Media Content
     @ViewBuilder
     private func mediaContent(from url: URL) -> some View {
-        let cornerShape = CustomRoundedCornersShape(radius: 8, roundedCorners: [.topRight, .bottomLeft, .bottomRight])
+        let cornerShape = CustomRoundedCornersShape(radius: 8, roundedCorners: [.topRight, .topLeft, .bottomRight])
         
         if message.isImageMessage {
             if let image = UIImage(contentsOfFile: url.path) {
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFit()
-//                    .frame(width: 220, height: 215)
                     .clipShape(cornerShape)
             } else {
                 Text("Image failed to load")
@@ -226,7 +250,7 @@ struct ReceiverMessageView: View {
                 Image(message.isImageMessage ? "image-placeholder" : "image-placeholder")
                     .resizable()
                     .scaledToFit()
-                    .clipShape(CustomRoundedCornersShape(radius: 8, roundedCorners: [.topRight, .bottomLeft, .bottomRight]))
+                    .clipShape(CustomRoundedCornersShape(radius: 8, roundedCorners: [.topRight, .topLeft, .bottomRight]))
                
             } else if mediaType == .video {
                 ZStack {
@@ -236,7 +260,7 @@ struct ReceiverMessageView: View {
                         .clipShape(
                             CustomRoundedCornersShape(
                                 radius: 8,
-                                roundedCorners: [.topRight, .bottomLeft, .bottomRight]
+                                roundedCorners: [.topRight, .topLeft, .bottomRight]
                             )
                         )
                     Image(systemName: "play.circle.fill")
@@ -258,31 +282,39 @@ struct ReceiverMessageView: View {
                 .contentShape(Rectangle())
             }
 
-//            ProgressView(value: message.downloadProgress)
-//                .progressViewStyle(LinearProgressViewStyle())
-//                .frame(height: 4)
-//                .frame(maxWidth: .infinity)
-//                .background(Design.Color.appGradient)
-//                .zIndex(1)
+            ProgressView(value: message.downloadProgress)
+                .progressViewStyle(LinearProgressViewStyle())
+                .frame(height: 4)
+                .frame(maxWidth: .infinity)
+                .background(Design.Color.appGradient)
+                .zIndex(1)
         }
     }
 
     // MARK: - Text Section
     private var textSection: some View {
-        // Show content without URLs if URL exists, otherwise show full content
         let displayText = message.containsURL ? message.contentWithoutURLs : message.content
-        return HighlightedText(text: displayText, searchText: searchText)
-            .font(Design.Font.regular(14))
-            .foregroundColor(Design.Color.primaryText)
-            .padding(.leading, 8)
-            .padding(.trailing, 8)
+        
+        return Group {
+            if searchText.isEmpty {
+                Text(displayText)
+                    .font(Design.Font.regular(14))
+                    .foregroundColor(Design.Color.primaryTextColor)
+            } else {
+                HighlightedText(text: displayText, searchText: searchText)
+                    .font(Design.Font.regular(14))
+                    .foregroundColor(Design.Color.primaryTextColor)
+            }
+        }
+        .padding(.leading, 8)
+        .padding(.trailing, 8)
     }
     
     private var redactedPlaceholder: some View {
         // Deleted placeholder
         HighlightedText(text: thisMessageWasDeleted, searchText: searchText)
             .font(Design.Font.italic(14))
-            .foregroundColor(Design.Color.primaryText)
+            .foregroundColor(Design.Color.primaryTextColor)
             .padding(.leading, 8)
             .padding(.trailing, 8)
     }
@@ -302,9 +334,9 @@ struct ReceiverMessageView: View {
     private var bubbleBackground: some View {
         CustomRoundedCornersShape(
             radius: 8,
-            roundedCorners: [.topRight, .bottomLeft, .bottomRight]
+            roundedCorners: [.topRight, .topLeft, .bottomRight]
         )
-        .fill(Design.Color.white)
+        .fill(Color(Design.Color.darkgrayColor))
     }
     
     // MARK: - Helpers
@@ -332,10 +364,7 @@ struct ReceiverMessageView: View {
                 .resizable()
                 .frame(width: 20, height: 20)
                 .clipShape(Circle())
-                .overlay(
-                    Circle()
-                        .stroke(Design.Color.white, lineWidth: 1)
-                )
+                .overlay(Circle().stroke(Design.Color.white, lineWidth: 1))
         } else {
             placeholderInitialsView
         }
@@ -360,56 +389,65 @@ struct ReceiverMessageView: View {
                 Spacer().frame(height: 2)
                 if isGroupChat && showSenderInfo {
                     Text(senderName ?? "Unknown")
-//                        .font(.caption)
                         .font(Design.Font.regular(8))
                         .foregroundColor(.gray)
                         .padding(.horizontal, 8)
                     
                 }
                 
-                if message.isRedacted || message.content == thisMessageWasDeleted {
-                    redactedPlaceholder
-                    timestampSection
-
-                } else {
-                    if hasMedia { mediaSection }
-                    
-                    if let replied = message.inReplyTo {
-                        let senderId = replied.sender
-                        let senderModel = ContactManager.shared.contact(for: senderId)
-                        let senderName = senderModel?.fullName ?? senderModel?.phoneNumber ?? "Unknown"
-                        let currentUserId = replied.currentUserId
-                        ReplyPreviewView(
-                            message: replied,
-                            senderName: senderId == currentUserId ? "You" : senderName,
-                            onTapReplyMessage: {
-                                onScrollToMessage?(replied.eventId)
-                            }
-                        )
+                if message.isCallMessage {
+                    CallMessageView(message: message, isReceived: message.isReceived, participantCount: participantCount) {
+                        onCallBack?()
                     }
-                    
-                    VStack(alignment: .leading, spacing: 0) {
-                        // Show text only if message doesn't contain URL, or if there's text beyond the URL
-                        if !message.containsURL || !message.contentWithoutURLs.isEmpty {
-                            textSection
+                    timestampSection
+                }else{
+                    if message.isRedacted || message.content == thisMessageWasDeleted {
+                        redactedPlaceholder
+                        timestampSection
+                        
+                    } else {
+                        
+                        if hasMedia { mediaSection }
+                        
+                        if let replied = message.inReplyTo {
+                            let senderId = replied.sender
+                            let senderModel = ContactManager.shared.contact(for: senderId)
+                            let senderName = senderModel?.fullName ?? senderModel?.phoneNumber ?? "Unknown"
+                            let currentUserId = replied.currentUserId
+                            ReplyPreviewView(
+                                message: replied,
+                                senderName: senderId == currentUserId ? "You" : senderName,
+                                onTapReplyMessage: {
+                                    onScrollToMessage?(replied.eventId)
+                                }
+                            )
+                        }
+                        // Only show text/URL section if there's actual content
+                        if hasTextContent || message.containsURL {
+                            VStack(alignment: .leading, spacing: 0) {
+                                // Show text only if message doesn't contain URL, or if there's text beyond the URL
+                                if hasTextContent {
+                                    textSection
+                                }
+                                
+                                // URL Preview for received messages (WhatsApp style - shows preview only)
+                                if message.containsURL, let urlString = message.firstURL {
+                                    URLPreviewForMessage(
+                                        urlString: urlString,
+                                        message: message,
+                                        onURLTapped: onURLTapped
+                                    )
+                                    .padding(.leading, 8)
+                                    .padding(.trailing, 8)
+                                    .padding(.top, hasTextContent ? 8 : 0)
+                                }
+                            }
                         }
                         
-                        // URL Preview for received messages (WhatsApp style - shows preview only)
-                        if message.containsURL, let urlString = message.firstURL {
-                            URLPreviewForMessage(
-                                urlString: urlString,
-                                message: message,
-                                onURLTapped: onURLTapped
-                            )
-                            .padding(.leading, 8)
-                            .padding(.trailing, 8)
-                            .padding(.top, (!message.containsURL || !message.contentWithoutURLs.isEmpty) ? 8 : 0)
-                        }
+                        timestampSection
                     }
                     
-                    timestampSection
                 }
-                
             }
             .background(
                 ZStack {
@@ -430,8 +468,12 @@ struct ReceiverMessageView: View {
             
             if !message.reactions.isEmpty {
                 reactionsBar
-                    .background(Design.Color.lighterGrayBackground)
+                    .background(Color(Design.Color.darkgrayColor))
                     .cornerRadius(20)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 20)
+                            .stroke(Color.black, lineWidth: 1)
+                    )
                     .padding(.top, -2) // slightly overlaps the bubble
                     .padding(.bottom, 8) // space below bar to next message
             }
@@ -468,7 +510,8 @@ struct ReceiverMessageView: View {
     }
     
     private func downLoadAvatarIfNeeded() {
-        guard downloadedImage == nil else { return } 
+        guard downloadedImage == nil else { return }
+        guard isVisible else { return }
         if let urlString = senderAvatarURL, !urlString.isEmpty {
             MediaCacheManager.shared.getMedia(
                 url: urlString,
@@ -488,6 +531,7 @@ struct ReceiverMessageView: View {
 
                     // Decode off the main thread with type-gating + downsampling
                     decodeImageAsync(from: fileURL, maxPixelSize: 1024) { res in
+                        guard self.isVisible else { return }
                         switch res {
                         case .success(let ui):
                             downloadedImage = ui   // already on main from helper

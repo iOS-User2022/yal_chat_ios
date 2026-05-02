@@ -33,193 +33,312 @@ struct NewGroupContactSelectorView: View {
             VStack(spacing: 0) {
                 // Header
                 HStack(spacing: 12) {
-                    Button(action: { dismiss() }) {
+                    Button(action: {
+                        onDismiss?()
+                        dismiss()
+                    }) {
                         Image("back-long")
                             .resizable()
                             .frame(width: 20, height: 20)
+                            .foregroundColor(Design.Color.primaryTextColor)
                     }
-                    VStack(alignment: .leading, spacing: 4) {
+                    VStack(alignment: .leading, spacing: 2) {
                         Text("New group")
-                            .font(Design.Font.bold(16))
-                            .foregroundColor(Design.Color.primaryText)
+                            .font(Design.Font.bold(18))
+                            .foregroundColor(Design.Color.primaryTextColor)
                         Text("You can add upto 200 members")
-                            .font(Design.Font.medium(12))
-                            .foregroundColor(Design.Color.primaryText.opacity(0.4))
+                            .font(Design.Font.regular(12))
+                            .foregroundColor(Design.Color.primaryTextColor).opacity(0.5)
                     }
                     Spacer()
-                    Button(action: { /* Info action */ }) {
+                    Button(action: {}) {
                         Image("info-circle")
                             .resizable()
-                            .frame(width: 20, height: 20)
+                            .renderingMode(.template)
+                            .frame(width: 22, height: 22)
+                            .foregroundColor(Design.Color.primaryTextColor)
                     }
                 }
                 .padding(.horizontal, 20)
-                .padding(.top, 56)
-                .padding(.bottom, 8)
+                .padding(.top, 5)
+                .padding(.bottom, 16)
 
                 // Search bar
                 SearchBarView(placeholder: "Search numbers, names & more", text: $selectContactListViewModel.search)
                     .padding(.horizontal, 20)
-                    .padding(.bottom, 16)
-                    .padding(.top, 20)
-
+                    .padding(.bottom, 12)
 
                 // Selected contacts avatar row
                 if !selectedContacts.isEmpty {
                     ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 16) {
+                        HStack(spacing: 12) {
                             ForEach(selectedContacts) { contact in
-                                VStack {
+                                VStack(spacing: 6) {
                                     ZStack(alignment: .topTrailing) {
                                         avatarView(for: contact)
-                                            
+                                            .frame(width: 48, height: 48)
+                                        
                                         Button(action: {
-                                            if let idx = selectedContacts.firstIndex(of: contact) {
-                                                selectedContacts.remove(at: idx)
+                                            withAnimation(.easeInOut(duration: 0.2)) {
+                                                if let idx = selectedContacts.firstIndex(of: contact) {
+                                                    selectedContacts.remove(at: idx)
+                                                }
                                             }
                                         }) {
-                                            Image("cross-circle")
-                                                .foregroundColor(.white)
-                                                .frame(width: 22, height: 22)
+                                            ZStack {
+                                                Circle()
+                                                    .fill(Color.blue)
+                                                    .frame(width: 22, height: 22)
+                                                Image("x-small")
+                                                    .font(.system(size: 10, weight: .bold))
+                                                    .foregroundColor(.white)
+                                            }
                                         }
-                                        .offset(x: 6, y: 18)
+                                        .offset(x: 1, y: -1)
                                     }
-                                    Text(contact.fullName ?? "")
-                                        .font(Design.Font.bold(10))
-                                        .foregroundColor(Design.Color.primaryText)
+                                    
+                                    Text(contact.fullName?.components(separatedBy: " ").first ?? "")
+                                        .font(Design.Font.semiBold(8))
+                                        .foregroundColor(Design.Color.primaryTextColor)
                                         .frame(maxWidth: 48)
                                         .lineLimit(1)
+                                        .truncationMode(.tail)
                                 }
                             }
                         }
                         .padding(.horizontal, 20)
-                        .padding(.vertical, 12)
+                        .padding(.vertical, 5)
                     }
-                    .transition(.move(edge: .top))
+                    .background(Design.Color.backgroundColor)
                 }
 
-                separatorView()
-
                 // Contacts list
-                List {
-                    // Frequently contacted section (if available)
-                    if !selectContactListViewModel.filteredFrequentlyContacted.isEmpty {
-                        Section(header: Text("Frequently contacted")
-                            .font(Design.Font.bold(14))
-                            .foregroundColor(Design.Color.primaryText)) {
+                ScrollView {
+                    VStack(spacing: 0) {
+                        // Frequently contacted section
+                        if !selectContactListViewModel.filteredFrequentlyContacted.isEmpty {
+                            VStack(alignment: .leading, spacing: 0) {
+                                Text("Frequently contacted")
+                                    .font(Design.Font.bold(14))
+                                    .foregroundColor(Design.Color.primaryTextColor)
+                                    .padding(.horizontal, 20)
+                                    .padding(.top, 16)
+                                    .padding(.bottom, 12)
+                                
                                 ForEach(selectContactListViewModel.filteredFrequentlyContacted) { contact in
                                     ContactSelectRow(
                                         contact: contact,
                                         isSelected: selectedContacts.contains(contact),
                                         addAction: {
-                                            if !selectedContacts.contains(contact) {
-                                                selectedContacts.append(contact)
+                                            withAnimation(.easeInOut(duration: 0.2)) {
+                                                if !selectedContacts.contains(contact) {
+                                                    selectedContacts.append(contact)
+                                                }
                                             }
                                         },
                                         removeAction: {
-                                            selectedContacts.removeAll { $0 == contact }
+                                            withAnimation(.easeInOut(duration: 0.2)) {
+                                                selectedContacts.removeAll { $0 == contact }
+                                            }
                                         }
                                     )
+                                    .padding(.horizontal, 20)
                                 }
                             }
-                            .listRowSeparator(.hidden)
-                            .listRowInsets(EdgeInsets())
-                            .padding(.horizontal, 20)
+                        }
                         
-                        separatorView()
-                    }
-                    
-                    if !selectContactListViewModel.filteredYalContacts.isEmpty {
-                        Section(header: Text("Contact on YAL.ai")) {
-                            ForEach(selectContactListViewModel.filteredYalContacts) { contact in
-                                ContactSelectRow(
-                                    contact: contact,
-                                    isSelected: selectedContacts.contains(contact),
-                                    addAction: {
-                                        if !selectedContacts.contains(contact) {
-                                            selectedContacts.append(contact)
+                        // Contact on YAL.ai section
+                        if !selectContactListViewModel.filteredYalContacts.isEmpty {
+                            VStack(alignment: .leading, spacing: 0) {
+                                Text("Contact on YAL.ai")
+                                    .font(Design.Font.bold(14))
+                                    .foregroundColor(Design.Color.primaryTextColor)
+                                    .padding(.horizontal, 20)
+                                    .padding(.top, 20)
+                                    .padding(.bottom, 12)
+                                
+                                ForEach(selectContactListViewModel.filteredYalContacts) { contact in
+                                    ContactSelectRow(
+                                        contact: contact,
+                                        isSelected: selectedContacts.contains(contact),
+                                        addAction: {
+                                            withAnimation(.easeInOut(duration: 0.2)) {
+                                                if !selectedContacts.contains(contact) {
+                                                    selectedContacts.append(contact)
+                                                }
+                                            }
+                                        },
+                                        removeAction: {
+                                            withAnimation(.easeInOut(duration: 0.2)) {
+                                                selectedContacts.removeAll { $0 == contact }
+                                            }
                                         }
-                                    },
-                                    removeAction: {
-                                        selectedContacts.removeAll { $0 == contact }
-                                    }
-                                )
+                                    )
+                                    .padding(.horizontal, 20)
+                                }
                             }
                         }
-                        .listRowSeparator(.hidden)
-                        .listRowInsets(EdgeInsets())
-                        .padding(.horizontal, 20)
                         
-                        separatorView()
-                    }
-                    
-                    // All contacts section
-                    Section(header: Text("Other Contacts")) {
-                        ForEach(selectContactListViewModel.filteredOtherContacts) { contact in
-                            OtherContactInviteRow(contact: contact, isInvited: invitedContacts.contains(contact)) {
-                                invitedContacts.append(contact)
+                        // Invite on YAL.ai section
+                        if !selectContactListViewModel.filteredOtherContacts.isEmpty {
+                            VStack(alignment: .leading, spacing: 0) {
+                                Text("Invite on YAL.ai")
+                                    .font(Design.Font.bold(14))
+                                    .foregroundColor(Design.Color.primaryTextColor)
+                                    .padding(.horizontal, 20)
+                                    .padding(.top, 20)
+                                    .padding(.bottom, 12)
+                                
+                                ForEach(selectContactListViewModel.filteredOtherContacts) { contact in
+                                    OtherContactInviteRow(
+                                        contact: contact,
+                                        isInvited: invitedContacts.contains(contact)
+                                    ) {
+                                        withAnimation(.easeInOut(duration: 0.2)) {
+                                            if !invitedContacts.contains(contact) {
+                                                invitedContacts.append(contact)
+                                            }
+                                        }
+                                    }
+                                    .padding(.horizontal, 20)
+                                }
                             }
                         }
+                        
+                        // Invite on YAL.ai section with action buttons
+                        VStack(alignment: .leading, spacing: 0) {
+                           
+                            // Share Invite link button
+                            Button(action: {
+                                // Handle share invite link action
+                                shareInviteLink()
+                            }) {
+                                HStack(spacing: 12) {
+                                    ZStack {
+                                        Circle()
+                                            .fill(Design.Color.lightWhiteBackground)
+                                            .frame(width: 48, height: 48)
+                                        
+                                        Image("share")
+                                            .resizable()
+                                            .frame(width: 20, height: 20)
+                                            .foregroundColor(Design.Color.primaryTextColor)
+                                    }
+                                    
+                                    Text("Share Invite link")
+                                        .font(Design.Font.bold(15))
+                                        .foregroundColor(Design.Color.primaryTextColor)
+                                    
+                                    Spacer()
+                                }
+                                .padding(.horizontal, 20)
+                                .padding(.vertical, 10)
+                            }
+                            
+                            // Contact Help button
+                            Button(action: {
+                                // Handle contact help action
+                                contactHelp()
+                            }) {
+                                HStack(spacing: 12) {
+                                    ZStack {
+                                        Circle()
+                                            .fill(Design.Color.lightWhiteBackground)
+                                            .frame(width: 48, height: 48)
+                                        
+                                        Image("profile-add")
+                                            .resizable()
+                                            .frame(width: 20, height: 20)
+                                            .foregroundColor(Design.Color.primaryTextColor)
+                                    }
+                                    
+                                    Text("Contact Help")
+                                        .font(Design.Font.bold(15))
+                                        .foregroundColor(Design.Color.primaryTextColor)
+                                    
+                                    Spacer()
+                                }
+                                .padding(.horizontal, 20)
+                                .padding(.vertical, 10)
+                            }
+                        }
+                        
+                        // Bottom padding for button
+                        Spacer()
+                            .frame(height: 140)
                     }
-                    .listRowSeparator(.hidden)
-                    .listRowInsets(EdgeInsets())
-                    .padding(.horizontal, 20)
                 }
-                .listStyle(.plain)
-                .environment(\.defaultMinListRowHeight, 48)
             }
             
-            // Bottom bar
+            // Bottom bar - Updated button styling
             if !isKeyboardVisible {
-            VStack(spacing: 20) {
-                if selectedContacts.count < 1 {
-                    Text("Add contacts to continue")
+                VStack(spacing: 0) {
+                    // Contact count or message
+                    Text(selectedContacts.count >= 1
+                        ? "\(selectedContacts.count) contact\(selectedContacts.count > 1 ? "s" : "") selected"
+                        : "Add contacts to continue")
                         .font(Design.Font.bold(14))
-                        .foregroundColor(Design.Color.primaryText)
-                } else {
-                    Text("\(selectedContacts.count) contact\(selectedContacts.count > 1 ? "s" : "") selected")
-                        .font(Design.Font.bold(14))
-                        .foregroundColor(Design.Color.primaryText)
-                }
-                
-                
-                HStack(spacing: 20) {
-                    Button("Cancel") { onDismiss?() }
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(Design.Color.lightWhiteBackground)
-                        .cornerRadius(8)
-                    Button("Continue") {
-                        onContinue?()
+                        .foregroundColor(Design.Color.primaryTextColor)
+                        .padding(.top, 16)
+                        .padding(.bottom, 12)
+                    
+                    // Action buttons - Updated to match GroupNameView
+                    HStack(spacing: 12) {
+                        Button(action: {
+                            onDismiss?()
+                            dismiss()
+                        }) {
+                            Text("Cancel")
+                                .font(.system(size: 17, weight: .semibold))
+                                .foregroundColor(.black)
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 50)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .fill(Color.white)
+                                )
+                        }
+                        
+                        Button(action: {
+                            onContinue?()
+                        }) {
+                            Text("Continue")
+                                .font(.system(size: 17, weight: .semibold))
+                                .foregroundColor(.white)
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 50)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .fill(
+                                            LinearGradient(
+                                                colors: [
+                                                    Color(red: 0.3, green: 0.4, blue: 1.0),
+                                                    Color(red: 0.55, green: 0.36, blue: 0.96)
+                                                ],
+                                                startPoint: .leading,
+                                                endPoint: .trailing
+                                            )
+                                        )
+                                        .opacity(selectedContacts.count < 1 ? 0.5 : 1.0)
+                                )
+                        }
+                        .disabled(selectedContacts.count < 1)
                     }
-                    .disabled(selectedContacts.count < 1)
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(selectedContacts.count >= 1 ? Design.Color.appGradient.opacity(1.0) : Design.Color.appGradient.opacity(0.6))
-                    .cornerRadius(8)
-                    .foregroundColor(.white)
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 20)
                 }
-                .padding(.horizontal, 15)
-                .padding(.bottom, 20)
+                .background(
+                    RoundedRectangle(cornerRadius: 20)
+                        .fill(Color(Design.Color.darkgrayColor))
+                        .shadow(color: Color.black.opacity(0.2), radius: 10, x: 0, y: -4)
+                )
+                .transition(.move(edge: .bottom))
             }
-            .padding(.horizontal, 20)
-            .padding(.bottom, 20)
-            .padding(.top, 20)
-            .background(
-                RoundedRectangle(cornerRadius: 20)
-                    .fill(.ultraThinMaterial) // Native blurred background
-                    .background(Color.white.opacity(0.6)) // Light white tint
-                    .clipShape(RoundedRectangle(cornerRadius: 16))
-                    .shadow(color: Color.black.opacity(0.12), radius: 10, x: 0, y: -4)
-            )
         }
-    }
-        .background(Design.Color.white)
+        .background(Design.Color.backgroundColor)
         .ignoresSafeArea(.container, edges: .bottom)
         .navigationBarBackButtonHidden(true)
         .navigationBarHidden(true)
-        
-        
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
             withAnimation {
                 isKeyboardVisible = true
@@ -230,7 +349,6 @@ struct NewGroupContactSelectorView: View {
                 isKeyboardVisible = false
             }
         }
-
     }
 
     // Avatar helper
@@ -250,7 +368,7 @@ struct NewGroupContactSelectorView: View {
                 localURLOverride: nil
             )
             .scaledToFill()
-            .frame(width: 40, height: 40)
+            .frame(width: 48, height: 48)
             .clipShape(Circle())
         } else if let imageURLString = contact.imageURL {
             MediaView(
@@ -266,48 +384,62 @@ struct NewGroupContactSelectorView: View {
                 localURLOverride: nil
             )
             .scaledToFill()
-            .frame(width: 40, height: 40)
+            .frame(width: 48, height: 48)
             .clipShape(Circle())
         } else if let imageData = contact.imageData, let img = UIImage(data: imageData) {
             Image(uiImage: img)
                 .resizable()
                 .scaledToFill()
-                .frame(width: 40, height: 40)
+                .frame(width: 48, height: 48)
                 .clipShape(Circle())
         } else {
             Text(getInitials(from: contact.fullName ?? ""))
-                .font(.system(size: 16, weight: .bold))
-                .foregroundColor(Design.Color.primaryText.opacity(0.7))
-                .frame(width: 40, height: 40)  // Set the circle size
-                .background(contact.randomeProfileColor.opacity(0.3))
+                .font(.system(size: 20, weight: .bold))
+                .foregroundColor(Design.Color.primaryTextColor).opacity(0.7)
+                .frame(width: 48, height: 48)
+                .background(contact.randomeProfileColor).opacity(0.3)
                 .clipShape(Circle())
         }
     }
     
     private func placeholderInitialsView(for contact: ContactLite) -> some View {
         return Text(getInitials(from: contact.fullName ?? contact.displayName ?? contact.phoneNumber))
-            .font(Design.Font.bold(8))
-            .frame(width: 40, height: 40)
+            .font(Design.Font.bold(10))
+            .frame(width: 48, height: 48)
             .background(randomBackgroundColor())
-            .foregroundColor(Design.Color.primaryText.opacity(0.7))
+            .foregroundColor(Design.Color.primaryTextColor).opacity(0.7)
             .clipShape(Circle())
-            .overlay(
-                Circle()
-                    .stroke(Design.Color.white, lineWidth: 1)
-            )
     }
     
-    @ViewBuilder
-    private func separatorView() -> some View {
-        Rectangle()
-            .fill(Design.Color.appGradient.opacity(0.12))
-            .frame(height: 8)
-            .listRowSeparator(.hidden)
-            .listRowInsets(EdgeInsets())
+    // MARK: - Action Functions
+    private func shareInviteLink() {
+        // Generate or get the invite link
+        let inviteLink = "https://yal.ai/invite/your-invite-code" // Replace with actual invite link
         
+        // Create activity view controller to share
+        let activityVC = UIActivityViewController(
+            activityItems: ["Join me on YAL.ai! \(inviteLink)"],
+            applicationActivities: nil
+        )
+        
+        // Present the share sheet
+        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+           let rootViewController = windowScene.windows.first?.rootViewController {
+            rootViewController.present(activityVC, animated: true)
+        }
+    }
+    
+    private func contactHelp() {
+        // Handle contact help action
+        if let url = URL(string: "mailto:support@yal.ai?subject=Need Help with Group Creation") {
+            UIApplication.shared.open(url)
+        }
+        
+        print("Contact Help tapped")
     }
 }
 
+// MARK: - Contact Select Row
 struct ContactSelectRow: View {
     let contact: ContactLite
     let isSelected: Bool
@@ -316,6 +448,7 @@ struct ContactSelectRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
+            // Avatar
             ZStack(alignment: .center) {
                 if let imageURLString = contact.avatarURL {
                     MediaView(
@@ -331,7 +464,7 @@ struct ContactSelectRow: View {
                         localURLOverride: nil
                     )
                     .scaledToFill()
-                    .frame(width: 40, height: 40)
+                    .frame(width: 48, height: 48)
                     .clipShape(Circle())
                 } else if let imageURLString = contact.imageURL {
                     MediaView(
@@ -347,90 +480,88 @@ struct ContactSelectRow: View {
                         localURLOverride: nil
                     )
                     .scaledToFill()
-                    .frame(width: 40, height: 40)
+                    .frame(width: 48, height: 48)
                     .clipShape(Circle())
                 } else if let imageData = contact.imageData, let img = UIImage(data: imageData) {
                     Image(uiImage: img)
                         .resizable()
-                        .frame(width: 40, height: 40)
+                        .scaledToFill()
+                        .frame(width: 48, height: 48)
                         .clipShape(Circle())
                 } else {
                     Text(getInitials(from: contact.fullName ?? ""))
-                        .font(.system(size: 16, weight: .bold))
-                        .foregroundColor(Design.Color.primaryText.opacity(0.7))
-                        .frame(width: 40, height: 40)  // Set the circle size
-                        .background(contact.randomeProfileColor.opacity(0.3))
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundColor(Design.Color.primaryTextColor).opacity(0.7)
+                        .frame(width: 48, height: 48)
+                        .background(contact.randomeProfileColor).opacity(0.3)
                         .clipShape(Circle())
-                }
-                
-                if isSelected {
-                    Button(action: {
-                        removeAction()
-                    }) {
-                        Image("tick-circle")
-                            .background(.white)
-                            .frame(width: 24, height: 24)
-                            .clipShape(Circle())
-                            .overlay(Circle().stroke(Design.Color.white, lineWidth: 1))
-                    }
-                    .offset(x: 12, y: 12)
                 }
             }
             
-            VStack(alignment: .leading, spacing: 4) {
+            // Contact info
+            VStack(alignment: .leading, spacing: 3) {
                 Text(contact.fullName ?? "")
-                    .font(Design.Font.bold(14))
-                    .foregroundColor(Design.Color.primaryText)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                Text(contact.about ?? "")
-                    .font(Design.Font.regular(12))
-                    .foregroundColor(Design.Color.primaryText.opacity(0.4))
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .font(Design.Font.bold(15))
+                    .foregroundColor(Design.Color.primaryTextColor)
+                
+                if !contact.phoneNumber.isEmpty {
+                    Text(contact.phoneNumber)
+                        .font(Design.Font.regular(13))
+                        .foregroundColor(Design.Color.primaryTextColor).opacity(0.5)
+                }
             }
-            .frame(maxWidth: .infinity)
             
             Spacer()
             
-            if isSelected {
-                Button(action: removeAction) {
-                    Text("Added")
-                        .foregroundColor(Design.Color.white)
-                        .font(Design.Font.bold(12))
-                        .padding(4)
+            // Checkbox - Updated with overlay
+            Button(action: {
+                if isSelected {
+                    removeAction()
+                } else {
+                    addAction()
                 }
-                .background(Design.Color.greenGradient)
-                .cornerRadius(2)
-                
-            } else {
-                Button(action: addAction) {
-                    Text("Add")
-                        .foregroundColor(Design.Color.white)
-                        .font(Design.Font.bold(12))
-                        .padding(4)
+            }) {
+                ZStack {
+                    // Background checkbox (always visible)
+                    Image("checkbox_empty")
+                        .resizable()
+                        .renderingMode(.template)
+                        .frame(width: 22, height: 22)
+                        .foregroundColor(Design.Color.primaryTextColor.opacity(0.3))
+                    
+                    // Green tick overlay (only when selected)
+                    if isSelected {
+                        Image("green_tick")
+                            .resizable()
+                            .renderingMode(.template)
+                            .frame(width: 14, height: 14)
+                            .foregroundColor(Color.green)
+                    }
                 }
-                .background(Design.Color.blueGradient)
-                .cornerRadius(2)
-
             }
         }
-        .padding(.vertical, 6)
-        .padding(.horizontal, 4)
+        .padding(.vertical, 10)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            if isSelected {
+                removeAction()
+            } else {
+                addAction()
+            }
+        }
     }
     
     private var placeholderInitialsView: some View {
         return Text(getInitials(from: contact.fullName ?? contact.displayName ?? contact.phoneNumber))
-            .font(Design.Font.bold(8))
-            .frame(width: 40, height: 40)
+            .font(Design.Font.bold(10))
+            .frame(width: 48, height: 48)
             .background(randomBackgroundColor())
-            .foregroundColor(Design.Color.primaryText.opacity(0.7))
+            .foregroundColor(Design.Color.primaryTextColor).opacity(0.7)
             .clipShape(Circle())
-            .overlay(
-                Circle()
-                    .stroke(Design.Color.white, lineWidth: 1)
-            )
     }
 }
 
+// MARK: - Other Contact Invite Row
 struct OtherContactInviteRow: View {
     let contact: ContactLite
     let isInvited: Bool
@@ -438,58 +569,73 @@ struct OtherContactInviteRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
+            // Avatar
             ZStack(alignment: .center) {
                 if let imageURLString = contact.imageURL, let imageURL = URL(string: imageURLString) {
                     WebImage(url: imageURL, options: [.retryFailed, .continueInBackground])
                         .resizable()
                         .scaledToFill()
-                        .frame(width: 40, height: 40)
+                        .frame(width: 48, height: 48)
                         .clipShape(Circle())
                 } else if let imageData = contact.imageData, let img = UIImage(data: imageData) {
                     Image(uiImage: img)
                         .resizable()
-                        .frame(width: 40, height: 40)
+                        .scaledToFill()
+                        .frame(width: 48, height: 48)
                         .clipShape(Circle())
                 } else {
                     Text(getInitials(from: contact.fullName ?? ""))
-                        .font(.system(size: 16, weight: .bold))
-                        .foregroundColor(Design.Color.primaryText.opacity(0.7))
-                        .frame(width: 40, height: 40)  // Set the circle size
-                        .background(contact.randomeProfileColor.opacity(0.3))
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundColor(Design.Color.primaryTextColor).opacity(0.7)
+                        .frame(width: 48, height: 48)
+                        .background(contact.randomeProfileColor).opacity(0.3)
                         .clipShape(Circle())
                 }
             }
 
-            VStack(alignment: .leading, spacing: 4) {
+            // Contact info
+            VStack(alignment: .leading, spacing: 3) {
                 Text(contact.fullName ?? "")
-                    .font(Design.Font.bold(14))
-                    .foregroundColor(Design.Color.primaryText)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .font(Design.Font.bold(15))
+                    .foregroundColor(Design.Color.primaryTextColor)
 
-                Text(contact.about ?? "")
-                    .font(Design.Font.regular(12))
-                    .foregroundColor(Design.Color.primaryText.opacity(0.4))
-                    .frame(maxWidth: .infinity, alignment: .leading)
-
+                if !contact.phoneNumber.isEmpty {
+                    Text(contact.phoneNumber)
+                        .font(Design.Font.regular(13))
+                        .foregroundColor(Design.Color.primaryTextColor).opacity(0.5)
+                }
             }
-            .frame(maxWidth: .infinity)
 
             Spacer()
 
+            // Invite button - Updated to match new design
             Button(action: {
                 if !isInvited {
                     onInviteTapped()
                 }
             }) {
                 Text(isInvited ? "Invited" : "Invite")
-                    .foregroundColor(Design.Color.white)
-                    .font(Design.Font.bold(12))
-                    .padding(4)
+                    .font(Design.Font.bold(13))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    .background(
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(
+                                LinearGradient(
+                                    colors: [
+                                        Color(red: 0.3, green: 0.4, blue: 1.0),
+                                        Color(red: 0.55, green: 0.36, blue: 0.96)
+                                    ],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                            )
+                            .opacity(isInvited ? 0.5 : 1.0)
+                    )
             }
-            .background(isInvited ? Design.Color.greenGradient : Design.Color.blueGradient)
-            .cornerRadius(2)
+            .disabled(isInvited)
         }
-        .padding(.vertical, 6)
-        .padding(.horizontal, 4)
+        .padding(.vertical, 10)
     }
 }

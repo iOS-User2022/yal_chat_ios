@@ -76,6 +76,11 @@ final class ContactManager {
         cacheContactsSubject.send(contacts)
     }
     
+    private let presenceSubject = PassthroughSubject<PresenceEvent, Never>()
+    var presencePublisher: AnyPublisher<PresenceEvent, Never> {
+        presenceSubject.eraseToAnyPublisher()
+    }
+    
     // MARK: - Public cache accessors
     func clearCaches() {
         cacheQueue.async(flags: .barrier) {
@@ -272,17 +277,16 @@ final class ContactManager {
     }
     
     @discardableResult
-    func updatePresence(
-        for userId: String,
-        isOnline: Bool,
-        lastSeen: Int?,
-        avatarURL: String? = nil,
-        statusMessage: String? = nil
-    ) -> ContactModel? {
-        guard !userId.isEmpty else { return nil }
+    func updatePresence(presenceEvent: PresenceEvent) -> ContactModel? {
+        guard let userId = presenceEvent.sender, !userId.isEmpty else { return nil }
         
         var lite = contact(for: userId) ?? ContactLite(userId: userId, fullName: "", phoneNumber: "")
-        lite.updatePresence(isOnline: isOnline, lastSeen: lastSeen, avatarURL: avatarURL, statusMessage: statusMessage)
+        lite.updatePresence(
+            isOnline: presenceEvent.content?.currentlyActive ?? false,
+            lastSeen: presenceEvent.content?.lastActiveAgo,
+            avatarURL: presenceEvent.content?.avatarURL,
+            statusMessage: presenceEvent.content?.statusMessage
+        )
 
         cacheQueue.async(flags: .barrier) {
             self._contactCache[userId] = lite
@@ -292,12 +296,15 @@ final class ContactManager {
         DBManager.shared.upsertContactPresence(
             userId: userId,
             phoneNumber: lite.phoneNumber,
-            currentlyActive: isOnline,
-            lastActiveAgoMs: lastSeen,
-            avatarURL: avatarURL,
-            statusMessage: statusMessage
+            currentlyActive: presenceEvent.content?.currentlyActive ?? false,
+            lastActiveAgoMs: presenceEvent.content?.lastActiveAgo,
+            avatarURL: presenceEvent.content?.avatarURL,
+            statusMessage: presenceEvent.content?.statusMessage
          )
         
+        DispatchQueue.main.async {
+            self.presenceSubject.send(presenceEvent)
+        }
         return ContactModel.fromLite(lite)
     }
 }

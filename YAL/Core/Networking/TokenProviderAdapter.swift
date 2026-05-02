@@ -46,7 +46,8 @@ final class TokenProviderAdapter: TokenProvider {
             deviceId: old.deviceId,
             accessToken: token,
             refreshToken: old.refreshToken,
-            matrixUrl: old.matrixUrl
+            matrixUrl: old.matrixUrl,
+            jitsiToken: old.jitsiToken
         )
         sessionProvider.save(session: updated) // will trigger sessionPublisher → subjects
     }

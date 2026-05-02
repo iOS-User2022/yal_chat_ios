@@ -7,8 +7,6 @@
 
 import SwiftUI
 
-import SwiftUI
-
 struct LockChatConfirmationView: View {
     let onLock: () -> Void
     let onCancel: () -> Void
@@ -16,52 +14,52 @@ struct LockChatConfirmationView: View {
     var body: some View {
         ZStack {
             // Dimmed background
-            Color.black.opacity(0.3)
+            Color.black.opacity(UIConstants.Opacity.overlay)
                 .ignoresSafeArea()
                 .onTapGesture { onCancel() }
             
-            VStack(spacing: 16) {
+            VStack(spacing: UIConstants.Layout.formSpacing) {
                 
                 // Title
-                Text("Lock this chat?")
-                    .font(Design.Font.semiBold(16))
-                    .foregroundColor(Design.Color.primaryText)
+                Text(Constants.lockThisChat.localized)
+                    .font(Design.Font.semiBold(UIConstants.Layout.formSpacing))
+                    .foregroundColor(Design.Color.primaryTextColor)
                     .multilineTextAlignment(.center)
                 
                 // Subtitle
-                Text("This chat will be moved to Locked Chats. You’ll need your PIN, Face ID, or fingerprint to open it.")
-                    .font(Design.Font.regular(14))
-                    .foregroundColor(Design.Color.primaryText.opacity(0.6))
+                Text(Constants.lockedChatsDesc.localized)
+                    .font(Design.Font.regular(UIConstants.Layout.Height.iconSmallest))
+                    .foregroundColor(Design.Color.primaryTextColor.opacity(UIConstants.Opacity.medium))
                     .multilineTextAlignment(.center)
-                    .padding(.horizontal, 8)
+                    .padding(.horizontal, UIConstants.Layout.Radius.small)
                 
                 // Lock button
                 Button(action: { onLock() }) {
-                    Text("Lock")
-                        .font(Design.Font.semiBold(16))
+                    Text(Constants.lock.localized)
+                        .font(Design.Font.semiBold(UIConstants.Layout.formSpacing))
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
+                        .padding(.vertical, UIConstants.Layout.internalPadding)
                         .background(Design.Color.appGradient)
-                        .cornerRadius(8)
+                        .cornerRadius(UIConstants.Layout.Radius.small)
                 }
                 
                 // Cancel button
                 Button(action: { onCancel() }) {
-                    Text("Cancel")
-                        .font(Design.Font.semiBold(16))
-                        .foregroundColor(Design.Color.primaryText)
+                    Text(Constants.cancel.localized)
+                        .font(Design.Font.semiBold(UIConstants.Layout.formSpacing))
+                        .foregroundColor(Design.Color.primaryTextColor)
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
-                        .background(Color.gray.opacity(0.1))
-                        .cornerRadius(8)
+                        .padding(.vertical, UIConstants.Layout.internalPadding)
+                        .background(Color.gray.opacity(UIConstants.Opacity.veryLow))
+                        .cornerRadius(UIConstants.Layout.Radius.small)
                 }
             }
             .padding()
-            .background(Color.white)
-            .cornerRadius(16)
-            .shadow(radius: 8)
-            .padding(.horizontal, 32)
+            .background(Color(Design.Color.darkgrayColor))
+            .cornerRadius(UIConstants.Layout.formSpacing)
+            .shadow(radius: UIConstants.Layout.Radius.small)
+            .padding(.horizontal, UIConstants.Layout.formSpacing)
         }
     }
 }
@@ -74,60 +72,62 @@ struct SecureYourChatsView: View {
     var body: some View {
         ZStack {
             // Dim background
-            Color.black.opacity(0.3)
+            Color.black.opacity(UIConstants.Opacity.overlay)
                 .ignoresSafeArea()
                 .onTapGesture { onCancel?() }
             
-            VStack(spacing: 16) {
+            VStack(spacing: UIConstants.Layout.formSpacing) {
                 
                 // Title
-                Text("Secure your chats")
-                    .font(Design.Font.semiBold(16))
-                    .foregroundColor(Design.Color.primaryText)
+                Text(Constants.secureYourChats.localized)
+                    .font(Design.Font.semiBold(UIConstants.Layout.formSpacing))
+                    .foregroundColor(Design.Color.primaryTextColor)
                     .multilineTextAlignment(.center)
                 
                 // Lock icon
-                Image("lockBlack")
+                Image(UIConstants.Symbols.lockBlack)
+                    .renderingMode(.template)
                     .resizable()
+                    .foregroundColor(.white)
                     .scaledToFit()
-                    .frame(width: 60, height: 60)
-                    .foregroundColor(Design.Color.primaryText)
-                    .padding(.top, 8)
+                    .frame(width: UIConstants.Layout.ActionButton.height, height: UIConstants.Layout.ActionButton.height)
+                    .foregroundColor(Design.Color.primaryTextColor)
+                    .padding(.top, UIConstants.Layout.Radius.small)
                 
                 // Subtitle
-                Text("Protect your chats with a PIN or your device’s biometrics.")
-                    .font(Design.Font.regular(14))
-                    .foregroundColor(Design.Color.primaryText.opacity(0.6))
+                Text(Constants.protectChatsDesc.localized)
+                    .font(Design.Font.regular(UIConstants.Layout.Height.iconSmallest))
+                    .foregroundColor(Design.Color.primaryTextColor.opacity(UIConstants.Opacity.medium))
                     .multilineTextAlignment(.center)
-                    .padding(.horizontal, 8)
+                    .padding(.horizontal, UIConstants.Layout.Radius.small)
                 
                 // Use Biometrics button
                 Button(action: { onUseBiometrics() }) {
-                    Text("Use Biometrics")
-                        .font(Design.Font.semiBold(16))
+                    Text(Constants.useBiometrics.localized)
+                        .font(Design.Font.semiBold(UIConstants.Layout.formSpacing))
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
+                        .padding(.vertical, UIConstants.Layout.internalPadding)
                         .background(Design.Color.appGradient)
-                        .cornerRadius(8)
+                        .cornerRadius(UIConstants.Layout.Radius.small)
                 }
                 
                 // Set 4-digit PIN button
                 Button(action: { onSetPIN() }) {
-                    Text("Set a 4-digit PIN")
-                        .font(Design.Font.semiBold(16))
-                        .foregroundColor(Design.Color.primaryText)
+                    Text(Constants.setPinTitle.localized)
+                        .font(Design.Font.semiBold(UIConstants.Layout.formSpacing))
+                        .foregroundColor(Design.Color.primaryTextColor)
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
-                        .background(Color.gray.opacity(0.1))
-                        .cornerRadius(8)
+                        .padding(.vertical, UIConstants.Layout.internalPadding)
+                        .background(Color.gray.opacity(UIConstants.Opacity.veryLow))
+                        .cornerRadius(UIConstants.Layout.Radius.small)
                 }
             }
             .padding()
-            .background(Color.white)
-            .cornerRadius(16)
-            .shadow(radius: 8)
-            .padding(.horizontal, 32)
+            .background(Color(Design.Color.darkgrayColor))
+            .cornerRadius(UIConstants.Layout.formSpacing)
+            .shadow(radius: UIConstants.Layout.Radius.small)
+            .padding(.horizontal, UIConstants.Layout.horizontalPadding)
         }
     }
 }
@@ -139,49 +139,51 @@ struct ChatsProtectedView: View {
     var body: some View {
         ZStack {
             // Dim background
-            Color.black.opacity(0.3)
+            Color.black.opacity(UIConstants.Opacity.overlay)
                 .ignoresSafeArea()
                 .onTapGesture { onCancel?() }
             
-            VStack(spacing: 16) {
+            VStack(spacing: UIConstants.Layout.formSpacing) {
                 
                 // Checkmark icon
-                Image("Check Mark")
+                Image(UIConstants.Symbols.checkMark)
+                    .renderingMode(.template)
                     .resizable()
+                    .foregroundColor(.white)
                     .scaledToFit()
-                    .frame(width: 60, height: 60)
+                    .frame(width: UIConstants.Layout.ActionButton.height, height: UIConstants.Layout.ActionButton.height)
                     .foregroundColor(.green)
-                    .padding(.top, 8)
+                    .padding(.top, UIConstants.Layout.Radius.small)
                 
                 // Title
-                Text("Your chats are now protected")
-                    .font(Design.Font.semiBold(16))
-                    .foregroundColor(Design.Color.primaryText)
+                Text(Constants.chatsProtectedTitle.localized)
+                    .font(Design.Font.semiBold(UIConstants.Layout.formSpacing))
+                    .foregroundColor(Design.Color.primaryTextColor)
                     .multilineTextAlignment(.center)
                 
                 // Subtitle
-                Text("Your chats are secured. Access them using your PIN or device biometrics.")
-                    .font(Design.Font.regular(14))
-                    .foregroundColor(Design.Color.primaryText.opacity(0.6))
+                Text(Constants.chatsProtectedDesc.localized)
+                    .font(Design.Font.regular(UIConstants.Layout.Height.iconSmallest))
+                    .foregroundColor(Design.Color.primaryTextColor.opacity(UIConstants.Opacity.medium))
                     .multilineTextAlignment(.center)
-                    .padding(.horizontal, 8)
+                    .padding(.horizontal, UIConstants.Layout.Radius.small)
                 
                 // Continue button
                 Button(action: { onContinue() }) {
-                    Text("Continue")
-                        .font(Design.Font.semiBold(16))
+                    Text(Constants.continueAction.localized)
+                        .font(Design.Font.semiBold(UIConstants.Layout.formSpacing))
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
+                        .padding(.vertical, UIConstants.Layout.internalPadding)
                         .background(Design.Color.appGradient)
-                        .cornerRadius(8)
+                        .cornerRadius(UIConstants.Layout.Radius.small)
                 }
             }
             .padding()
-            .background(Color.white)
-            .cornerRadius(16)
-            .shadow(radius: 8)
-            .padding(.horizontal, 32)
+            .background(Color(Design.Color.darkgrayColor))
+            .cornerRadius(UIConstants.Layout.formSpacing)
+            .shadow(radius: UIConstants.Layout.Radius.small)
+            .padding(.horizontal, UIConstants.Layout.formSpacing)
         }
     }
 }
